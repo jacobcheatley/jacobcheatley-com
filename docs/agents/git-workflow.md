@@ -23,17 +23,22 @@ The full grammar as one regex (shared with the CI check in `.github/workflows/br
 
 ## Stacked PRs
 
-The rule above covers one self-contained change. A feature that graduates into a chain of dependent tickets — a spec's tickets that block one another, say — lands as a **stack** of PRs: a first-class GitHub object where each ticket's PR builds on the branch below it, not on `main`, so a later PR can build on code that hasn't merged yet. Each PR is still reviewed independently with its own checks.
+The rule above covers one self-contained change. A feature that graduates into a chain of dependent tickets — a spec's tickets that block one another, say — lands as a **stack** of PRs: two or more PRs where the bottom one targets the trunk (`main`) and each PR above targets the branch of the PR below it, so a later PR can build on code that hasn't merged yet. It's first-class on GitHub: branch protection and CI are enforced on every PR in the stack, and each is reviewed independently.
 
-Stacks are managed with the `gh stack` CLI (`gh extension install github/gh-stack`), which removes the manual base-retargeting and bottom-up rebasing entirely:
+Two behaviours make this cheap, and neither needs manual rebasing:
 
-- `gh stack init [branches...]` — start a stack on `main` (the trunk), adopting existing branches bottom-to-top.
-- `gh stack add <branch>` — add a branch on top of the stack.
+- **Merges go bottom-up.** You can merge the whole stack, one PR, or a span, but never above an unmerged PR. When a PR merges, GitHub **automatically rebases the remaining branches** so the next one retargets `main`. Squash is a supported method — use it, and the history matches squash-merging each PR from the bottom.
+- **Edits low in the stack cascade up.** Change a lower branch and a restack rebases everything above it onto the new parent automatically.
+
+Drive it with the `gh stack` CLI (`gh extension install github/gh-stack`):
+
+- `gh stack init [branches...]` — start a stack on `main`, adopting existing branches bottom-to-top.
+- `gh stack add <branch>` — add a branch on top.
 - `gh stack submit` — push every branch and create/update its PR and the stack on GitHub.
-- `gh stack sync` / `gh stack rebase` — cascade-rebase the stack onto its updated parents, so an edit low in the chain propagates up on its own; no per-branch rebasing by hand.
-- `gh stack merge` — GitHub's **atomic stack merge**: everything up to the chosen PR merges into `main` in one all-or-nothing operation. Pick **squash** as the merge method to keep the squash-merge rule. Branch protection and the `protect-main-merges` ruleset are evaluated when the merge runs (stacks can't bypass them).
+- `gh stack sync` / `gh stack rebase` — cascade-rebase after a lower branch changes or the trunk moves.
+- `gh stack merge` — merge up to the chosen PR in one all-or-nothing operation, choosing the merge method. `protect-main-merges` and other rules are evaluated at merge (stacks can't bypass them).
 
-Each branch still follows the `type/<ticket>-<short-name>` grammar. This extends the squash-merge rule, it doesn't replace it: every PR still lands on `main` as a squash merge — the CLI just sequences the merges and rebases for you.
+Constraints: all branches live in the same repo (no cross-fork stacks), each still follows the `type/<ticket>-<short-name>` grammar, and every PR still lands on `main` as a squash merge — this extends the squash-merge rule, it doesn't replace it. See GitHub's docs: <https://docs.github.com/en/pull-requests/get-started/about-stacked-prs>.
 
 ## Enforcement
 
