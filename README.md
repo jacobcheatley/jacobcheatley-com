@@ -9,3 +9,16 @@ Personal website for fun projects and learning
 - DB: Neon
 - Hosted: Docker in Fly.io
 - Other stuff as we figure it out
+
+## Secret scanning
+
+A pre-commit hook scans staged changes with [gitleaks](https://github.com/gitleaks/gitleaks) and blocks the commit if a secret is found. `bun install` wires it up (via `core.hooksPath`); install the binary once:
+
+```sh
+# macOS
+brew install gitleaks
+# Linux
+go install github.com/gitleaks/gitleaks/v8@latest   # or grab a release binary
+```
+
+The hook fails if `gitleaks` isn't on PATH. Emergency bypass: `git commit --no-verify`.
