@@ -1,15 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { StickyWall } from "@/projects/sticky-notes/StickyWall";
-import { listNotesFn } from "@/projects/sticky-notes/sticky-notes.fn";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-// Top-level (not under _shell): the corkboard is full-bleed, not the centred
-// Portfolio column. Read path mirrors the retired guestbook — loader + list fn.
+// Passthrough layout for the Sticky Notes routes so the wall (`/sticky-notes`,
+// the index) and the editor (`/sticky-notes/new`) are full-bleed siblings — it
+// adds no chrome of its own, unlike `_shell` which frames the Portfolio column.
 export const Route = createFileRoute("/sticky-notes")({
-  loader: () => listNotesFn(),
-  component: Wall,
+  component: Outlet,
 });
-
-function Wall() {
-  const notes = Route.useLoaderData();
-  return <StickyWall notes={notes} />;
-}

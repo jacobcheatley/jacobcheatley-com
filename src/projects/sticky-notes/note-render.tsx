@@ -17,15 +17,17 @@ import type { Fastener, Ink, NoteContent, PaperColour } from "./note-schema";
 const CANVAS = 500;
 const MAX_FOLD = 120; // px a corner peels in at curl = 1
 // Transparent board headroom above the note so a fastener (esp. tape) can
-// overhang the top edge onto the wall. The note itself stays 0..500.
-const FASTENER_MARGIN = 40;
+// overhang the top edge onto the wall. The note itself stays 0..500. Exported
+// so the editor (#61) maps pointer input through the exact same coordinate frame.
+export const FASTENER_MARGIN = 40;
 
 // The SVG's width / height. A consumer sizing a tile or zoom box must match this
 // exactly or the note crops, so derive it from here rather than re-typing it.
 export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
 
-// Paper backgrounds — soft, saturated sticky-note stock.
-const PAPER: Record<PaperColour, string> = {
+// Paper backgrounds — soft, saturated sticky-note stock. Exported so the editor
+// (#61) tints its paper/ink swatches from the exact rendered shades.
+export const PAPER: Record<PaperColour, string> = {
   yellow: "#fde68a",
   pink: "#fbcfe8",
   blue: "#bfdbfe",
@@ -34,8 +36,8 @@ const PAPER: Record<PaperColour, string> = {
   white: "#f8fafc",
 };
 
-// Marker inks — bold and legible on any paper.
-const INK: Record<Ink, string> = {
+// Marker inks — bold and legible on any paper. Exported (see PAPER above).
+export const INK: Record<Ink, string> = {
   black: "#1f2937",
   green: "#16a34a",
   red: "#dc2626",
