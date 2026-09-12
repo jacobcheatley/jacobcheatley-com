@@ -1,4 +1,27 @@
 @import "tailwindcss";
+@import "@fontsource-variable/newsreader/index.css";
+@import "@fontsource-variable/newsreader/wght-italic.css";
+@import "@fontsource/ibm-plex-sans/index.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+
+@theme {
+  --color-paper: light-dark(#f7f7f4, #1a1b1a);
+  --color-ink: light-dark(#202523, #e8e9e6);
+  --color-accent: light-dark(#28714a, #7dd69a);
+  --color-accent-2: light-dark(#d96c1e, #f2a05a);
+  --color-on-accent-2: #202523;
+  --color-name: light-dark(#d63a2f, #f26b5e);
+  --color-muted: light-dark(#626864, #9aa09c);
+  --color-line: light-dark(#dcddd8, #2e302e);
+  --color-surface: light-dark(#ffffff, #232524);
+  --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --radius-sm: 2px;
+}
+
+:root {
+  color-scheme: light dark;
+}
 
 * {
   box-sizing: border-box;
@@ -12,4 +35,15 @@ body,
 
 body {
   margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
 }
