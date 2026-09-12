@@ -1,7 +1,7 @@
 import { getStroke } from "perfect-freehand";
 import { useId } from "react";
 import { FONT_FAMILIES } from "./note-fonts";
-import type { Ink, NoteContent, PaperColour } from "./note-schema";
+import type { Fastener, Ink, NoteContent, PaperColour } from "./note-schema";
 
 // The one pure, state-free renderer: note `content` JSON → SVG. Every surface
 // (wall tile, zoom view, editor, approval CLI) uses it, so notes render
@@ -104,111 +104,402 @@ function paperPath(fbl: number, fbr: number): string {
 const tri = (a: Point, b: Point, t: Point) =>
   `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]} L ${t[0]} ${t[1]} Z`;
 
-// Fasteners fix the note to the board. Rendered here (not in CSS around the
-// SVG) so they look identical on the wall, zoom, editor and CLI. Most sit on
-// top of the note; sticky tack sits behind it (see fastenerBehind). Diegetic
-// and decorative; the stored `fastener` key chooses which.
+// Blend two #rrggbb colours: t = 0 → a, t = 1 → b. Tints the fold faces from
+// the paper colour so a curled corner shows the same stock, a shade lighter.
+function mix(a: string, b: string, t: number): string {
+  const ch = (h: string, i: number) => Number.parseInt(h.slice(i, i + 2), 16);
+  const c = (i: number) =>
+    Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${c(1)}${c(3)}${c(5)}`;
+}
 
-// Pin head colour → [head, dimple] shades.
-const PIN_SHADES: Record<
-  "red" | "green" | "yellow" | "blue",
-  [string, string]
-> = {
-  red: ["#e11d48", "#9f1239"],
-  green: ["#16a34a", "#14532d"],
-  yellow: ["#eab308", "#854d0e"],
-  blue: ["#2563eb", "#1e3a8a"],
+// ---------------------------------------------------------------------------
+// Fasteners fix the note to the board. Rendered inside the SVG (not in CSS
+// around it) so they look identical on the wall, zoom, editor and CLI. Drawn in
+// 500-canvas units but sized to survive the ~128px wall tile. Light comes from
+// the top-left, so every shadow falls down-right, matching the wall's CSS
+// drop-shadow. Most sit on top of the note; sticky tack sits behind it.
+
+// Per-render SVG ids: a fastener needs at most one gradient and one blur.
+type FastenerIds = { grad: string; blur: string };
+const url = (id: string) => `url(#${id})`;
+
+// Pin head colour → [light, mid, dark] radial-gradient stops.
+const PIN_SHADES: Partial<Record<Fastener, [string, string, string]>> = {
+  "pin-red": ["#fb7185", "#e11d48", "#881337"],
+  "pin-green": ["#6ee7a0", "#16a34a", "#14532d"],
+  "pin-yellow": ["#fde68a", "#eab308", "#854d0e"],
+  "pin-blue": ["#93c5fd", "#2563eb", "#1e3a8a"],
 };
 
-// A push-pin seen head-on, sitting a little below the note's top edge.
-function pin(head: string, dimple: string) {
+// The <defs> a fastener needs: a soft blur for its shadows plus its gradient.
+function fastenerDefs(fastener: Fastener, ids: FastenerIds) {
+  if (fastener === "none") return null;
+  const shades = PIN_SHADES[fastener];
+  return (
+    <>
+      <filter id={ids.blur} x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="2.5" />
+      </filter>
+      {shades && (
+        <radialGradient id={ids.grad} cx="35%" cy="30%" r="75%">
+          <stop offset="0" stopColor={shades[0]} />
+          <stop offset="0.55" stopColor={shades[1]} />
+          <stop offset="1" stopColor={shades[2]} />
+        </radialGradient>
+      )}
+      {fastener === "tape-clear" && (
+        // the sheen of a curved clear strip: bright edges, dim middle
+        <linearGradient id={ids.grad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
+          <stop offset="0.35" stopColor="#ffffff" stopOpacity="0.12" />
+          <stop offset="0.7" stopColor="#ffffff" stopOpacity="0.18" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0.45" />
+        </linearGradient>
+      )}
+      {(fastener === "staple" || fastener === "staples") && (
+        <linearGradient id={ids.grad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f8fafc" />
+          <stop offset="0.45" stopColor="#b8bec8" />
+          <stop offset="1" stopColor="#6b7280" />
+        </linearGradient>
+      )}
+      {fastener === "stick" && (
+        <linearGradient id={ids.grad} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#93aee0" />
+          <stop offset="1" stopColor="#5b7fc4" />
+        </linearGradient>
+      )}
+    </>
+  );
+}
+
+// A push-pin stuck in at an angle: domed head, needle exiting under it into a
+// puncture, soft shadow down-right.
+function pin(ids: FastenerIds) {
   const cx = CANVAS / 2;
+  const cy = 28;
   return (
     <g>
-      <ellipse cx={cx} cy={40} rx={15} ry={6} fill="#000000" opacity={0.15} />
-      <circle cx={cx} cy={26} r={16} fill={head} />
-      <circle cx={cx - 5} cy={21} r={5} fill="#ffffff" opacity={0.55} />
-      <circle cx={cx} cy={26} r={4} fill={dimple} />
-    </g>
-  );
-}
-
-// A staple centred at (x, y), rotated by `angle` degrees.
-function staple(x: number, y: number, angle: number) {
-  return (
-    <g fill="#9ca3af" transform={`rotate(${angle} ${x} ${y})`}>
-      <rect x={x - 16} y={y - 3} width={32} height={6} rx={1.5} />
-      <rect x={x - 16} y={y - 3} width={6} height={15} rx={1.5} />
-      <rect x={x + 10} y={y - 3} width={6} height={15} rx={1.5} />
-    </g>
-  );
-}
-
-// Drawn BEHIND the paper: only sticky tack, whose blobs peek out from behind
-// the note's top edge.
-function fastenerBehind(fastener: NoteContent["fastener"]) {
-  if (fastener !== "stick") return null;
-  const blob = (bx: number) => (
-    <g key={bx}>
-      <ellipse cx={bx} cy={-3} rx={17} ry={13} fill="#93b4d8" />
       <ellipse
-        cx={bx - 5}
-        cy={-8}
-        rx={5}
-        ry={3}
+        cx={cx + 7}
+        cy={cy + 24}
+        rx={27}
+        ry={12}
+        fill="#000000"
+        opacity={0.3}
+        filter={url(ids.blur)}
+      />
+      <line
+        x1={cx + 2}
+        y1={cy + 12}
+        x2={cx + 13}
+        y2={cy + 36}
+        stroke="#4b5563"
+        strokeWidth={4}
+        strokeLinecap="round"
+      />
+      <line
+        x1={cx + 1}
+        y1={cy + 12}
+        x2={cx + 12}
+        y2={cy + 35}
+        stroke="#e5e7eb"
+        strokeWidth={1.4}
+        strokeLinecap="round"
+      />
+      <ellipse
+        cx={cx + 13.5}
+        cy={cy + 36.5}
+        rx={3}
+        ry={1.6}
+        fill="#000000"
+        opacity={0.55}
+      />
+      <circle cx={cx} cy={cy} r={26} fill={url(ids.grad)} />
+      <ellipse
+        cx={cx - 10}
+        cy={cy - 10}
+        rx={9}
+        ry={5.5}
         fill="#ffffff"
-        opacity={0.35}
+        opacity={0.6}
+        transform={`rotate(-35 ${cx - 10} ${cy - 10})`}
       />
     </g>
   );
+}
+
+// Tape outlines: a strip x0..x1 × y0..y1 whose short ends are torn (masking)
+// or finely serrated (clear). Deterministic, so renders stay identical.
+function tornStrip(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  amp = 5,
+  step = 7,
+): string {
+  const pts: Point[] = [
+    [x0, y0],
+    [x1, y0],
+  ];
+  for (let y = y0 + step; y < y1; y += step) {
+    const dir = Math.round(y / step) % 2 ? 1 : -1;
+    pts.push([x1 + dir * amp * (0.6 + 0.4 * Math.sin(y)), y]);
+  }
+  pts.push([x1, y1], [x0, y1]);
+  for (let y = y1 - step; y > y0; y -= step) {
+    const dir = Math.round(y / step) % 2 ? -1 : 1;
+    pts.push([x0 + dir * amp * (0.6 + 0.4 * Math.cos(y)), y]);
+  }
+  return pts.map(([x, y]) => `${x.toFixed(1)},${y}`).join(" ");
+}
+
+function serratedStrip(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  t = 3,
+): string {
+  const pts: Point[] = [
+    [x0, y0],
+    [x1, y0],
+  ];
+  for (let y = y0; y < y1; y += t * 2)
+    pts.push([x1 - t, y + t], [x1, y + t * 2]);
+  pts.push([x1, y1], [x0, y1]);
+  for (let y = y1; y > y0; y -= t * 2)
+    pts.push([x0 + t, y - t], [x0, y - t * 2]);
+  return pts.map(([x, y]) => `${x},${y}`).join(" ");
+}
+
+// Cream masking tape bridging board and note: torn ends, two light streaks,
+// faint edge lines, soft shadow.
+function tapeMasking(ids: FastenerIds) {
+  const cx = CANVAS / 2;
+  const outline = tornStrip(cx - 90, -34, cx + 90, 30);
+  return (
+    <g transform={`rotate(-6 ${cx} 0)`}>
+      <polygon
+        points={outline}
+        fill="#000000"
+        opacity={0.18}
+        transform="translate(1 4)"
+        filter={url(ids.blur)}
+      />
+      <polygon points={outline} fill="#f4ecc6" fillOpacity={0.7} />
+      <line
+        x1={cx - 80}
+        y1={26}
+        x2={cx - 54}
+        y2={-30}
+        stroke="#ffffff"
+        strokeOpacity={0.28}
+        strokeWidth={7}
+      />
+      <line
+        x1={cx + 40}
+        y1={26}
+        x2={cx + 54}
+        y2={-30}
+        stroke="#ffffff"
+        strokeOpacity={0.2}
+        strokeWidth={4}
+      />
+      <line
+        x1={cx - 88}
+        y1={-33}
+        x2={cx + 88}
+        y2={-33}
+        stroke="#000000"
+        strokeOpacity={0.07}
+        strokeWidth={1.5}
+      />
+      <line
+        x1={cx - 88}
+        y1={29}
+        x2={cx + 88}
+        y2={29}
+        stroke="#000000"
+        strokeOpacity={0.09}
+        strokeWidth={1.5}
+      />
+    </g>
+  );
+}
+
+// Clear tape: a faint blue-white tint, the sheen gradient, a hairline edge and
+// one bright streak. Subtle by design.
+function tapeClear(ids: FastenerIds) {
+  const cx = CANVAS / 2;
+  const outline = serratedStrip(cx - 85, -32, cx + 85, 28);
+  return (
+    <g transform={`rotate(-5 ${cx} 0)`}>
+      <polygon
+        points={outline}
+        fill="#000000"
+        opacity={0.12}
+        transform="translate(1 3)"
+        filter={url(ids.blur)}
+      />
+      <polygon points={outline} fill="#e8f1ff" fillOpacity={0.28} />
+      <polygon points={outline} fill={url(ids.grad)} />
+      <polygon
+        points={outline}
+        fill="none"
+        stroke="#ffffff"
+        strokeOpacity={0.55}
+        strokeWidth={1}
+      />
+      <line
+        x1={cx - 54}
+        y1={26}
+        x2={cx - 28}
+        y2={-30}
+        stroke="#ffffff"
+        strokeOpacity={0.5}
+        strokeWidth={9}
+      />
+    </g>
+  );
+}
+
+// A driven staple centred at (x, y): only the steel crown shows, with a dark
+// slit at each end where the legs pierce the paper.
+function staple(
+  ids: FastenerIds,
+  x: number,
+  y: number,
+  angle: number,
+  w: number,
+) {
+  const l = x - w / 2;
+  return (
+    <g transform={`rotate(${angle} ${x} ${y})`}>
+      <rect
+        x={l}
+        y={y - 1}
+        width={w}
+        height={12}
+        rx={3}
+        fill="#000000"
+        opacity={0.3}
+        filter={url(ids.blur)}
+      />
+      <rect
+        x={l - 3}
+        y={y - 4}
+        width={7}
+        height={10}
+        rx={1.5}
+        fill="#111827"
+        opacity={0.75}
+      />
+      <rect
+        x={x + w / 2 - 4}
+        y={y - 4}
+        width={7}
+        height={10}
+        rx={1.5}
+        fill="#111827"
+        opacity={0.75}
+      />
+      <rect
+        x={l}
+        y={y - 5}
+        width={w}
+        height={10}
+        rx={1.5}
+        fill={url(ids.grad)}
+      />
+      <rect
+        x={l + 1}
+        y={y - 4.5}
+        width={w - 2}
+        height={2}
+        rx={1}
+        fill="#ffffff"
+        opacity={0.7}
+      />
+    </g>
+  );
+}
+
+// A squished lump of sticky tack centred on x at the note's top edge; only the
+// part above y = 0 peeks out from behind the paper. `k` nudges the middle bump
+// so the two lumps aren't twins.
+function lump(ids: FastenerIds, cx: number, w: number, h: number, k: number) {
+  const l = cx - w / 2;
+  const r = cx + w / 2;
+  const d = [
+    `M ${l} 6`,
+    `C ${l - 3} ${-h * 0.4} ${l + w * 0.1} ${-h * 0.95} ${l + w * 0.27} ${-h * 0.78}`,
+    `C ${l + w * 0.35} ${-h * 0.7} ${l + w * 0.4} ${-h * 1.05} ${l + w * 0.55 + k} ${-h * 0.98}`,
+    `C ${l + w * 0.67} ${-h * 0.92} ${l + w * 0.72} ${-h * 0.66} ${l + w * 0.83} ${-h * 0.62}`,
+    `C ${r + 2} ${-h * 0.5} ${r + 3} 0 ${r} 6 Z`,
+  ].join(" ");
+  return (
+    <g>
+      <path d={d} fill={url(ids.grad)} />
+      <ellipse
+        cx={l + w * 0.3}
+        cy={-h * 0.5}
+        rx={w * 0.12}
+        ry={h * 0.18}
+        fill="#ffffff"
+        opacity={0.18}
+      />
+      {/* the note's own shade falling on the tack along the top edge */}
+      <rect
+        x={l - 6}
+        y={-6}
+        width={w + 12}
+        height={14}
+        fill="#000000"
+        opacity={0.3}
+        filter={url(ids.blur)}
+      />
+    </g>
+  );
+}
+
+// Drawn BEHIND the paper: only sticky tack, one lump under each top corner.
+function fastenerBehind(fastener: Fastener, ids: FastenerIds) {
+  if (fastener !== "stick") return null;
   return (
     <>
-      {blob(150)}
-      {blob(350)}
+      {lump(ids, 58, 66, 18, 3)}
+      {lump(ids, CANVAS - 58, 60, 17, -3)}
     </>
   );
 }
 
 // Drawn ON TOP of the note.
-function fastenerFront(fastener: NoteContent["fastener"]) {
-  const cx = CANVAS / 2;
+function fastenerFront(fastener: Fastener, ids: FastenerIds) {
   switch (fastener) {
     case "none":
     case "stick": // holds by itself / rendered behind
       return null;
     case "pin-red":
-      return pin(...PIN_SHADES.red);
     case "pin-green":
-      return pin(...PIN_SHADES.green);
     case "pin-yellow":
-      return pin(...PIN_SHADES.yellow);
     case "pin-blue":
-      return pin(...PIN_SHADES.blue);
-    case "tape": {
-      // a wide translucent strip bridging the board (above y=0) and the note
-      const w = 170;
-      return (
-        <g transform={`rotate(-5 ${cx} 0)`}>
-          <rect
-            x={cx - w / 2}
-            y={-30}
-            width={w}
-            height={68}
-            fill="#ffffff"
-            fillOpacity={0.5}
-            stroke="#ffffff"
-            strokeOpacity={0.5}
-          />
-        </g>
-      );
-    }
-    case "staple": // a single staple, centred near the top
-      return staple(cx, 28, 0);
-    case "staples": // one staple angled into each top corner
+      return pin(ids);
+    case "tape-masking":
+      return tapeMasking(ids);
+    case "tape-clear":
+      return tapeClear(ids);
+    case "staple": // one staple, centred near the top
+      return staple(ids, CANVAS / 2, 30, 0, 70);
+    case "staples": // one angled across each top corner
       return (
         <>
-          {staple(80, 46, -32)}
-          {staple(CANVAS - 80, 46, 32)}
+          {staple(ids, 58, 42, -40, 60)}
+          {staple(ids, CANVAS - 58, 42, 40, 60)}
         </>
       );
   }
@@ -274,12 +565,20 @@ export function NoteRender({ content }: { content: NoteContent }) {
   const faceBr = `${uid}-face-br`;
   const faceBl = `${uid}-face-bl`;
   const shadowId = `${uid}-shadow`;
+  const fastenerIds: FastenerIds = {
+    grad: `${uid}-fastener-grad`,
+    blur: `${uid}-fastener-blur`,
+  };
 
   const c = CANVAS;
+  const paperFill = PAPER[content.colour];
   const fbl = content.curl.bl * MAX_FOLD;
   const fbr = content.curl.br * MAX_FOLD;
   const hasFold = fbl > 0 || fbr > 0;
   const paper = paperPath(fbl, fbr);
+  // fold face: the same stock, lighter at the lifted tip, near-paper at the crease
+  const foldTip = mix(paperFill, "#ffffff", 0.6);
+  const foldCrease = mix(paperFill, "#ffffff", 0.15);
 
   return (
     <svg
@@ -296,14 +595,13 @@ export function NoteRender({ content }: { content: NoteContent }) {
         </clipPath>
         {hasFold && (
           <>
-            {/* light paper back, darkening toward the crease, one per corner */}
             <linearGradient id={faceBr} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#fbfcfd" />
-              <stop offset="1" stopColor="#cdd1d5" />
+              <stop offset="0" stopColor={foldTip} />
+              <stop offset="1" stopColor={foldCrease} />
             </linearGradient>
             <linearGradient id={faceBl} x1="1" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#fbfcfd" />
-              <stop offset="1" stopColor="#cdd1d5" />
+              <stop offset="0" stopColor={foldTip} />
+              <stop offset="1" stopColor={foldCrease} />
             </linearGradient>
             <filter id={shadowId} x="-30%" y="-30%" width="160%" height="160%">
               <feDropShadow
@@ -316,13 +614,14 @@ export function NoteRender({ content }: { content: NoteContent }) {
             </filter>
           </>
         )}
+        {fastenerDefs(content.fastener, fastenerIds)}
       </defs>
 
       {/* sticky tack sits behind the note, peeking out above the top edge */}
-      {fastenerBehind(content.fastener)}
+      {fastenerBehind(content.fastener, fastenerIds)}
 
       {/* paper, then content clipped to the (corner-cut) paper shape */}
-      <path d={paper} fill={PAPER[content.colour]} />
+      <path d={paper} fill={paperFill} />
       <g clipPath={`url(#${clipId})`}>{content.elements.map(renderElement)}</g>
 
       {/* folded corners last, on top of the content */}
@@ -342,7 +641,7 @@ export function NoteRender({ content }: { content: NoteContent }) {
       )}
 
       {/* fastener on top of everything */}
-      {fastenerFront(content.fastener)}
+      {fastenerFront(content.fastener, fastenerIds)}
     </svg>
   );
 }
