@@ -11,7 +11,7 @@ const content: NoteContent = {
   colour: "yellow",
   rotation: 0,
   curl: { bl: 0, br: 0 },
-  fastener: "pin",
+  fastener: "pin-red",
   elements: [
     { type: "sticker", x: 100, y: 100, emoji: "⭐", scale: 1, rotation: 0 },
   ],

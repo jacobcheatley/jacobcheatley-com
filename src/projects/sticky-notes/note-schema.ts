@@ -20,7 +20,17 @@ export const PAPER_COLOURS = [
   "white",
 ] as const;
 export const FONTS = ["print", "handwritten", "casual", "marker"] as const;
-export const FASTENERS = ["pin", "tape", "staple", "stick"] as const;
+export const FASTENERS = [
+  "none",
+  "pin-red",
+  "pin-green",
+  "pin-yellow",
+  "pin-blue",
+  "tape",
+  "staple",
+  "staples",
+  "stick",
+] as const;
 
 // Curated sticker set. Kept small on purpose; re-tunable without a migration
 // since only the key is stored. The editor (#61) surfaces exactly these.

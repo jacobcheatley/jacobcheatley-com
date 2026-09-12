@@ -39,7 +39,7 @@ The marker colour palette — `black`, `green`, `red`, `blue`. The only colours 
 _Avoid_: colour (for strokes/text — "colour" alone is the Note's background)
 
 **Fastener**:
-The decorative attachment that pins a Note to the wall — `pin`, `tape`, `staple`, `stick`. Choosing a Fastener *is* the act of submitting the Note.
+The decorative attachment that fixes a Note to the wall — a coloured pin (`pin-red`, `pin-green`, `pin-yellow`, `pin-blue`), `tape`, a single `staple` or two corner `staples`, a blob of sticky tack behind the Note (`stick`), or `none` (it holds on its own). Choosing a Fastener *is* the act of submitting the Note.
 _Avoid_: pin (as the general term — a pin is one kind of Fastener)
 
 **Curl**:

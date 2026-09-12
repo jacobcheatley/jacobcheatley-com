@@ -10,7 +10,7 @@ function validContent(): NoteContent {
     colour: "yellow",
     rotation: -2,
     curl: { bl: 0.3, br: 0.1 },
-    fastener: "pin",
+    fastener: "pin-red",
     elements: [
       { type: "stroke", ink: "red", size: 8, points: [[10, 20, 0.5]] },
       {
