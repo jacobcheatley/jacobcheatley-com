@@ -184,5 +184,10 @@ export const noteSchema = z.strictObject({
   content: noteContentSchema,
 });
 
+export type Ink = (typeof INKS)[number];
+export type PaperColour = (typeof PAPER_COLOURS)[number];
+export type Font = (typeof FONTS)[number];
+export type Fastener = (typeof FASTENERS)[number];
+
 export type NoteContent = z.infer<typeof noteContentSchema>;
 export type NoteSubmission = z.infer<typeof noteSchema>;
