@@ -71,3 +71,4 @@ jobs:
       - run: bun run test:e2e
         env:
           BASE_URL: https://jacobcheatley-com-dev.fly.dev
+          SMOKE_WRITE: "1"
