@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
-import { listApprovedEntries } from "./guestbook.server";
+import { addEntry, listApprovedEntries } from "./guestbook.server";
 import { guestbookEntries } from "./schema";
+
+describe("addEntry", () => {
+  it("inserts a pending entry, returns its id, and keeps it off the approved list", async () => {
+    const id = await addEntry({ name: "Ada", message: "Hello" });
+    expect(id).toBeGreaterThan(0);
+
+    const [row] = await db.select().from(guestbookEntries);
+    expect(row?.id).toBe(id);
+    expect(row?.approvedAt).toBeNull();
+
+    expect(await listApprovedEntries()).toHaveLength(0);
+  });
+});
 
 describe("listApprovedEntries", () => {
   it("excludes pending entries", async () => {

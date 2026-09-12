@@ -12,9 +12,9 @@ export default defineConfig({
   plugins: [viteReact()],
   resolve: { tsconfigPaths: true },
   test: {
-    include: ["src/**/*.test.{ts,tsx}"],
+    // No root-level `include`: each project sets its own so `.test.ts` (unit,
+    // node + db) and `.test.tsx` (component, jsdom) never cross over.
     fileParallelism: false,
-    // The jsdom `component` project arrives with the first component test (#25/#26).
     projects: [
       {
         extends: true,
@@ -24,6 +24,15 @@ export default defineConfig({
           environment: "node",
           globalSetup: "src/test/global-setup.ts",
           setupFiles: "src/test/db-reset.ts",
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "component",
+          include: ["src/**/*.test.tsx"],
+          environment: "jsdom",
+          setupFiles: "src/test/jsdom-setup.ts",
         },
       },
     ],

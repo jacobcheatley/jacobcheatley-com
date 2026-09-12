@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { GuestbookForm } from "@/projects/guestbook/GuestbookForm";
 import { listEntriesFn } from "@/projects/guestbook/guestbook.fn";
 
 export const Route = createFileRoute("/guestbook")({
@@ -12,6 +13,7 @@ function Guestbook() {
     <main>
       <Link to="/">← jacobcheatley.com</Link>
       <h1>Guestbook</h1>
+      <GuestbookForm />
       <ul>
         {entries.map((entry) => (
           <li key={entry.id}>
