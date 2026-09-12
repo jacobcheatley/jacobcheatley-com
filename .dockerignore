@@ -1,10 +1,7 @@
 node_modules
 dist
 .output
-.env
-.env.*
-!.env.example
-.neon
+.env*
+.git
 test-results
 playwright-report
-.claude/worktrees
