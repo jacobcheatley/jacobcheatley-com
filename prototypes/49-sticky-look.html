@@ -123,7 +123,7 @@
 <body>
 <header>
   <h1>Sticky Notes — visual direction probe</h1>
-  <p class="sub">Ticket #49 · pick a surface, a note object, an ink feel. Distinct from the serif tree-frog Portfolio. Nothing here is final — react to it.</p>
+  <p class="sub">Ticket #49 · surface + note object + ink + <b>the editor itself</b> (tools, text boxes). Distinct from the serif tree-frog Portfolio. Nothing here is final — react to it. Sections 1–6 = the world; 7–9 = the editor.</p>
 </header>
 
 <section>
@@ -240,8 +240,152 @@
   </div>
 </section>
 
+<style>
+  /* ---- editor exploration ---- */
+  .stage { position: relative; height: 520px; border-radius: 10px; padding: 0; overflow: hidden; }
+  .stage .center-note {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-1.5deg);
+    width: 300px; min-height: 300px; padding: 22px 20px; border-radius: 3px;
+    box-shadow: 4px 10px 22px rgba(0,0,0,.4); background: var(--n-yellow); color:#1c1c1c;
+    font-family:"Patrick Hand",cursive; font-size: 1.15rem;
+    background-image: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0) 40%);
+  }
+  /* diegetic corner / edge handles on the note */
+  .handle { position:absolute; width:16px; height:16px; border:2px solid rgba(0,0,0,.45); background:#fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .handle.tl{top:-9px;left:-9px} .handle.tr{top:-9px;right:-9px} .handle.bl{bottom:-9px;left:-9px} .handle.br{bottom:-9px;right:-9px}
+  .handle.rot{top:-34px;left:50%;transform:translateX(-50%);border-color:var(--ink-green)}
+  .handle.rot::before{content:"";position:absolute;top:14px;left:50%;transform:translateX(-50%);width:2px;height:18px;background:rgba(0,0,0,.35)}
+  .tag { position:absolute; font-size:.68rem; background:#0d0f12; color:#cfd3da; padding:2px 6px; border-radius:4px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,.4); font-family:"IBM Plex Sans"; }
+
+  /* marker jar */
+  .jar { position:absolute; width:110px; height:120px; border-radius:8px 8px 14px 14px;
+         background:linear-gradient(180deg, rgba(255,255,255,.25), rgba(120,90,50,.35)); border:2px solid rgba(0,0,0,.2); }
+  .marker { position:absolute; bottom:14px; width:20px; height:96px; border-radius:3px 3px 5px 5px; box-shadow:0 3px 5px rgba(0,0,0,.35); }
+  .marker::after{content:"";position:absolute;bottom:-8px;left:3px;width:14px;height:14px;border-radius:0 0 50% 50%;background:inherit;filter:brightness(.7)}
+  .marker.k{background:#2a2a2a} .marker.g{background:var(--ink-green)} .marker.r{background:var(--ink-red)} .marker.b{background:var(--ink-blue)}
+  .marker.active{bottom:40px} /* lifted out = selected */
+
+  /* sticker sheet */
+  .sheet { position:absolute; width:132px; padding:10px; background:#fff; border-radius:6px; box-shadow:0 6px 16px rgba(0,0,0,.35);
+           display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  .sheet::before{content:"stickers";position:absolute;top:-18px;left:0;font-size:.7rem;color:#cfd3da;font-family:"IBM Plex Sans"}
+  .sheet span{ font-size:1.3rem; text-align:center; cursor:grab; }
+  .sheet span.peel{ transform:rotate(-12deg) translateY(-4px); filter:drop-shadow(0 3px 3px rgba(0,0,0,.3)); }
+
+  /* paper pad (colour picker) */
+  .pad { position:absolute; width:74px; height:74px; }
+  .pad .p{ position:absolute; width:60px; height:60px; border-radius:3px; box-shadow:0 3px 6px rgba(0,0,0,.3); }
+
+  /* fastener box */
+  .fbox{ position:absolute; display:flex; gap:10px; align-items:center; background:#0d0f12aa; padding:8px 10px; border-radius:8px; }
+  .fbox .pinicon{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8f8f,#c0271c 70%);box-shadow:0 2px 3px rgba(0,0,0,.4)}
+  .fbox .tapeicon{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 50% 50%,transparent 6px,rgba(240,235,200,.85) 7px);border:1px solid rgba(0,0,0,.2)}
+  .fbox .sel{outline:2px solid var(--ink-green);outline-offset:2px}
+
+  /* free text boxes */
+  .tbox{ position:absolute; padding:2px 4px; color:#1c1c1c; }
+  .tbox.selected{ outline:1.5px dashed rgba(0,0,0,.5); }
+  .tbox.selected .th{ position:absolute; width:9px; height:9px; background:#fff; border:1.5px solid rgba(0,0,0,.55); }
+  .th.a{top:-5px;left:-5px}.th.b{top:-5px;right:-5px}.th.c{bottom:-5px;left:-5px}.th.d{bottom:-5px;right:-5px}
+  .fontchip{ position:absolute; top:-22px; left:0; font-size:.62rem; background:#0d0f12; color:#cfd3da; padding:1px 6px; border-radius:4px; font-family:"IBM Plex Sans"; white-space:nowrap; }
+
+  /* tool tray (mode switch) */
+  .tray{ display:inline-flex; gap:0; border-radius:10px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,.4); margin-top:6px; }
+  .tray button{ border:0; background:#20242b; color:#cfd3da; padding:10px 14px; font-family:"IBM Plex Sans"; font-size:.85rem; display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .tray button.on{ background:var(--ink-green); color:#fff; }
+  .tray button+button{ border-left:1px solid #14161a; }
+</style>
+
+<section>
+  <div class="sec-head"><h2>7 · The editor workspace</h2><span class="hint">diegetic tools sit around the note as physical objects — not a generic toolbar</span></div>
+  <p class="sub" style="margin-top:-8px">One big note you're working on, on the corkboard. Grab a marker from the jar, peel a sticker off the sheet, pick a paper colour, choose a pin or tape. The corner handles rotate / curl / resize the note itself.</p>
+  <div class="stage cork">
+    <!-- tools around the note -->
+    <div class="jar" style="left:24px; top:54px;">
+      <div class="marker k active" style="left:10px"></div>
+      <div class="marker g" style="left:32px"></div>
+      <div class="marker r" style="left:54px"></div>
+      <div class="marker b" style="left:76px"></div>
+    </div>
+    <div class="tag" style="left:20px; top:186px">marker jar · black lifted = selected</div>
+
+    <div class="sheet" style="right:26px; top:56px;">
+      <span class="peel">⭐</span><span>❤️</span><span>😎</span><span>🔥</span><span>👍</span><span>🎉</span>
+    </div>
+    <div class="tag" style="right:26px; top:184px">drag a sticker onto the note</div>
+
+    <div class="pad" style="left:40px; bottom:30px;">
+      <div class="p y" style="left:0;top:0"></div><div class="p c" style="left:6px;top:6px"></div><div class="p b" style="left:12px;top:12px;outline:2px solid #fff"></div>
+    </div>
+    <div class="tag" style="left:34px; bottom:8px">paper colour pad</div>
+
+    <div class="fbox" style="right:34px; bottom:26px;">
+      <span class="pinicon sel"></span><span class="tapeicon"></span>
+    </div>
+    <div class="tag" style="right:34px; bottom:6px">pin (selected) or tape</div>
+
+    <!-- the note being edited -->
+    <div class="center-note">
+      <span class="handle rot"></span>
+      <span class="handle tl"></span><span class="handle tr"></span><span class="handle bl"></span><span class="handle br"></span>
+      <span class="pin" style="top:-8px"></span>
+      <svg width="150" height="46" viewBox="0 0 150 46" style="display:block;margin:2px 0 6px"><path d="M8 30 Q30 6 54 30 T120 24" fill="none" stroke="var(--ink-green)" stroke-width="6" stroke-linecap="round"/></svg>
+      thanks for visiting!
+      <span class="sticker" style="right:16px;bottom:44px">⭐</span>
+      <span class="who">— your name</span>
+    </div>
+    <div class="tag" style="left:50%; transform:translateX(-50%); top:14px">green handle rotates · corners resize / curl (seeded random, adjustable in a small range)</div>
+  </div>
+
+  <div class="sec-head" style="margin-top:20px"><span class="hint">mode = which tool is "in your hand". Direct: pick marker → draw; pick text → drop a box; pick sticker → drag from sheet; move → drag/rotate objects.</span></div>
+  <div class="tray">
+    <button class="on">✍️ Draw</button><button>🅣 Text box</button><button>⭐ Sticker</button><button>✋ Move</button>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>8 · Text boxes are their own objects</h2><span class="hint">not "one font for the note" — many boxes, freely placed, each with its own font / size / colour</span></div>
+  <div class="board" style="background:#2a2e35; border-radius:10px; height:340px; justify-content:center; align-items:center;">
+    <div class="note y" style="width:280px; min-height:280px; transform:rotate(-1deg); font-size:1rem; position:relative;">
+      <span class="pin" style="top:-8px"></span>
+      <div class="tbox" style="top:22px; left:20px; font-family:'Permanent Marker'; font-size:1.5rem; color:var(--ink-red)">WOW</div>
+      <div class="tbox selected" style="top:78px; left:30px; font-family:'Caveat'; font-size:1.6rem;">
+        best note wall
+        <span class="fontchip">Caveat · 24px · ✎ edit</span>
+        <span class="th a"></span><span class="th b"></span><span class="th c"></span><span class="th d"></span>
+      </div>
+      <div class="tbox" style="top:150px; left:24px; font-family:'Patrick Hand'; font-size:1.15rem;">placed anywhere<br>you like</div>
+      <div class="tbox" style="bottom:40px; right:20px; font-family:'IBM Plex Sans'; font-size:.8rem; color:#333;">tiny print corner</div>
+      <span class="who">— jc</span>
+    </div>
+  </div>
+  <p class="sub">Each box is drag-to-place, resize-by-handle, with its own font picker (the chip). Draw strokes and stickers are separate object layers on the same note. Open question: do text boxes also get a colour, or is ink colour only for marker strokes?</p>
+</section>
+
+<section>
+  <div class="sec-head"><h2>9 · Tool close-ups</h2><span class="hint">how "grabbing" reads — markers, stickers, paper, fasteners</span></div>
+  <div class="board" style="background:#2a2e35; border-radius:10px; height:auto; gap:34px; padding:34px;">
+    <div style="position:relative; width:120px; height:140px;">
+      <div class="jar" style="left:0; top:10px;"><div class="marker k" style="left:10px"></div><div class="marker g active" style="left:32px"></div><div class="marker r" style="left:54px"></div><div class="marker b" style="left:76px"></div></div>
+      <div class="tag" style="left:0; bottom:-6px">pick up a marker</div>
+    </div>
+    <div style="position:relative; width:150px; height:140px;">
+      <div class="sheet" style="left:0; top:14px; position:absolute;"><span class="peel">😎</span><span>❤️</span><span>⭐</span><span>🔥</span><span>👍</span><span>🎉</span></div>
+      <div class="tag" style="left:0; bottom:-6px">peel a sticker</div>
+    </div>
+    <div style="position:relative; width:120px; height:140px;">
+      <div class="swatches" style="gap:6px; max-width:110px;"><div class="sw y" style="width:48px;height:34px"></div><div class="sw c" style="width:48px;height:34px"></div><div class="sw b" style="width:48px;height:34px;outline:2px solid #fff"></div><div class="sw m" style="width:48px;height:34px"></div></div>
+      <div class="tag" style="left:0; bottom:-6px">choose paper colour</div>
+    </div>
+    <div style="position:relative; width:120px; height:140px;">
+      <div class="fbox" style="position:absolute; left:0; top:40px;"><span class="pinicon sel"></span><span class="tapeicon"></span></div>
+      <div class="tag" style="left:0; bottom:-6px">pin or tape</div>
+    </div>
+  </div>
+</section>
+
 <footer>
-  Throwaway probe on <code>prototype/49-sticky-look</code> · not merged · React to it and I'll narrow to one direction.
+  Throwaway probe on <code>prototype/49-sticky-look</code> · not merged · Surface = corkboard, default font = Patrick Hand. Now iterating the editor & text boxes — react and I'll keep going.
 </footer>
 </body>
 </html>
