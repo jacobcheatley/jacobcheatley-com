@@ -123,7 +123,7 @@
 <body>
 <header>
   <h1>Sticky Notes — visual direction probe</h1>
-  <p class="sub">Ticket #49 · surface + note object + ink + <b>the editor itself</b> (tools, text boxes). Distinct from the serif tree-frog Portfolio. Nothing here is final — react to it. §1–6 = the world; §7–9 = first editor pass; <b>§10 = the refined, grounded, mobile-first editor</b> — start there.</p>
+  <p class="sub">Ticket #49 · surface + note object + ink + <b>the editor itself</b> (tools, text boxes). Distinct from the serif tree-frog Portfolio. Nothing here is final — react to it. §1–6 = the world; §7–9 = first editor pass; §10 = grounded mobile editor; <b>§11 = research-led compression</b> — start at §11, then §10.</p>
 </header>
 
 <section>
@@ -589,6 +589,118 @@
       <div class="finalise" style="position:absolute; bottom:0; left:0; right:0;"><div class="stick" style="max-width:180px; margin-left:auto">📌 Stick it up</div></div>
     </div>
   </div>
+</section>
+
+<style>
+  .v2{ background:#0d1116; }
+  .v2 .frames{ display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start; }
+  .v2 .cap{ color:var(--chrome-muted); font-size:.82rem; margin:10px 2px 0; max-width:330px; font-family:"IBM Plex Sans"; }
+  .v2 .cap a{ color:#7dd69a; }
+  /* contextual inline toolbar on a selected object (pattern E) */
+  .ctxbar{ position:absolute; z-index:9; display:flex; gap:7px; align-items:center; background:#0d1114; padding:6px 8px; border-radius:11px; box-shadow:0 5px 14px rgba(0,0,0,.55); }
+  .ctxbar .fchip{ width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; background:#20262b; color:#e7ecee; font-size:.95rem; }
+  .ctxbar .fchip.on{ background:#1f8a45; color:#fff; }
+  .ctxbar .sep{ width:1px; height:22px; background:#2c343a; }
+  .ctxbar .idot{ width:19px; height:19px; border-radius:50%; }
+  .ctxbar .idot.on{ outline:2px solid #fff; outline-offset:1px; }
+  .ctxbar .bin{ color:#ff8a7d; font-size:1rem; padding:0 3px; }
+  .ctxbar::after{ content:""; position:absolute; bottom:-6px; left:22px; border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid #0d1114; }
+  /* stickers handle hints the pull-up */
+  .uptile{ position:relative; }
+  .uptile .up{ position:absolute; top:-8px; left:50%; transform:translateX(-50%); font-size:.7rem; color:#0f5a2c; }
+  /* pull-up bottom sheet (pattern D) */
+  .sheetup{ position:absolute; left:0; right:0; bottom:0; z-index:10; background:#f4ecdd; border-radius:18px 18px 0 0; box-shadow:0 -10px 26px rgba(0,0,0,.45); padding:10px 16px 20px; }
+  .sheetup .grab{ width:44px; height:5px; border-radius:3px; background:#cbba93; margin:2px auto 12px; }
+  .sheetup .stabs{ display:flex; gap:16px; font-family:"IBM Plex Sans"; font-size:.85rem; color:#8a7649; margin-bottom:12px; }
+  .sheetup .stabs .on{ color:#3a2a12; font-weight:600; border-bottom:2px solid var(--ink-red); padding-bottom:3px; }
+  .stgrid{ display:grid; grid-template-columns:repeat(5,1fr); gap:14px 10px; }
+  .stgrid span{ font-size:1.55rem; text-align:center; }
+  .stgrid span.peel{ transform:rotate(-13deg) translateY(-5px); filter:drop-shadow(0 3px 3px rgba(0,0,0,.3)); }
+  /* radial colour fan fallback */
+  .fanwrap{ position:relative; width:170px; height:150px; background:radial-gradient(120% 90% at 50% 100%, #3d525a, #2b3a41 70%); border-radius:12px; }
+  .fandot{ position:absolute; width:30px; height:30px; border-radius:50%; box-shadow:0 3px 6px rgba(0,0,0,.45); }
+  .fandot.sel{ outline:3px solid #fff; outline-offset:2px; }
+</style>
+
+<section class="v2">
+  <div class="sec-head"><h2>11 · Compression, research-led</h2><span class="hint">applies the <a href="49-tool-ux-research.md" style="color:#7dd69a">research</a>: marker tray + in-hand spine · bottom sheet for stickers/fonts · inline bar on a selected object · colour fan as fallback</span></div>
+
+  <div class="frames">
+    <!-- resting state + contextual inline toolbar on a selected text box -->
+    <div>
+      <div class="phone"><div class="ed">
+        <div class="mat">
+          <div class="topbar"><span class="back">‹ corkboard</span><span class="post-hint">draft · autosaved</span></div>
+          <div class="inhand">✍️ red marker in hand</div>
+          <div class="rnote">
+            <span class="rh rot"></span><span class="rh tl"></span><span class="rh tr"></span><span class="rh bl"></span><span class="rh br"></span>
+            <!-- selected text box gets an inline bar: fonts + inks + bin -->
+            <div class="ctxbar" style="top:34px; left:16px;">
+              <span class="fchip on" style="font-family:'Patrick Hand'">A</span>
+              <span class="fchip" style="font-family:'Caveat'">A</span>
+              <span class="fchip" style="font-family:'Permanent Marker'">A</span>
+              <span class="fchip" style="font-family:'IBM Plex Sans'">A</span>
+              <span class="sep"></span>
+              <span class="idot" style="background:var(--ink-black)"></span>
+              <span class="idot on" style="background:var(--ink-green)"></span>
+              <span class="idot" style="background:var(--ink-red)"></span>
+              <span class="idot" style="background:var(--ink-blue)"></span>
+              <span class="sep"></span><span class="bin">🗑</span>
+            </div>
+            <div class="rtb sel" style="top:92px; left:22px; font-family:'Patrick Hand'; color:var(--ink-green); font-size:1.25rem">love this
+              <span class="h a"></span><span class="h b"></span><span class="h c"></span><span class="h d"></span></div>
+            <svg width="150" height="46" viewBox="0 0 150 46" style="position:absolute; top:150px; left:14px"><path d="M6 30 Q30 6 54 30 T120 22" fill="none" stroke="var(--ink-red)" stroke-width="6" stroke-linecap="round"/></svg>
+            <span class="who">— your name</span>
+          </div>
+        </div>
+        <div class="dock">
+          <div class="pantray" style="justify-content:space-around;">
+            <div class="pobj held"><div class="pmarker r"></div><span class="plabel">marker</span></div>
+            <div class="pobj"><div class="ptile" style="font-family:'Patrick Hand'; font-size:1.5rem">Aa</div><span class="plabel">text</span></div>
+            <div class="pobj uptile"><div class="ptile"><span class="up">▲</span>⭐</div><span class="plabel">stickers</span></div>
+            <div class="pobj"><div class="peraser"></div><span class="plabel">eraser</span></div>
+            <div class="pobj"><svg class="ptweez" viewBox="0 0 40 40"><path d="M13 4 L19 26 M27 4 L21 26" stroke="#4a3a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M19 26 q1 8 1 10 q0-2 1-10" fill="#4a3a1a"/></svg><span class="plabel">select</span></div>
+          </div>
+          <div class="finalise"><div class="stick">📌 Stick it up</div></div>
+        </div>
+      </div></div>
+      <p class="cap"><b>Resting state — 5 objects, no scrolling.</b> One marker (tap = its colour; long-press = fan). Stickers &amp; fonts move off the tray. Selecting the text box floats an <b>inline bar</b> (fonts + the 4 inks + bin) right where you're working — pattern E.</p>
+    </div>
+
+    <!-- pull-up sheet for stickers/fonts -->
+    <div>
+      <div class="phone"><div class="ed">
+        <div class="mat">
+          <div class="topbar"><span class="back">‹ corkboard</span><span class="post-hint">pick a sticker</span></div>
+          <div class="rnote" style="top:64px"><span class="who">— your name</span>drag one up →</div>
+        </div>
+        <div class="dock" style="opacity:.5"><div class="pantray" style="height:74px"></div><div class="finalise"><div class="stick">📌 Stick it up</div></div></div>
+        <div class="sheetup">
+          <div class="grab"></div>
+          <div class="stabs"><span class="on">Stickers</span><span>Fonts</span></div>
+          <div class="stgrid">
+            <span class="peel">⭐</span><span>❤️</span><span>😎</span><span>🔥</span><span>👍</span>
+            <span>🎉</span><span>🌟</span><span>💚</span><span>😂</span><span>✨</span>
+          </div>
+        </div>
+      </div></div>
+      <p class="cap"><b>Pull-up sheet for the browse-heavy stuff</b> — stickers (and the font list) live here, not cluttering the tray. Peel one and drag it onto the note; the sheet drops away. Pattern D.</p>
+    </div>
+
+    <!-- radial colour fan fallback -->
+    <div>
+      <div class="fanwrap">
+        <div class="pmarker r" style="position:absolute; bottom:6px; left:70px;"></div>
+        <div class="fandot" style="background:var(--ink-black); left:26px; bottom:70px;"></div>
+        <div class="fandot" style="background:var(--ink-green); left:58px; bottom:96px;"></div>
+        <div class="fandot sel" style="background:var(--ink-red); left:98px; bottom:96px;"></div>
+        <div class="fandot" style="background:var(--ink-blue); left:126px; bottom:70px;"></div>
+      </div>
+      <p class="cap"><b>Colour fan (fallback).</b> If you'd rather see all four inks as physical markers, we keep the tray of four — this fan is the compact alternative for narrow screens: long-press the marker, the inks arc out, pick one.</p>
+    </div>
+  </div>
+
+  <p class="cap" style="max-width:640px; margin-top:24px"><b>The open trade-off for you:</b> four visible markers (max charm, wider tray, may scroll at ~360px) vs. one marker + colour fan (roomier, one extra tap to change ink). Everything else — bottom sheet for stickers/fonts, inline bar on selected objects, fastener-as-submit, no undo — the research backs as the spine.</p>
 </section>
 
 <footer>
