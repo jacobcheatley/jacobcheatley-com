@@ -1,0 +1,29 @@
+name: Branch Pattern
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  branch-pattern:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Branch name must match convention
+        env:
+          PATTERN: '^((feat|fix|docs|chore|refactor|revert|test)/[0-9]+-[a-z0-9]+(-[a-z0-9]+)*|(prototype|research)/([0-9]+-)?[a-z0-9]+(-[a-z0-9]+)*)$'
+          HEAD: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Bot- and GitHub-generated branches we don't own.
+          case "$HEAD" in
+            dependabot/*|revert-[0-9]*-*)
+              echo "Branch '$HEAD' exempt."
+              exit 0
+              ;;
+          esac
+          # No -i: lowercase is enforced by the pattern.
+          if echo "$HEAD" | grep -qE "$PATTERN"; then
+            echo "Branch '$HEAD' OK."
+            exit 0
+          fi
+          echo "::error::Branch '$HEAD' must match: $PATTERN"
+          exit 1
