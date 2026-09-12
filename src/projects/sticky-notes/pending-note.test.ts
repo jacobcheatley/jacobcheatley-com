@@ -1,6 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NoteContent } from "./note-schema";
-import { isApproved, type PendingNote } from "./pending-note";
+import {
+  isApproved,
+  MAX_PENDING,
+  type PendingNote,
+  readPending,
+  reconcilePending,
+  savePending,
+} from "./pending-note";
+
+// The unit project runs on node, which has no localStorage; the module only
+// ever calls these three, so a Map stands in for the whole thing.
+const KEY = "sticky-notes:pending";
+const store = new Map<string, string>();
+vi.stubGlobal("localStorage", {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => {
+    store.set(k, v);
+  },
+  removeItem: (k: string) => {
+    store.delete(k);
+  },
+});
+
+beforeEach(() => store.clear());
 
 function content(over?: Partial<NoteContent>): NoteContent {
   return {
@@ -64,5 +87,66 @@ describe("isApproved", () => {
 
   it("is false against an empty approved list", () => {
     expect(isApproved(pending, [])).toBe(false);
+  });
+});
+
+const pendingNote = (author: string, at: number): PendingNote => ({
+  author,
+  content: content(),
+  submittedAt: at,
+});
+
+describe("the pending list", () => {
+  it("reads back an empty list when nothing is stored", () => {
+    expect(readPending()).toEqual([]);
+  });
+
+  it("savePending prepends, so the newest note reads first", () => {
+    savePending(pendingNote("ada", 1));
+    savePending(pendingNote("sam", 2));
+    expect(readPending().map((p) => p.author)).toEqual(["sam", "ada"]);
+  });
+
+  it("caps the list, dropping the oldest", () => {
+    for (let i = 0; i < MAX_PENDING + 5; i++) savePending(pendingNote("a", i));
+    const list = readPending();
+    expect(list).toHaveLength(MAX_PENDING);
+    expect(list[0]?.submittedAt).toBe(MAX_PENDING + 4); // newest kept
+  });
+
+  it("reads a legacy single note as a one-element list", () => {
+    localStorage.setItem(KEY, JSON.stringify(pendingNote("lee", 7)));
+    expect(readPending().map((p) => p.author)).toEqual(["lee"]);
+  });
+
+  it("reads garbage as an empty list", () => {
+    localStorage.setItem(KEY, "not json at all");
+    expect(readPending()).toEqual([]);
+    localStorage.setItem(KEY, JSON.stringify({ nope: true }));
+    expect(readPending()).toEqual([]);
+  });
+});
+
+describe("reconcilePending", () => {
+  it("keeps the notes that have not been approved yet and writes back", () => {
+    const ada = pendingNote("ada", 1);
+    const sam = pendingNote("sam", 2);
+    savePending(ada);
+    savePending(sam);
+
+    const left = reconcilePending(readPending(), [
+      { author: "ada", content: content() },
+    ]);
+    expect(left.map((p) => p.author)).toEqual(["sam"]);
+    // the write-back means the next read agrees
+    expect(readPending().map((p) => p.author)).toEqual(["sam"]);
+  });
+
+  it("clears the key once every pending note is approved", () => {
+    savePending(pendingNote("ada", 1));
+    expect(
+      reconcilePending(readPending(), [{ author: "ada", content: content() }]),
+    ).toEqual([]);
+    expect(localStorage.getItem(KEY)).toBeNull();
   });
 });

@@ -3,9 +3,11 @@ import {
   addElement,
   bounds,
   clampCoord,
+  cycleHit,
   type Element,
   emptyNote,
   hitTest,
+  hitTestAll,
   isOffNote,
   moveElement,
   removeElement,
@@ -31,14 +33,42 @@ const stroke = (
   ...over,
 });
 
-const sticker = (x: number, y: number): Element => ({
+const sticker = (x: number, y: number, scale = 1): Element => ({
   type: "sticker",
   x,
   y,
   emoji: "⭐",
-  scale: 1,
+  scale,
   rotation: 0,
 });
+
+const text = (over?: Partial<Extract<Element, { type: "text" }>>): Element => ({
+  type: "text",
+  x: 100,
+  y: 100,
+  w: 200,
+  text: "hello",
+  font: "casual",
+  color: "black",
+  fontSize: 20,
+  rotation: 0,
+  ...over,
+});
+
+// A ring of ink: r = 100 about (250, 250). Its bounding box swallows the whole
+// middle of the note, which is exactly what the old box hit-test got wrong.
+const circleStroke = (): Element =>
+  stroke({
+    size: 8,
+    points: Array.from({ length: 33 }, (_, i) => {
+      const a = (i / 32) * Math.PI * 2;
+      return [250 + 100 * Math.cos(a), 250 + 100 * Math.sin(a), 0.5] as [
+        number,
+        number,
+        number,
+      ];
+    }),
+  });
 
 describe("emptyNote", () => {
   it("seeds a blank note that passes the write-path contract", () => {
@@ -78,14 +108,36 @@ describe("element ops", () => {
     expect(note.elements).toHaveLength(MAX_ELEMENTS);
   });
 
-  it("moveElement translates and clamps into the coord range", () => {
+  it("moveElement translates and clamps the element's box into range", () => {
     const note = addElement(emptyNote(seq(0.1)), sticker(10, 10));
     const moved = moveElement(note, 0, 5, -30);
     const el = moved.elements[0];
     expect(el).toMatchObject({ x: 15, y: -20 });
-    // clamp: dragging far past the top edge stops at -50
+    // clamp is on the box, not the coord: the sticker's top edge (y - 24)
+    // stops at -50, so its centre stops at -26.
     const off = moveElement(note, 0, 0, -999);
-    expect((off.elements[0] as { y: number }).y).toBe(-50);
+    expect((off.elements[0] as { y: number }).y).toBe(-26);
+  });
+
+  it("moveElement is rigid: a stroke dragged past the edge keeps its shape", () => {
+    const note = addElement(
+      emptyNote(seq(0.1)),
+      stroke({
+        size: 8,
+        points: [
+          [10, 10, 0.5],
+          [60, 10, 0.5],
+        ],
+      }),
+    );
+    // bounds x0 = 10 - 4 = 6, so the biggest leftward delta is -56
+    const moved = moveElement(note, 0, -999, 0);
+    const pts = (moved.elements[0] as { points: [number, number, number][] })
+      .points;
+    expect(pts[0]?.[0]).toBe(-46);
+    expect(pts[1]?.[0]).toBe(4);
+    // the 50-unit gap survives: no per-point collapse onto the boundary
+    expect((pts[1]?.[0] ?? 0) - (pts[0]?.[0] ?? 0)).toBe(50);
   });
 
   it("removeElement drops the given index", () => {
@@ -123,5 +175,65 @@ describe("geometry", () => {
     const b = bounds(stroke({ size: 20 }));
     expect(b.x0).toBe(0); // min x 10 - 10
     expect(b.x1).toBe(30); // max x 20 + 10
+  });
+
+  it("text bounds start at the text's y, not a line above it", () => {
+    const b = bounds(text());
+    expect(b.y0).toBe(100);
+    expect(b.y1).toBe(120); // one line: y + fontSize
+    expect(b.x0).toBe(100);
+    expect(b.x1).toBe(300); // x + w
+  });
+
+  it("text bounds grow by 1.2 line-height per wrapped line", () => {
+    const b = bounds(text({ text: "one\ntwo\nthree" }));
+    // y + fontSize + 2 x 1.2 x fontSize
+    expect(b.y1).toBe(168);
+  });
+});
+
+describe("hit-testing", () => {
+  it("a point inside a drawn circle misses the stroke and hits the sticker under it", () => {
+    let note = emptyNote(seq(0.1));
+    note = addElement(note, sticker(250, 250, 2)); // index 0, below
+    note = addElement(note, circleStroke()); // index 1, on top
+    // dead centre: 100 units from the ink, well past size/2 + slop
+    expect(hitTestAll(note, 250, 250)).toEqual([0]);
+    // on the ink itself the stroke wins, sticker is out of its box
+    expect(hitTestAll(note, 350, 250)).toEqual([1]);
+  });
+
+  it("hit-tests text through its own rotation", () => {
+    let note = emptyNote(seq(0.1));
+    note = addElement(note, text({ rotation: 90 }));
+    // (200, 110) is inside the unrotated box; rotating the box 90 deg about
+    // (100, 100) carries that spot to (90, 200).
+    expect(hitTest(note, 90, 200)).toBe(0);
+    expect(hitTest(note, 200, 110)).toBe(-1);
+  });
+
+  it("hitTestAll lists every hit topmost-first", () => {
+    let note = emptyNote(seq(0.1));
+    note = addElement(note, sticker(100, 100));
+    note = addElement(note, sticker(400, 400));
+    note = addElement(note, sticker(100, 100));
+    expect(hitTestAll(note, 100, 100)).toEqual([2, 0]);
+    expect(hitTestAll(note, 10, 400)).toEqual([]);
+  });
+});
+
+describe("cycleHit", () => {
+  it("steps to the next hit and wraps", () => {
+    expect(cycleHit([2, 0], 2)).toBe(0);
+    expect(cycleHit([2, 0], 0)).toBe(2);
+  });
+
+  it("starts at the topmost hit when nothing relevant is selected", () => {
+    expect(cycleHit([2, 0], 5)).toBe(2);
+    expect(cycleHit([2, 0], -1)).toBe(2);
+  });
+
+  it("is -1 when nothing was hit", () => {
+    expect(cycleHit([], 1)).toBe(-1);
   });
 });

@@ -33,6 +33,15 @@ const note = (id: number, author: string, over?: Partial<NoteContent>) => ({
   content: content(over),
 });
 
+const pending = (author: string, at: number): PendingNote => ({
+  author,
+  content: content(),
+  submittedAt: at,
+});
+
+const storePending = (...list: PendingNote[]) =>
+  localStorage.setItem("sticky-notes:pending", JSON.stringify(list));
+
 afterEach(() => {
   localStorage.clear();
 });
@@ -92,45 +101,40 @@ describe("StickyWall", () => {
     );
   });
 
-  it("shows a stored pending note at the newest slot, marked pending", async () => {
-    const pending: PendingNote = {
-      author: "ada",
-      content: content(),
-      submittedAt: 1,
-    };
-    localStorage.setItem("sticky-notes:pending", JSON.stringify(pending));
+  it("shows every stored pending note at the newest slots, marked pending", async () => {
+    // stored newest-first, as savePending writes them
+    storePending(pending("ada", 2), pending("lee", 1));
 
     render(<StickyWall notes={[note(1, "sam")]} />);
 
-    // pending overlay is applied after mount; it lands first (newest slot)
+    // pending overlay is applied after mount; both land ahead of the approved one
     await waitFor(() => {
       const tiles = screen.getAllByRole("button", { name: /zoom note by/i });
-      expect(tiles).toHaveLength(2);
+      expect(tiles).toHaveLength(3);
       expect(tiles[0]).toHaveAccessibleName(/ada/i);
+      expect(tiles[1]).toHaveAccessibleName(/lee/i);
     });
-    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/pending/i)).toHaveLength(2);
   });
 
-  it("reconciles a pending note away once it appears approved", async () => {
-    const pending: PendingNote = {
-      author: "ada",
-      content: content(),
-      submittedAt: 1,
-    };
-    localStorage.setItem("sticky-notes:pending", JSON.stringify(pending));
+  it("reconciles away only the pending note that got approved", async () => {
+    storePending(pending("ada", 2), pending("lee", 1));
 
-    // the same note is now in the approved list (same author + content)
+    // ada's note is now in the approved list (same author + content)
     render(
       <StickyWall notes={[{ id: 9, author: "ada", content: content() }]} />,
     );
 
     await waitFor(() => {
-      expect(screen.queryByText(/pending/i)).toBeNull();
+      expect(screen.getAllByText(/pending/i)).toHaveLength(1);
     });
-    // only the one approved tile, and localStorage was cleared
-    expect(
-      screen.getAllByRole("button", { name: /zoom note by/i }),
-    ).toHaveLength(1);
-    expect(localStorage.getItem("sticky-notes:pending")).toBeNull();
+    // ada's approved tile plus lee's still-pending one
+    const tiles = screen.getAllByRole("button", { name: /zoom note by/i });
+    expect(tiles).toHaveLength(2);
+    expect(tiles[0]).toHaveAccessibleName(/lee/i);
+    // the trimmed list is written back
+    expect(localStorage.getItem("sticky-notes:pending")).toBe(
+      JSON.stringify([pending("lee", 1)]),
+    );
   });
 });

@@ -4,10 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 import {
-  clearPending,
-  isApproved,
   type PendingNote,
   readPending,
+  reconcilePending,
 } from "./pending-note";
 
 // The public wall: a corkboard of approved notes, newest-first, that SSRs with
@@ -170,15 +169,12 @@ function AddNote({ empty }: { empty: boolean }) {
 
 export function StickyWall({ notes }: { notes: WallNote[] }) {
   const [zoomed, setZoomed] = useState<DisplayNote | null>(null);
-  const [pending, setPending] = useState<PendingNote | null>(null);
+  const [pending, setPending] = useState<PendingNote[]>([]);
 
-  // Own pending note lives only in this browser, so read it after mount (SSR has
-  // no localStorage) and drop it the moment it shows up approved in the list.
+  // Own pending notes live only in this browser, so read them after mount (SSR
+  // has no localStorage); each drops the moment it shows up approved.
   useEffect(() => {
-    const p = readPending();
-    const reconciled = p !== null && isApproved(p, notes);
-    if (reconciled) clearPending();
-    setPending(reconciled ? null : p);
+    setPending(reconcilePending(readPending(), notes));
   }, [notes]);
 
   // Esc closes the zoom lightbox (tap-out is handled on the scrim itself).
@@ -191,7 +187,7 @@ export function StickyWall({ notes }: { notes: WallNote[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [zoomed]);
 
-  const empty = notes.length === 0 && !pending;
+  const empty = notes.length === 0 && pending.length === 0;
 
   return (
     <div
@@ -215,14 +211,14 @@ export function StickyWall({ notes }: { notes: WallNote[] }) {
         <li>
           <AddNote empty={empty} />
         </li>
-        {pending && (
-          <li>
-            <NoteTile
-              note={{ ...pending, pending: true }}
-              onOpen={() => setZoomed({ ...pending, pending: true })}
-            />
-          </li>
-        )}
+        {pending.map((p) => {
+          const tile = { ...p, pending: true };
+          return (
+            <li key={`${p.submittedAt}-${p.author}`}>
+              <NoteTile note={tile} onOpen={() => setZoomed(tile)} />
+            </li>
+          );
+        })}
         {notes.map((n) => (
           <li key={n.id}>
             <NoteTile note={n} onOpen={() => setZoomed(n)} />

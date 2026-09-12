@@ -2,6 +2,7 @@ import { getStroke } from "perfect-freehand";
 import { useId } from "react";
 import { FONT_FAMILIES } from "./note-fonts";
 import type { Fastener, Ink, NoteContent, PaperColour } from "./note-schema";
+import { wrapLines } from "./note-text";
 
 // The one pure, state-free renderer: note `content` JSON → SVG. Every surface
 // (wall tile, zoom view, editor, approval CLI) uses it, so notes render
@@ -68,28 +69,6 @@ function svgPathFromStroke(stroke: number[][]): string {
   }
   parts.push("Z");
   return parts.join(" ");
-}
-
-// ponytail: naive width→char estimate (avg glyph ≈ 0.55·fontSize) plus explicit
-// newlines. Good enough for the wall/CLI; swap for real text measurement if
-// wrapping visibly drifts from the editor.
-function wrapLines(text: string, width: number, fontSize: number): string[] {
-  const maxChars = Math.max(1, Math.floor(width / (fontSize * 0.55)));
-  const lines: string[] = [];
-  for (const para of text.split("\n")) {
-    let line = "";
-    for (const word of para.split(" ")) {
-      const next = line ? `${line} ${word}` : word;
-      if (next.length > maxChars && line) {
-        lines.push(line);
-        line = word;
-      } else {
-        line = next;
-      }
-    }
-    lines.push(line);
-  }
-  return lines;
 }
 
 // Paper outline, clockwise from top-left, with each bottom corner clipped back

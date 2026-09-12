@@ -51,29 +51,49 @@ export function isApproved(
   );
 }
 
+// A visitor can have several notes awaiting approval at once, so the stored
+// value is a list, newest first. Capped because it is a courtesy overlay, not a
+// record: past this many, the oldest pending note just stops being shown.
+export const MAX_PENDING = 10;
+
 // localStorage can throw (private mode, disabled storage); a missing overlay is
-// harmless, so every access swallows failure and degrades to "no pending note".
-export function readPending(): PendingNote | null {
+// harmless, so every access swallows failure and degrades to "nothing pending".
+export function readPending(): PendingNote[] {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as PendingNote) : null;
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    // the key held a single note before #71 — read it as a one-entry list
+    const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+    return list.filter(
+      (n): n is PendingNote =>
+        typeof n === "object" && n !== null && "content" in n,
+    );
   } catch {
-    return null;
+    return [];
   }
 }
 
-export function savePending(note: PendingNote): void {
+function write(list: PendingNote[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(note));
+    if (list.length === 0) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
     // overlay is a nicety, not load-bearing
   }
 }
 
-export function clearPending(): void {
-  try {
-    localStorage.removeItem(KEY);
-  } catch {
-    // ignore
-  }
+export function savePending(note: PendingNote): void {
+  write([note, ...readPending()].slice(0, MAX_PENDING));
+}
+
+// Drop the pending notes that have shown up approved and persist what's left,
+// so the wall stops overlaying them on the copies the server now serves.
+export function reconcilePending(
+  list: readonly PendingNote[],
+  approved: readonly { author: string; content: NoteContent }[],
+): PendingNote[] {
+  const remaining = list.filter((p) => !isApproved(p, approved));
+  write(remaining);
+  return remaining;
 }
