@@ -48,7 +48,8 @@ const content: NoteContent = {
 describe("NoteRender", () => {
   it("emits a 500×500 svg with the stroke, text, and sticker in array (z-)order", () => {
     const svg = render(content);
-    expect(svg).toContain('viewBox="0 0 500 500"');
+    // the note is 500×500 with transparent headroom above for an overhanging fastener
+    expect(svg).toContain('viewBox="0 -40 500 540"');
 
     // locate the stroke by its red ink fill (the first <path is the paper)
     const iStroke = svg.indexOf("#dc2626");

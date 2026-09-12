@@ -16,6 +16,9 @@ import type { Ink, NoteContent, PaperColour } from "./note-schema";
 
 const CANVAS = 500;
 const MAX_FOLD = 120; // px a corner peels in at curl = 1
+// Transparent board headroom above the note so a fastener (esp. tape) can
+// overhang the top edge onto the wall. The note itself stays 0..500.
+const FASTENER_MARGIN = 40;
 
 // Paper backgrounds — soft, saturated sticky-note stock.
 const PAPER: Record<PaperColour, string> = {
@@ -108,51 +111,54 @@ const tri = (a: Point, b: Point, t: Point) =>
 function renderFastener(fastener: NoteContent["fastener"]) {
   const cx = CANVAS / 2;
   switch (fastener) {
-    case "pin": // a push-pin, seen head-on
+    case "pin": // a push-pin, seen head-on, sitting at the note's top edge
       return (
         <g>
           <ellipse
             cx={cx}
-            cy={54}
+            cy={30}
             rx={15}
             ry={6}
             fill="#000000"
             opacity={0.15}
           />
-          <circle cx={cx} cy={40} r={16} fill="#e11d48" />
-          <circle cx={cx - 5} cy={35} r={5} fill="#ffffff" opacity={0.55} />
-          <circle cx={cx} cy={40} r={4} fill="#9f1239" />
+          <circle cx={cx} cy={16} r={16} fill="#e11d48" />
+          <circle cx={cx - 5} cy={11} r={5} fill="#ffffff" opacity={0.55} />
+          <circle cx={cx} cy={16} r={4} fill="#9f1239" />
         </g>
       );
-    case "tape": // a translucent strip across the top
+    case "tape": {
+      // a wide translucent strip bridging the board (above y=0) and the note
+      const w = 170;
       return (
-        <g transform={`rotate(-6 ${cx} 28)`}>
+        <g transform={`rotate(-5 ${cx} 0)`}>
           <rect
-            x={cx - 68}
-            y={6}
-            width={136}
-            height={40}
+            x={cx - w / 2}
+            y={-30}
+            width={w}
+            height={68}
             fill="#ffffff"
-            fillOpacity={0.4}
+            fillOpacity={0.5}
             stroke="#ffffff"
             strokeOpacity={0.5}
           />
         </g>
       );
-    case "staple": // a bent metal staple
+    }
+    case "staple": // a bent metal staple straddling the top edge
       return (
         <g fill="#9ca3af">
-          <rect x={cx - 22} y={30} width={44} height={7} rx={1.5} />
-          <rect x={cx - 22} y={30} width={7} height={20} rx={1.5} />
-          <rect x={cx + 15} y={30} width={7} height={20} rx={1.5} />
+          <rect x={cx - 22} y={-2} width={44} height={7} rx={1.5} />
+          <rect x={cx - 22} y={-2} width={7} height={22} rx={1.5} />
+          <rect x={cx + 15} y={-2} width={7} height={22} rx={1.5} />
         </g>
       );
-    case "stick": // a blob of adhesive putty
+    case "stick": // a blob of adhesive putty at the top edge
       return (
         <g>
           <ellipse
             cx={cx}
-            cy={54}
+            cy={28}
             rx={20}
             ry={6}
             fill="#000000"
@@ -160,7 +166,7 @@ function renderFastener(fastener: NoteContent["fastener"]) {
           />
           <ellipse
             cx={cx}
-            cy={40}
+            cy={14}
             rx={22}
             ry={15}
             fill="#a7c7e7"
@@ -168,7 +174,7 @@ function renderFastener(fastener: NoteContent["fastener"]) {
           />
           <ellipse
             cx={cx - 7}
-            cy={35}
+            cy={9}
             rx={7}
             ry={4}
             fill="#ffffff"
@@ -248,7 +254,7 @@ export function NoteRender({ content }: { content: NoteContent }) {
 
   return (
     <svg
-      viewBox="0 0 500 500"
+      viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS + FASTENER_MARGIN}`}
       width="100%"
       height="100%"
       role="img"
