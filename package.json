@@ -1,39 +1,39 @@
 {
-	"name": "jacobcheatley-com",
-	"private": true,
-	"type": "module",
-	"packageManager": "bun@1.4.2",
-	"engines": {
-		"node": ">=24",
-		"bun": ">=1.4"
-	},
-	"scripts": {
-		"dev": "bun --bun vite dev --port 3000",
-		"build": "vite build",
-		"start": "bun run server.ts",
-		"check": "biome check && tsc --noEmit",
-		"format": "biome format --write",
-		"lint": "biome lint",
-		"test:e2e": "playwright test",
-		"generate-routes": "tsr generate"
-	},
-	"dependencies": {
-		"@tailwindcss/vite": "^4.3.0",
-		"@tanstack/react-router": "^1.170.0",
-		"@tanstack/react-start": "^1.168.0",
-		"react": "^19.3.0",
-		"react-dom": "^19.3.0",
-		"tailwindcss": "^4.3.0"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^2.5.0",
-		"@playwright/test": "^1.63.0",
-		"@tanstack/router-cli": "^1.167.0",
-		"@types/bun": "^1.4.0",
-		"@types/react": "^19.3.0",
-		"@types/react-dom": "^19.3.0",
-		"@vitejs/plugin-react": "^6.1.0",
-		"typescript": "^6.0.0",
-		"vite": "^8.3.0"
-	}
+  "name": "jacobcheatley-com",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=24",
+    "bun": ">=1.4"
+  },
+  "scripts": {
+    "dev": "bun --bun vite dev --port 3000",
+    "build": "vite build",
+    "start": "bun run server.ts",
+    "check": "biome check && tsc --noEmit",
+    "format": "biome format --write",
+    "lint": "biome lint",
+    "test:e2e": "playwright test",
+    "generate-routes": "tsr generate"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-router": "^1.170.35",
+    "@tanstack/react-start": "^1.168.52",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
+    "@playwright/test": "^1.63.0",
+    "@tanstack/router-cli": "^1.167.35",
+    "@types/bun": "^1.4.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
 }
