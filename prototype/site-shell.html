@@ -1,0 +1,734 @@
+<!--
+  PROTOTYPE. Throwaway. Answers wayfinder ticket #5 (design tokens and site shell).
+  Three structurally different takes on the jacobcheatley.com shell, switchable via ?variant=A|B|C
+  or the bar at the bottom. Left/right arrow keys also switch. Light/Dark/System in the same bar.
+  Each variant's tokens are written in Tailwind v4 @theme shape (paste the block into @theme { }).
+  The guestbook form is a stub: entries live in memory only.
+-->
+<title>Skeleton Shell Variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=IBM+Plex+Sans:wght@400;500;600&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,200..800&display=swap">
+<style>
+  :root { color-scheme: light dark; }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+
+  /* ===== Variant A: Marquee. Two inks that swap between themes, one yellow. ===== */
+  :root[data-variant="A"] {
+    --color-paper: light-dark(#F1ECDD, #1F2F9E);
+    --color-ink: light-dark(#1F2F9E, #F1ECDD);
+    --color-accent: #FFC53D;
+    --color-on-accent: #1F2F9E;
+    --color-muted: light-dark(#5560A8, #B9C1EA);
+    --color-line: light-dark(#CFC7A8, #4658C2);
+    --color-surface: light-dark(#E8E2CE, #2A3BAF);
+    --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif; /* used at font-stretch 125% */
+    --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --font-ui: var(--font-body);
+    --radius-field: 0;
+    --spacing: 0.25rem;
+  }
+
+  /* ===== Variant B: Graph paper. Engineering notebook, serif text, sans for the apparatus. ===== */
+  :root[data-variant="B"] {
+    --color-paper: light-dark(#F4F5F0, #171B19);
+    --color-grid: light-dark(#CDD9E5, #26302B);
+    --color-ink: light-dark(#1F2A24, #E6E9E4);
+    --color-accent: light-dark(#1E6B4E, #6FCB9E);
+    --color-highlight: light-dark(#F2D64B, #B89F2A);
+    --color-muted: light-dark(#5C665F, #97A29B);
+    --color-surface: light-dark(#FFFFFF, #1F2522);
+    --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --font-body: "Newsreader", Georgia, "Times New Roman", serif;
+    --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+    --radius-field: 2px;
+    --spacing: 0.25rem;
+  }
+
+  /* ===== Variant C: Cartridges. Every Project is its own coloured tile with a hard shadow. ===== */
+  :root[data-variant="C"] {
+    --color-paper: light-dark(#EFEDF6, #161420);
+    --color-ink: light-dark(#17151F, #F1EEF9);
+    --color-surface: light-dark(#FFFFFF, #221F2E);
+    --color-muted: light-dark(#5E5A73, #A9A4BF);
+    --color-accent: #F2553F;
+    --color-tomato: #F2553F;
+    --color-mustard: #F0B429;
+    --color-teal: #1FA394;
+    --color-violet: #9B84EE;
+    --color-tile-ink: #17151F;
+    --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+    --font-body: "Bricolage Grotesque", system-ui, sans-serif;
+    --font-ui: var(--font-body);
+    --radius-tile: 1rem;
+    --radius-pill: 999px;
+    --radius-field: 0.5rem;
+    --spacing: 0.3rem;
+  }
+
+  /* ---- shared reset ---- */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding-bottom: 6rem;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 1.0625rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+  h1, h2, h3, p { margin: 0; }
+  h1, h2, h3 { text-wrap: balance; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  a { color: inherit; }
+  button, input, textarea { font: inherit; color: inherit; }
+  label { display: block; }
+  textarea { resize: vertical; }
+  .gb-form output { font-size: 0.9375rem; color: var(--color-muted); }
+  time { font-variant-numeric: tabular-nums; }
+
+  /* ---- A: Marquee ---- */
+  .vA .a-bar {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding-inline: clamp(1rem, 4vw, 3rem);
+  }
+  .vA .a-mark {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    font-size: clamp(1.5rem, 3.5vw, 2.5rem);
+    line-height: 1;
+    text-decoration: none;
+    padding-block: 1rem;
+    display: flex;
+    align-items: center;
+  }
+  .vA .a-tabs { display: flex; }
+  .vA .a-tabs a {
+    display: flex;
+    align-items: center;
+    padding: 0 1.25rem;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .vA .a-tabs a[aria-current] { background: var(--color-accent); color: var(--color-on-accent); }
+  .vA .a-page {
+    max-width: 44rem;
+    margin-inline: auto;
+    padding: clamp(2rem, 6vw, 4rem) 1rem 3rem;
+    display: grid;
+    gap: 3rem;
+  }
+  .vA h1 {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+  }
+  .vA .a-hero p { font-size: 1.125rem; line-height: 1.55; max-width: 36rem; }
+  .vA .a-section { border-top: 3px solid var(--color-ink); padding-top: 1rem; }
+  .vA h2 {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 700;
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  .vA .a-projects li + li { border-top: 1px solid var(--color-line); }
+  .vA .a-projects a {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem 1.5rem;
+    padding-block: 1rem;
+    text-decoration: none;
+  }
+  .vA .a-projects .title { font-weight: 700; font-size: 1.125rem; }
+  .vA .a-projects .desc { grid-column: 1; color: var(--color-muted); line-height: 1.45; }
+  .vA .a-projects .status { grid-column: 2; grid-row: 1; align-self: start; color: var(--color-muted); font-size: 0.875rem; padding: 0.1em 0; }
+  .vA .a-projects .status.live { background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; padding: 0.1em 0.5em; }
+  .vA .a-form { display: grid; gap: 0.5rem; margin-bottom: 2rem; }
+  .vA .a-form label { font-weight: 600; font-size: 0.9375rem; margin-top: 0.5rem; }
+  .vA .a-form input, .vA .a-form textarea {
+    width: 100%;
+    background: var(--color-surface);
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-field);
+    padding: 0.6rem 0.75rem;
+  }
+  .vA .a-actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem; }
+  .vA .a-form button {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    border: 0;
+    border-radius: var(--radius-field);
+    font-weight: 700;
+    font-stretch: 110%;
+    padding: 0.7rem 1.25rem;
+    cursor: pointer;
+  }
+  .vA .a-entries li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem 1rem;
+    padding-block: 1rem;
+    border-top: 1px solid var(--color-line);
+  }
+  .vA .gb-name { font-weight: 700; }
+  .vA .gb-date { color: var(--color-muted); font-size: 0.875rem; }
+  .vA .gb-msg { grid-column: 1 / -1; line-height: 1.5; }
+  .vA .a-foot { font-size: 0.875rem; padding-block: 1rem; gap: 1rem; align-items: center; margin-top: 2rem; }
+  .vA .a-foot a { color: var(--color-accent); }
+  @media (max-width: 40rem) {
+    .vA .a-tabs { width: 100%; }
+    .vA .a-tabs a { flex: 1; justify-content: center; padding-block: 0.75rem; }
+  }
+
+  /* ---- B: Graph paper ---- */
+  .vB {
+    min-height: 100vh;
+    background-image:
+      linear-gradient(var(--color-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+    background-size: 1.5rem 1.5rem;
+  }
+  .vB .b-page {
+    display: grid;
+    grid-template-columns: 11rem minmax(0, 38rem) 13rem;
+    column-gap: 3rem;
+    justify-content: center;
+    padding: 3rem 1rem 4rem;
+  }
+  .vB .b-rail { position: sticky; top: 3rem; align-self: start; font-family: var(--font-ui); }
+  .vB .b-mark {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 1.5rem;
+    line-height: 1.1;
+    text-decoration: none;
+    display: block;
+    margin-bottom: 1.5rem;
+  }
+  .vB .b-rail nav { display: grid; gap: 0.35rem; font-size: 0.9375rem; }
+  .vB .b-rail nav a { text-decoration: none; color: var(--color-muted); width: max-content; padding-inline: 0.15rem; }
+  .vB .b-rail nav a[aria-current] {
+    color: var(--color-ink);
+    font-weight: 600;
+    background: linear-gradient(transparent 58%, var(--color-highlight) 58%, var(--color-highlight) 92%, transparent 92%);
+  }
+  .vB .b-main { grid-column: 2 / 4; display: grid; gap: 1.5rem; }
+  .vB .b-entry { display: grid; grid-template-columns: minmax(0, 1fr) 13rem; column-gap: 3rem; }
+  .vB .b-side { font-family: var(--font-ui); font-size: 0.8125rem; line-height: 1.5; color: var(--color-muted); padding-top: 0.35rem; }
+  .vB h1 {
+    font-weight: 500;
+    font-size: clamp(2rem, 4vw, 2.875rem);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin-bottom: 1.25rem;
+  }
+  .vB .b-text p { font-size: 1.125rem; line-height: 1.6; }
+  .vB .b-h2 {
+    font-weight: 500;
+    font-size: 1.625rem;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid var(--color-accent);
+  }
+  .vB h3 { font-weight: 500; font-size: 1.375rem; margin-bottom: 0.25rem; }
+  .vB h3 a { text-decoration-color: var(--color-accent); text-decoration-thickness: 2px; text-underline-offset: 0.15em; }
+  .vB .b-live { color: var(--color-accent); font-weight: 600; }
+  .vB .b-form { display: grid; gap: 0.75rem; font-family: var(--font-ui); }
+  .vB .b-form label { font-size: 0.875rem; font-weight: 500; color: var(--color-muted); }
+  .vB .b-form input, .vB .b-form textarea {
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-muted);
+    border-radius: var(--radius-field);
+    padding: 0.6rem 0.75rem;
+    font-family: var(--font-body);
+    font-size: 1.0625rem;
+  }
+  .vB .b-actions { display: flex; align-items: center; gap: 1rem; }
+  .vB .b-form button {
+    background: var(--color-accent);
+    color: var(--color-paper);
+    border: 0;
+    border-radius: var(--radius-field);
+    padding: 0.65rem 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .vB .b-entries { display: grid; gap: 1.25rem; margin-top: 1rem; }
+  .vB .b-entries .gb-msg { font-size: 1.125rem; line-height: 1.55; }
+  .vB .b-by { font-family: var(--font-ui); font-size: 0.875rem; margin-top: 0.35rem; }
+  .vB .gb-name { font-weight: 600; }
+  .vB .b-foot {
+    grid-column: 2 / 4;
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    color: var(--color-muted);
+    margin-top: 4rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-grid);
+  }
+  @media (max-width: 64rem) {
+    .vB .b-page { grid-template-columns: minmax(0, 1fr); max-width: 44rem; margin-inline: auto; }
+    .vB .b-rail {
+      position: static;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .vB .b-mark { margin: 0; }
+    .vB .b-rail nav { display: flex; gap: 1.25rem; }
+    .vB .b-main, .vB .b-foot { grid-column: 1; }
+    .vB .b-entry { grid-template-columns: minmax(0, 1fr); row-gap: 0.35rem; }
+  }
+
+  /* ---- C: Cartridges ---- */
+  .vC { --pad: clamp(1rem, 4vw, 3rem); }
+  .vC .c-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    max-width: 76rem;
+    margin-inline: auto;
+    padding: 1.25rem var(--pad);
+  }
+  .vC .c-mark {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+    display: inline-block;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--radius-pill);
+    transform: rotate(-2deg);
+  }
+  .vC .c-nav { display: flex; gap: 0.25rem; }
+  .vC .c-nav a {
+    text-decoration: none;
+    font-weight: 600;
+    padding: 0.45rem 1rem;
+    border: 2px solid transparent;
+    border-radius: var(--radius-pill);
+  }
+  .vC .c-nav a[aria-current] { border-color: var(--color-ink); }
+  .vC .c-page {
+    max-width: 76rem;
+    margin-inline: auto;
+    padding: clamp(1.5rem, 5vw, 4rem) var(--pad) 3rem;
+    display: grid;
+    gap: clamp(3rem, 6vw, 5rem);
+  }
+  .vC .c-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 2rem;
+    align-items: end;
+  }
+  .vC h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2.75rem, 7vw, 5.5rem);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+  }
+  .vC .c-hero p { font-size: 1.125rem; line-height: 1.5; max-width: 32rem; }
+  .vC h2 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.75rem;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+  }
+  .vC .c-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1.5rem;
+    padding: 0 6px 6px 0;
+  }
+  .vC .c-tile a {
+    display: grid;
+    grid-template-rows: auto 1fr auto auto;
+    gap: 0.5rem;
+    min-height: 13rem;
+    padding: 1.25rem;
+    background: var(--tile);
+    color: var(--color-tile-ink);
+    border: 3px solid var(--color-ink);
+    border-radius: var(--radius-tile);
+    box-shadow: 6px 6px 0 var(--color-ink);
+    text-decoration: none;
+  }
+  .vC .c-status {
+    justify-self: start;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    background: var(--color-tile-ink);
+    color: #FFFFFF;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-pill);
+  }
+  .vC .c-status.planned { background: transparent; color: var(--color-tile-ink); border: 2px solid var(--color-tile-ink); }
+  .vC .c-title { grid-row: 3; font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.02em; line-height: 1.05; }
+  .vC .c-desc { grid-row: 4; font-size: 0.9375rem; line-height: 1.4; }
+  .vC .c-gb {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 3rem;
+    align-items: start;
+  }
+  .vC .c-form {
+    display: grid;
+    gap: 0.75rem;
+    background: var(--color-surface);
+    border: 3px solid var(--color-ink);
+    border-radius: var(--radius-tile);
+    box-shadow: 6px 6px 0 var(--color-ink);
+    padding: 1.5rem;
+    margin: 0 6px 6px 0;
+  }
+  .vC .c-form label { font-weight: 600; font-size: 0.9375rem; }
+  .vC .c-form input, .vC .c-form textarea {
+    width: 100%;
+    background: var(--color-paper);
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-field);
+    padding: 0.65rem 0.8rem;
+  }
+  .vC .c-actions { display: flex; align-items: center; gap: 1rem; }
+  .vC .c-form button {
+    background: var(--color-accent);
+    color: var(--color-tile-ink);
+    border: 3px solid var(--color-ink);
+    border-radius: var(--radius-pill);
+    padding: 0.55rem 1.25rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .vC .c-entries { display: grid; gap: 1.25rem; }
+  .vC .c-bubble {
+    background: var(--color-surface);
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-tile);
+    border-bottom-left-radius: 4px;
+    padding: 1rem 1.25rem;
+    line-height: 1.5;
+  }
+  .vC .c-by { font-size: 0.875rem; color: var(--color-muted); margin-top: 0.4rem; padding-left: 0.5rem; }
+  .vC .gb-name { font-weight: 700; color: var(--color-ink); }
+  .vC .c-foot {
+    max-width: 76rem;
+    margin: 2rem auto 0;
+    padding: 1.5rem var(--pad) 2rem;
+    border-top: 4px solid var(--color-ink);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.9375rem;
+  }
+  @media (max-width: 48rem) {
+    .vC .c-hero, .vC .c-gb { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ---- prototype chrome: not part of the design ---- */
+  .proto-bar {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: calc(100vw - 2rem);
+    padding: 0.4rem 0.5rem;
+    border-radius: 999px;
+    background: #111111;
+    color: #FFFFFF;
+    font: 500 0.8125rem/1 system-ui, sans-serif;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  }
+  .proto-bar button { background: transparent; border: 0; color: #FFFFFF; padding: 0.45rem 0.65rem; border-radius: 999px; cursor: pointer; font: inherit; }
+  .proto-bar button:hover { background: #333333; }
+  .proto-bar button[aria-pressed="true"] { background: #FFFFFF; color: #111111; }
+  .proto-bar .proto-label { padding: 0 0.5rem; min-width: 9rem; text-align: center; white-space: nowrap; }
+  .proto-bar .proto-sep { width: 1px; height: 1.25rem; background: #444444; margin: 0 0.25rem; }
+  .proto-bar :focus-visible { outline: 2px solid #FFC53D; outline-offset: 1px; }
+</style>
+
+<!-- ============================ A: Marquee ============================ -->
+<div class="variant vA" id="variant-A" data-name="Marquee">
+  <header class="a-bar">
+    <a class="a-mark" href="#">Jacob Cheatley</a>
+    <nav class="a-tabs" aria-label="Site">
+      <a href="#" aria-current="page">Projects</a>
+      <a href="#">Guestbook</a>
+      <a href="#">About</a>
+    </nav>
+  </header>
+  <main class="a-page">
+    <section class="a-hero">
+      <h1>Small things, built to learn.</h1>
+      <p>I'm a Python and machine-learning engineer teaching myself the modern TypeScript stack by shipping small projects here: quizzes, games, ARGs and browser toys. Some run on this site, some live elsewhere and get a page. Every one gets the same care, serious or silly.</p>
+    </section>
+    <section class="a-section">
+      <h2>Projects</h2>
+      <ul class="a-projects">
+        <li><a href="#"><span class="title">Guestbook</span><span class="status live">Live</span><span class="desc">Leave a note for the next visitor. The first Project on the site: one table, one form.</span></a></li>
+        <li><a href="#"><span class="title">Word ladder</span><span class="status">Planned</span><span class="desc">Turn one word into another, one letter at a time. A new puzzle each day.</span></a></li>
+        <li><a href="#"><span class="title">Spot the model</span><span class="status">Planned</span><span class="desc">Two answers, one written by a person. Guess which one came from a model.</span></a></li>
+        <li><a href="#"><span class="title">Colour distance</span><span class="status">Planned</span><span class="desc">Pick two colours and see how far apart they are, in every colour space at once.</span></a></li>
+      </ul>
+    </section>
+    <section class="a-section">
+      <h2>Guestbook</h2>
+      <form class="gb-form a-form">
+        <label for="a-name">Your name</label>
+        <input id="a-name" name="name" required maxlength="40" autocomplete="name">
+        <label for="a-message">Message</label>
+        <textarea id="a-message" name="message" rows="3" required maxlength="280"></textarea>
+        <div class="a-actions"><button type="submit">Sign the guestbook</button><output aria-live="polite"></output></div>
+      </form>
+      <ul class="gb-list a-entries">
+        <li><span class="gb-name">Maddy</span><time class="gb-date" datetime="2026-09-11">11 Sep 2026</time><p class="gb-msg">First! Nice to see this live.</p></li>
+        <li><span class="gb-name">Tom</span><time class="gb-date" datetime="2026-09-09">9 Sep 2026</time><p class="gb-msg">Came here from the word ladder link. Where's the word ladder?</p></li>
+        <li><span class="gb-name">Jacob</span><time class="gb-date" datetime="2026-09-08">8 Sep 2026</time><p class="gb-msg">Testing the guestbook from the staging app. If you can read this, the deploy worked.</p></li>
+      </ul>
+    </section>
+  </main>
+  <footer class="a-bar a-foot">
+    <p>Built with TanStack Start, Postgres and Fly.io, from Sydney.</p>
+    <p><a href="https://github.com/jacobcheatley/jacobcheatley-com">Source on GitHub</a></p>
+  </footer>
+</div>
+
+<!-- ============================ B: Graph paper ============================ -->
+<div class="variant vB" id="variant-B" data-name="Graph paper" hidden>
+  <div class="b-page">
+    <header class="b-rail">
+      <a class="b-mark" href="#">Jacob Cheatley</a>
+      <nav aria-label="Site">
+        <a href="#" aria-current="page">Projects</a>
+        <a href="#">Guestbook</a>
+        <a href="#">About</a>
+      </nav>
+    </header>
+    <main class="b-main">
+      <section class="b-entry">
+        <div class="b-text">
+          <h1>A notebook of small things, built to learn how they work.</h1>
+          <p>I'm a Python and machine-learning engineer teaching myself the modern TypeScript stack by shipping small projects here: quizzes, games, ARGs and browser toys. Some run on this site, some live elsewhere and get a page. Every one gets the same care, serious or silly.</p>
+        </div>
+        <aside class="b-side">Python and ML by day. TypeScript one Project at a time, here.</aside>
+      </section>
+
+      <h2 class="b-h2">Projects</h2>
+      <article class="b-entry">
+        <div class="b-text"><h3><a href="#">Guestbook</a></h3><p>Leave a note for the next visitor. The first Project on the site: one table, one form.</p></div>
+        <aside class="b-side"><span class="b-live">Live</span> since 8 Sep 2026</aside>
+      </article>
+      <article class="b-entry">
+        <div class="b-text"><h3><a href="#">Word ladder</a></h3><p>Turn one word into another, one letter at a time. A new puzzle each day.</p></div>
+        <aside class="b-side">Planned</aside>
+      </article>
+      <article class="b-entry">
+        <div class="b-text"><h3><a href="#">Spot the model</a></h3><p>Two answers, one written by a person. Guess which one came from a model.</p></div>
+        <aside class="b-side">Planned</aside>
+      </article>
+      <article class="b-entry">
+        <div class="b-text"><h3><a href="#">Colour distance</a></h3><p>Pick two colours and see how far apart they are, in every colour space at once.</p></div>
+        <aside class="b-side">Planned</aside>
+      </article>
+
+      <h2 class="b-h2">Guestbook</h2>
+      <section class="b-entry">
+        <form class="gb-form b-form">
+          <label for="b-name">Your name</label>
+          <input id="b-name" name="name" required maxlength="40" autocomplete="name">
+          <label for="b-message">Message</label>
+          <textarea id="b-message" name="message" rows="3" required maxlength="280"></textarea>
+          <div class="b-actions"><button type="submit">Sign the guestbook</button><output aria-live="polite"></output></div>
+        </form>
+        <aside class="b-side">A name and a message, nothing else. Entries stay until I take them down.</aside>
+      </section>
+      <ul class="gb-list b-entries">
+        <li class="b-entry"><div class="b-text"><p class="gb-msg">First! Nice to see this live.</p><p class="b-by"><span class="gb-name">Maddy</span></p></div><aside class="b-side"><time class="gb-date" datetime="2026-09-11">11 Sep 2026</time></aside></li>
+        <li class="b-entry"><div class="b-text"><p class="gb-msg">Came here from the word ladder link. Where's the word ladder?</p><p class="b-by"><span class="gb-name">Tom</span></p></div><aside class="b-side"><time class="gb-date" datetime="2026-09-09">9 Sep 2026</time></aside></li>
+        <li class="b-entry"><div class="b-text"><p class="gb-msg">Testing the guestbook from the staging app. If you can read this, the deploy worked.</p><p class="b-by"><span class="gb-name">Jacob</span></p></div><aside class="b-side"><time class="gb-date" datetime="2026-09-08">8 Sep 2026</time></aside></li>
+      </ul>
+    </main>
+    <footer class="b-foot">Built with TanStack Start, Postgres and Fly.io, from Sydney. <a href="https://github.com/jacobcheatley/jacobcheatley-com">Source on GitHub</a>.</footer>
+  </div>
+</div>
+
+<!-- ============================ C: Cartridges ============================ -->
+<div class="variant vC" id="variant-C" data-name="Cartridges" hidden>
+  <header class="c-head">
+    <a class="c-mark" href="#">Jacob Cheatley</a>
+    <nav class="c-nav" aria-label="Site">
+      <a href="#" aria-current="page">Projects</a>
+      <a href="#">Guestbook</a>
+      <a href="#">About</a>
+    </nav>
+  </header>
+  <main class="c-page">
+    <section class="c-hero">
+      <h1>Small things, built to learn.</h1>
+      <p>I'm a Python and machine-learning engineer teaching myself the modern TypeScript stack by shipping small projects here: quizzes, games, ARGs and browser toys. Some run on this site, some live elsewhere and get a page. Every one gets the same care, serious or silly.</p>
+    </section>
+    <section>
+      <h2>Projects</h2>
+      <ul class="c-tiles">
+        <li class="c-tile" style="--tile: var(--color-tomato)"><a href="#"><span class="c-status">Live</span><span class="c-title">Guestbook</span><span class="c-desc">Leave a note for the next visitor. The first Project on the site: one table, one form.</span></a></li>
+        <li class="c-tile" style="--tile: var(--color-mustard)"><a href="#"><span class="c-status planned">Planned</span><span class="c-title">Word ladder</span><span class="c-desc">Turn one word into another, one letter at a time. A new puzzle each day.</span></a></li>
+        <li class="c-tile" style="--tile: var(--color-teal)"><a href="#"><span class="c-status planned">Planned</span><span class="c-title">Spot the model</span><span class="c-desc">Two answers, one written by a person. Guess which one came from a model.</span></a></li>
+        <li class="c-tile" style="--tile: var(--color-violet)"><a href="#"><span class="c-status planned">Planned</span><span class="c-title">Colour distance</span><span class="c-desc">Pick two colours and see how far apart they are, in every colour space at once.</span></a></li>
+      </ul>
+    </section>
+    <section>
+      <h2>Guestbook</h2>
+      <div class="c-gb">
+        <form class="gb-form c-form">
+          <label for="c-name">Your name</label>
+          <input id="c-name" name="name" required maxlength="40" autocomplete="name">
+          <label for="c-message">Message</label>
+          <textarea id="c-message" name="message" rows="3" required maxlength="280"></textarea>
+          <div class="c-actions"><button type="submit">Sign the guestbook</button><output aria-live="polite"></output></div>
+        </form>
+        <ul class="gb-list c-entries">
+          <li><div class="c-bubble"><p class="gb-msg">First! Nice to see this live.</p></div><p class="c-by"><span class="gb-name">Maddy</span>, <time class="gb-date" datetime="2026-09-11">11 Sep 2026</time></p></li>
+          <li><div class="c-bubble"><p class="gb-msg">Came here from the word ladder link. Where's the word ladder?</p></div><p class="c-by"><span class="gb-name">Tom</span>, <time class="gb-date" datetime="2026-09-09">9 Sep 2026</time></p></li>
+          <li><div class="c-bubble"><p class="gb-msg">Testing the guestbook from the staging app. If you can read this, the deploy worked.</p></div><p class="c-by"><span class="gb-name">Jacob</span>, <time class="gb-date" datetime="2026-09-08">8 Sep 2026</time></p></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+  <footer class="c-foot">
+    <p>Built with TanStack Start, Postgres and Fly.io, from Sydney.</p>
+    <p><a href="https://github.com/jacobcheatley/jacobcheatley-com">Source on GitHub</a></p>
+  </footer>
+</div>
+
+<!-- prototype chrome -->
+<div class="proto-bar" role="toolbar" aria-label="Prototype controls">
+  <button type="button" id="proto-prev" aria-label="Previous variant">&lsaquo;</button>
+  <span class="proto-label" id="proto-label">A</span>
+  <button type="button" id="proto-next" aria-label="Next variant">&rsaquo;</button>
+  <span class="proto-sep"></span>
+  <button type="button" data-theme-set="light">Light</button>
+  <button type="button" data-theme-set="dark">Dark</button>
+  <button type="button" data-theme-set="">System</button>
+</div>
+
+<script>
+  (function () {
+    var VARIANTS = ['A', 'B', 'C'];
+    var root = document.documentElement;
+    var label = document.getElementById('proto-label');
+
+    function startingVariant() {
+      try {
+        var q = new URLSearchParams(location.search).get('variant');
+        if (VARIANTS.indexOf(q) !== -1) return q;
+      } catch (e) {}
+      try {
+        var s = localStorage.getItem('proto-variant');
+        if (VARIANTS.indexOf(s) !== -1) return s;
+      } catch (e) {}
+      return 'A';
+    }
+
+    function show(v) {
+      root.dataset.variant = v;
+      VARIANTS.forEach(function (k) {
+        document.getElementById('variant-' + k).hidden = k !== v;
+      });
+      label.textContent = v + ' — ' + document.getElementById('variant-' + v).dataset.name;
+      try {
+        var u = new URL(location.href);
+        u.searchParams.set('variant', v);
+        history.replaceState(null, '', u);
+      } catch (e) {}
+      try { localStorage.setItem('proto-variant', v); } catch (e) {}
+    }
+
+    function step(d) {
+      var i = VARIANTS.indexOf(root.dataset.variant);
+      show(VARIANTS[(i + d + VARIANTS.length) % VARIANTS.length]);
+    }
+
+    document.getElementById('proto-prev').addEventListener('click', function () { step(-1); });
+    document.getElementById('proto-next').addEventListener('click', function () { step(1); });
+    document.addEventListener('keydown', function (e) {
+      var t = e.target;
+      if (t instanceof Element && t.matches('input, textarea, [contenteditable]')) return;
+      if (e.key === 'ArrowLeft') step(-1);
+      if (e.key === 'ArrowRight') step(1);
+    });
+
+    // Theme: mirrors the viewer's convention (data-theme on <html>, nothing = system).
+    function syncTheme() {
+      var t = root.dataset.theme || '';
+      document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.themeSet === t));
+      });
+    }
+    document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.themeSet) root.dataset.theme = b.dataset.themeSet;
+        else delete root.dataset.theme;
+        syncTheme();
+      });
+    });
+    new MutationObserver(syncTheme).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+
+    show(startingVariant());
+    syncTheme();
+
+    // Guestbook stub: prepend the entry in memory, clone the first entry's markup per variant.
+    var fmt = new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    document.querySelectorAll('.gb-form').forEach(function (form) {
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var list = form.closest('.variant').querySelector('.gb-list');
+        var li = list.firstElementChild.cloneNode(true);
+        var data = new FormData(form);
+        var now = new Date();
+        li.querySelector('.gb-name').textContent = data.get('name');
+        li.querySelector('.gb-msg').textContent = data.get('message');
+        var time = li.querySelector('.gb-date');
+        time.textContent = fmt.format(now);
+        time.dateTime = now.toISOString().slice(0, 10);
+        list.prepend(li);
+        form.reset();
+        form.querySelector('output').textContent = 'Signed.';
+        form.querySelector('input').focus();
+      });
+    });
+  })();
+</script>
