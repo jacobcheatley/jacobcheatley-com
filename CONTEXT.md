@@ -43,4 +43,4 @@ The decorative attachment that pins a Note to the wall — `pin`, `tape`, `stapl
 _Avoid_: pin (as the general term — a pin is one kind of Fastener)
 
 **Curl**:
-How much a Note's corner peels off the wall — an intensity, seeded per Note and lightly adjustable.
+How much each of a Note's two bottom corners peels off the wall — a per-corner intensity (`bl`, `br`), seeded per Note and lightly adjustable. The renderer folds the corner up visually.

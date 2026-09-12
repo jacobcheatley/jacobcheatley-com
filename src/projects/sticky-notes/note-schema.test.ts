@@ -9,7 +9,7 @@ function validContent(): NoteContent {
     h: 500,
     colour: "yellow",
     rotation: -2,
-    curl: 0.3,
+    curl: { bl: 0.3, br: 0.1 },
     fastener: "pin",
     elements: [
       { type: "stroke", ink: "red", size: 8, points: [[10, 20, 0.5]] },
@@ -72,7 +72,8 @@ describe("noteContentSchema", () => {
     ["non-500 height", (c) => ({ ...c, h: 501 })],
     ["unknown top-level key", (c) => ({ ...c, hacked: true })],
     ["bad paper colour", (c) => ({ ...c, colour: "cyan" })],
-    ["curl above 1", (c) => ({ ...c, curl: 1.5 })],
+    ["curl corner above 1", (c) => ({ ...c, curl: { bl: 1.5, br: 0 } })],
+    ["curl missing a corner", (c) => ({ ...c, curl: { bl: 0.5 } })],
     ["bad fastener", (c) => ({ ...c, fastener: "glue" })],
     ["note rotation out of range", (c) => ({ ...c, rotation: 200 })],
     [

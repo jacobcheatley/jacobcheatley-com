@@ -141,7 +141,12 @@ export const noteContentSchema = z
     h: z.literal(CANVAS),
     colour: z.enum(PAPER_COLOURS),
     rotation,
-    curl: z.number().min(0).max(1),
+    // Per-corner peel intensity for the two bottom corners (0 = flat, 1 = fully
+    // curled). The renderer folds each corner up by this much.
+    curl: z.strictObject({
+      bl: z.number().min(0).max(1),
+      br: z.number().min(0).max(1),
+    }),
     fastener: z.enum(FASTENERS),
     elements: z.array(element).max(MAX_ELEMENTS),
   })
