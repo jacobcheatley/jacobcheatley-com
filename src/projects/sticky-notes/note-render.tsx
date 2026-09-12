@@ -104,29 +104,86 @@ function paperPath(fbl: number, fbr: number): string {
 const tri = (a: Point, b: Point, t: Point) =>
   `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]} L ${t[0]} ${t[1]} Z`;
 
-// The fastener that presses the note to the board, drawn at the top centre on
-// top of everything. Diegetic and decorative; the stored `fastener` key chooses
-// which. Rendered here (not in CSS around the SVG) so it looks identical on the
-// wall, zoom, editor and CLI.
-function renderFastener(fastener: NoteContent["fastener"]) {
+// Fasteners fix the note to the board. Rendered here (not in CSS around the
+// SVG) so they look identical on the wall, zoom, editor and CLI. Most sit on
+// top of the note; sticky tack sits behind it (see fastenerBehind). Diegetic
+// and decorative; the stored `fastener` key chooses which.
+
+// Pin head colour → [head, dimple] shades.
+const PIN_SHADES: Record<
+  "red" | "green" | "yellow" | "blue",
+  [string, string]
+> = {
+  red: ["#e11d48", "#9f1239"],
+  green: ["#16a34a", "#14532d"],
+  yellow: ["#eab308", "#854d0e"],
+  blue: ["#2563eb", "#1e3a8a"],
+};
+
+// A push-pin seen head-on, sitting a little below the note's top edge.
+function pin(head: string, dimple: string) {
+  const cx = CANVAS / 2;
+  return (
+    <g>
+      <ellipse cx={cx} cy={40} rx={15} ry={6} fill="#000000" opacity={0.15} />
+      <circle cx={cx} cy={26} r={16} fill={head} />
+      <circle cx={cx - 5} cy={21} r={5} fill="#ffffff" opacity={0.55} />
+      <circle cx={cx} cy={26} r={4} fill={dimple} />
+    </g>
+  );
+}
+
+// A staple centred at (x, y), rotated by `angle` degrees.
+function staple(x: number, y: number, angle: number) {
+  return (
+    <g fill="#9ca3af" transform={`rotate(${angle} ${x} ${y})`}>
+      <rect x={x - 16} y={y - 3} width={32} height={6} rx={1.5} />
+      <rect x={x - 16} y={y - 3} width={6} height={15} rx={1.5} />
+      <rect x={x + 10} y={y - 3} width={6} height={15} rx={1.5} />
+    </g>
+  );
+}
+
+// Drawn BEHIND the paper: only sticky tack, whose blobs peek out from behind
+// the note's top edge.
+function fastenerBehind(fastener: NoteContent["fastener"]) {
+  if (fastener !== "stick") return null;
+  const blob = (bx: number) => (
+    <g key={bx}>
+      <ellipse cx={bx} cy={-3} rx={17} ry={13} fill="#93b4d8" />
+      <ellipse
+        cx={bx - 5}
+        cy={-8}
+        rx={5}
+        ry={3}
+        fill="#ffffff"
+        opacity={0.35}
+      />
+    </g>
+  );
+  return (
+    <>
+      {blob(150)}
+      {blob(350)}
+    </>
+  );
+}
+
+// Drawn ON TOP of the note.
+function fastenerFront(fastener: NoteContent["fastener"]) {
   const cx = CANVAS / 2;
   switch (fastener) {
-    case "pin": // a push-pin, seen head-on, sitting at the note's top edge
-      return (
-        <g>
-          <ellipse
-            cx={cx}
-            cy={30}
-            rx={15}
-            ry={6}
-            fill="#000000"
-            opacity={0.15}
-          />
-          <circle cx={cx} cy={16} r={16} fill="#e11d48" />
-          <circle cx={cx - 5} cy={11} r={5} fill="#ffffff" opacity={0.55} />
-          <circle cx={cx} cy={16} r={4} fill="#9f1239" />
-        </g>
-      );
+    case "none":
+    case "stick": // holds by itself / rendered behind
+      return null;
+    case "pin-red":
+      return pin(...PIN_SHADES.red);
+    case "pin-green":
+      return pin(...PIN_SHADES.green);
+    case "pin-yellow":
+      return pin(...PIN_SHADES.yellow);
+    case "pin-blue":
+      return pin(...PIN_SHADES.blue);
     case "tape": {
       // a wide translucent strip bridging the board (above y=0) and the note
       const w = 170;
@@ -145,42 +202,14 @@ function renderFastener(fastener: NoteContent["fastener"]) {
         </g>
       );
     }
-    case "staple": // a bent metal staple straddling the top edge
+    case "staple": // a single staple, centred near the top
+      return staple(cx, 28, 0);
+    case "staples": // one staple angled into each top corner
       return (
-        <g fill="#9ca3af">
-          <rect x={cx - 22} y={-2} width={44} height={7} rx={1.5} />
-          <rect x={cx - 22} y={-2} width={7} height={22} rx={1.5} />
-          <rect x={cx + 15} y={-2} width={7} height={22} rx={1.5} />
-        </g>
-      );
-    case "stick": // a blob of adhesive putty at the top edge
-      return (
-        <g>
-          <ellipse
-            cx={cx}
-            cy={28}
-            rx={20}
-            ry={6}
-            fill="#000000"
-            opacity={0.12}
-          />
-          <ellipse
-            cx={cx}
-            cy={14}
-            rx={22}
-            ry={15}
-            fill="#a7c7e7"
-            opacity={0.92}
-          />
-          <ellipse
-            cx={cx - 7}
-            cy={9}
-            rx={7}
-            ry={4}
-            fill="#ffffff"
-            opacity={0.4}
-          />
-        </g>
+        <>
+          {staple(80, 46, -32)}
+          {staple(CANVAS - 80, 46, 32)}
+        </>
       );
   }
 }
@@ -289,6 +318,9 @@ export function NoteRender({ content }: { content: NoteContent }) {
         )}
       </defs>
 
+      {/* sticky tack sits behind the note, peeking out above the top edge */}
+      {fastenerBehind(content.fastener)}
+
       {/* paper, then content clipped to the (corner-cut) paper shape */}
       <path d={paper} fill={PAPER[content.colour]} />
       <g clipPath={`url(#${clipId})`}>{content.elements.map(renderElement)}</g>
@@ -310,7 +342,7 @@ export function NoteRender({ content }: { content: NoteContent }) {
       )}
 
       {/* fastener on top of everything */}
-      {renderFastener(content.fastener)}
+      {fastenerFront(content.fastener)}
     </svg>
   );
 }

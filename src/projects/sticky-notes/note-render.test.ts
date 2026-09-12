@@ -18,7 +18,7 @@ const content: NoteContent = {
   colour: "yellow",
   rotation: 0,
   curl: { bl: 0, br: 0 },
-  fastener: "pin",
+  fastener: "pin-red",
   elements: [
     {
       type: "stroke",
@@ -63,15 +63,26 @@ describe("NoteRender", () => {
     expect(iText).toBeLessThan(iSticker);
   });
 
-  it("renders a distinct fastener on top for each key", () => {
-    const pin = render({ ...content, fastener: "pin" });
-    const tape = render({ ...content, fastener: "tape" });
-    const staple = render({ ...content, fastener: "staple" });
-    const stick = render({ ...content, fastener: "stick" });
-    expect(pin).toContain("<circle"); // pin head
-    expect(stick).toContain("<ellipse"); // putty blob
-    // all four fasteners produce different output
-    expect(new Set([pin, tape, staple, stick]).size).toBe(4);
+  it("renders a distinct fastener for each key", () => {
+    const keys = [
+      "none",
+      "pin-red",
+      "pin-green",
+      "pin-yellow",
+      "pin-blue",
+      "tape",
+      "staple",
+      "staples",
+      "stick",
+    ] as const;
+    const outputs = keys.map((fastener) => render({ ...content, fastener }));
+    const out = (k: (typeof keys)[number]) => outputs[keys.indexOf(k)] ?? "";
+    // every fastener produces different output
+    expect(new Set(outputs).size).toBe(keys.length);
+    expect(out("pin-red")).toContain("#e11d48"); // red pin head
+    expect(out("pin-blue")).toContain("#2563eb"); // blue pin head
+    // the single staple and the two-corner staples differ
+    expect(out("staples")).not.toBe(out("staple"));
   });
 
   it("folds a bottom corner only when its curl > 0", () => {
