@@ -62,6 +62,17 @@ describe("NoteRender", () => {
     expect(iText).toBeLessThan(iSticker);
   });
 
+  it("renders a distinct fastener on top for each key", () => {
+    const pin = render({ ...content, fastener: "pin" });
+    const tape = render({ ...content, fastener: "tape" });
+    const staple = render({ ...content, fastener: "staple" });
+    const stick = render({ ...content, fastener: "stick" });
+    expect(pin).toContain("<circle"); // pin head
+    expect(stick).toContain("<ellipse"); // putty blob
+    // all four fasteners produce different output
+    expect(new Set([pin, tape, staple, stick]).size).toBe(4);
+  });
+
   it("folds a bottom corner only when its curl > 0", () => {
     const flat = render({ ...content, curl: { bl: 0, br: 0 } });
     const curled = render({ ...content, curl: { bl: 0, br: 0.6 } });

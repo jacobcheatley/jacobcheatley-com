@@ -9,10 +9,10 @@ import type { Ink, NoteContent, PaperColour } from "./note-schema";
 // `renderToStaticMarkup` in a non-browser context (the CLI, #62). `useId` is the
 // one hook used, purely for collision-free SVG ids when many notes share a page.
 //
-// Rotation and fastener render in CSS *around* this SVG (handled by consumers);
-// the corner curl folds *inside* the SVG so it looks identical everywhere. The
-// semantic colour keys resolve to shades here, in render code, so stored notes
-// never need migrating when the palette is re-tuned.
+// Rotation renders in CSS *around* this SVG (handled by consumers); the corner
+// curl fold and the fastener render *inside* the SVG so they look identical
+// everywhere. The semantic colour keys resolve to shades here, in render code,
+// so stored notes never need migrating when the palette is re-tuned.
 
 const CANVAS = 500;
 const MAX_FOLD = 120; // px a corner peels in at curl = 1
@@ -100,6 +100,84 @@ function paperPath(fbl: number, fbr: number): string {
 
 const tri = (a: Point, b: Point, t: Point) =>
   `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]} L ${t[0]} ${t[1]} Z`;
+
+// The fastener that presses the note to the board, drawn at the top centre on
+// top of everything. Diegetic and decorative; the stored `fastener` key chooses
+// which. Rendered here (not in CSS around the SVG) so it looks identical on the
+// wall, zoom, editor and CLI.
+function renderFastener(fastener: NoteContent["fastener"]) {
+  const cx = CANVAS / 2;
+  switch (fastener) {
+    case "pin": // a push-pin, seen head-on
+      return (
+        <g>
+          <ellipse
+            cx={cx}
+            cy={54}
+            rx={15}
+            ry={6}
+            fill="#000000"
+            opacity={0.15}
+          />
+          <circle cx={cx} cy={40} r={16} fill="#e11d48" />
+          <circle cx={cx - 5} cy={35} r={5} fill="#ffffff" opacity={0.55} />
+          <circle cx={cx} cy={40} r={4} fill="#9f1239" />
+        </g>
+      );
+    case "tape": // a translucent strip across the top
+      return (
+        <g transform={`rotate(-6 ${cx} 28)`}>
+          <rect
+            x={cx - 68}
+            y={6}
+            width={136}
+            height={40}
+            fill="#ffffff"
+            fillOpacity={0.4}
+            stroke="#ffffff"
+            strokeOpacity={0.5}
+          />
+        </g>
+      );
+    case "staple": // a bent metal staple
+      return (
+        <g fill="#9ca3af">
+          <rect x={cx - 22} y={30} width={44} height={7} rx={1.5} />
+          <rect x={cx - 22} y={30} width={7} height={20} rx={1.5} />
+          <rect x={cx + 15} y={30} width={7} height={20} rx={1.5} />
+        </g>
+      );
+    case "stick": // a blob of adhesive putty
+      return (
+        <g>
+          <ellipse
+            cx={cx}
+            cy={54}
+            rx={20}
+            ry={6}
+            fill="#000000"
+            opacity={0.12}
+          />
+          <ellipse
+            cx={cx}
+            cy={40}
+            rx={22}
+            ry={15}
+            fill="#a7c7e7"
+            opacity={0.92}
+          />
+          <ellipse
+            cx={cx - 7}
+            cy={35}
+            rx={7}
+            ry={4}
+            fill="#ffffff"
+            opacity={0.4}
+          />
+        </g>
+      );
+  }
+}
 
 // Array order IS z-order and element identity (no stored id) and this render
 // never reorders, so the array index is the correct, stable React key.
@@ -224,6 +302,9 @@ export function NoteRender({ content }: { content: NoteContent }) {
           filter={`url(#${shadowId})`}
         />
       )}
+
+      {/* fastener on top of everything */}
+      {renderFastener(content.fastener)}
     </svg>
   );
 }
