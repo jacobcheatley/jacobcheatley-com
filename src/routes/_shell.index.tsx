@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ProjectCard } from "@/portfolio/ProjectCard";
 
 export const Route = createFileRoute("/_shell/")({ component: Home });
 
 function Home() {
-  // The guestbook card is gone; the Sticky Notes wall card returns with the
-  // wall route (#60). No live Project until then.
   return (
-    <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-5 gap-y-6" />
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-5 gap-y-6">
+      <ProjectCard
+        to="/sticky-notes"
+        title="Sticky Notes"
+        description="Draw a note and pin it to the corkboard."
+        tint="linear-gradient(135deg, #c99a5b, #b07f3f)"
+        live
+      />
+    </ul>
   );
 }
