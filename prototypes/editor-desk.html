@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sticky Notes — desk scene probe (#70)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=IBM+Plex+Sans:wght@400;600&family=Patrick+Hand&family=Permanent+Marker&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* paper + ink: the exact shades from note-render.tsx */
+    --paper-yellow:#fde68a; --paper-pink:#fbcfe8; --paper-blue:#bfdbfe;
+    --paper-green:#bbf7d0; --paper-orange:#fed7aa; --paper-white:#f8fafc;
+    --ink-black:#1f2937; --ink-green:#16a34a; --ink-red:#dc2626; --ink-blue:#2563eb;
+    --note-size: min(78vw, 46vh, 340px);
+    --strip-h: 104px;
+    --ease-out: cubic-bezier(.2,.8,.25,1);
+    --overshoot: cubic-bezier(.34,1.4,.5,1);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin:0; height:100%; overflow:hidden; background:#12151a;
+    font-family:"IBM Plex Sans", system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body { user-select:none; -webkit-user-select:none; }
+
+  #stage { position:fixed; inset:0; overflow:hidden; }
+
+  /* ---------- the wall (warm cork, behind everything) ---------- */
+  #cork {
+    position:absolute; inset:0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(0,0,0,.05) 0 2px, transparent 3px),
+      radial-gradient(circle at 60% 70%, rgba(0,0,0,.06) 0 2px, transparent 3px),
+      radial-gradient(circle at 80% 20%, rgba(0,0,0,.05) 0 2px, transparent 3px),
+      radial-gradient(circle at 40% 85%, rgba(0,0,0,.05) 0 2px, transparent 3px),
+      linear-gradient(135deg, #c99a5b, #b07f3f);
+    background-size: 14px 14px, 22px 22px, 18px 18px, 16px 16px, cover;
+    box-shadow: inset 0 0 120px rgba(60,35,10,.35);
+  }
+  #wall {
+    position:absolute; inset:0; padding:26px 16px calc(var(--strip-h) + 10px);
+    display:flex; flex-wrap:wrap; align-content:flex-start; justify-content:center;
+    gap:20px 16px;
+  }
+  .tile { width:124px; }
+  .tile svg { display:block; width:100%; height:auto; filter:drop-shadow(2px 5px 7px rgba(0,0,0,.32)); }
+  #slot0 { width:124px; height:134px; }
+
+  /* ---------- the cutting mat (slides up over the cork) ---------- */
+  #mat {
+    position:absolute; inset:0; z-index:2;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
+      radial-gradient(120% 120% at 50% 0%, #2a2f36, #171a1f);
+    background-size: 26px 26px, 26px 26px, cover;
+    border-top:2px solid rgba(190,210,220,.22);
+    box-shadow: 0 -14px 34px rgba(0,0,0,.55);
+    transition: transform 500ms var(--ease-out);
+  }
+  #mat.down { transform: translateY(100%); }
+  /* the mat's edge, left peeking when it is down */
+  #matTab {
+    position:absolute; left:0; right:0; bottom:0; height:30px; z-index:3;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 26px),
+      linear-gradient(180deg, #2f353d, #1b1f25);
+    border-top:2px solid rgba(190,210,220,.22);
+    border-radius:10px 10px 0 0;
+    box-shadow: 0 -8px 20px rgba(0,0,0,.45);
+    transform: translateY(110%); transition: transform 420ms var(--ease-out) 120ms;
+  }
+  #matTab.show { transform: none; }
+  #matTab::after {
+    content:""; position:absolute; left:50%; top:11px; width:46px; height:4px; margin-left:-23px;
+    border-radius:3px; background:rgba(230,240,245,.3);
+  }
+
+  /* ---------- masking-tape labels stuck on the mat ---------- */
+  .tape-label {
+    position:absolute; top:10px; z-index:6; padding:7px 16px 8px;
+    font-family:"Patrick Hand", cursive; font-size:15px; color:#4a412c; letter-spacing:.01em;
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.45), rgba(0,0,0,.06)),
+      repeating-linear-gradient(90deg, rgba(160,140,90,.10) 0 3px, transparent 3px 7px);
+    background-color:#e8dcae;
+    box-shadow: 0 2px 5px rgba(0,0,0,.4);
+    opacity:.93;
+    clip-path: polygon(3% 0, 97% 2%, 100% 96%, 96% 100%, 4% 98%, 0 4%);
+    transition: transform 160ms var(--ease-out), filter 160ms;
+  }
+  .tape-label:active { filter:brightness(1.06); }
+  #tapeBack { left:12px; transform: rotate(-2.2deg); }
+  #tapePin { right:12px; transform: rotate(1.8deg); }
+
+  /* ---------- the note ---------- */
+  #noteShift {
+    position:absolute; left:50%; top:calc(50% - var(--strip-h)/2 + 6px);
+    width:var(--note-size); height:var(--note-size); margin:calc(var(--note-size)/-2) 0 0 calc(var(--note-size)/-2);
+    transition: transform 420ms var(--ease-out);
+  }
+  #stage.sheet-open #noteShift { transform: translateY(-20%) scale(.76); }
+  #noteWrap { position:absolute; inset:0; }
+  #note { position:absolute; inset:0; }
+  #note svg, .tile svg, .flown svg { display:block; width:100%; height:auto; }
+  #note svg { filter: drop-shadow(3px 9px 12px rgba(0,0,0,.45)); }
+  #note.hide-cursor { cursor:none; }
+  .paper-fill { transition: fill 320ms ease-out; }
+  svg { touch-action:none; }
+  @keyframes dip {
+    0%   { transform: translateY(0); }
+    45%  { transform: translateY(5px) scale(.99); }
+    100% { transform: translateY(0); }
+  }
+  .dipping { animation: dip 350ms var(--ease-out); }
+
+  /* ---------- the bottom edge of the mat: the tools ---------- */
+  #strip {
+    position:absolute; left:0; right:0; bottom:0; height:var(--strip-h); z-index:8;
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap:clamp(4px, 2vw, 30px); padding:0 6px 14px;
+    background:linear-gradient(180deg, transparent, rgba(0,0,0,.3));
+  }
+  .group { display:flex; align-items:flex-end; gap:3px; position:relative; }
+
+  /* pad stack (fanned so every colour is reachable) */
+  #pads { position:relative; width:62px; height:56px; flex:0 0 auto; }
+  .pad {
+    position:absolute; bottom:0; left:50%; width:36px; height:36px; margin-left:-18px;
+    border-radius:2px; transform-origin:50% 150%;
+    background-image: linear-gradient(170deg, rgba(255,255,255,.4), rgba(255,255,255,0) 45%);
+    box-shadow: 0 3px 6px rgba(0,0,0,.4), inset 0 -2px 0 rgba(0,0,0,.08);
+    transition: transform 220ms var(--ease-out), box-shadow 220ms;
+  }
+  .pad.active { box-shadow: 0 7px 11px rgba(0,0,0,.5), inset 0 -2px 0 rgba(0,0,0,.08); }
+  .pad.tearing { transform: rotate(calc(var(--a) * 1deg)) translateY(-10px) scale(1.04); }
+
+  /* markers + eraser */
+  .tool { position:relative; width:21px; height:84px; display:flex; align-items:flex-end; justify-content:center; }
+  .tool::after { /* the resting shadow = its slot on the mat */
+    content:""; position:absolute; bottom:1px; left:50%; width:24px; height:7px; margin-left:-12px;
+    border-radius:50%; background:rgba(0,0,0,.45); filter:blur(2.5px);
+    transition: transform 260ms var(--ease-out), opacity 260ms;
+  }
+  .tool.held::after { transform: scale(1.3); opacity:.55; }
+  .marker {
+    position:relative; width:19px; height:74px; border-radius:4px 4px 3px 3px;
+    background-image:
+      linear-gradient(100deg, rgba(255,255,255,.34) 0 20%, rgba(255,255,255,0) 20% 60%, rgba(0,0,0,.18) 60%);
+    background-color: var(--c);
+    box-shadow: 0 3px 6px rgba(0,0,0,.45);
+    transition: transform 280ms var(--ease-out);
+  }
+  .marker::before { /* grip band */
+    content:""; position:absolute; top:26px; left:0; right:0; height:11px;
+    background:rgba(0,0,0,.22); box-shadow:0 1px 0 rgba(255,255,255,.12) inset;
+  }
+  .marker::after { /* nib */
+    content:""; position:absolute; bottom:-8px; left:4.5px; width:10px; height:9px;
+    background:var(--c); filter:brightness(.62);
+    clip-path: polygon(0 0, 100% 0, 66% 100%, 34% 100%);
+  }
+  .cap {
+    position:absolute; left:-1.5px; bottom:-10px; width:21px; height:26px; border-radius:2px 2px 4px 4px;
+    border-top:2px solid rgba(255,255,255,.35);
+    background-image: linear-gradient(100deg, rgba(255,255,255,.45) 0 26%, rgba(0,0,0,.18) 72%);
+    background-color: var(--c); filter:brightness(1.12) saturate(.9);
+    box-shadow: 0 2px 4px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.35);
+    transition: transform 300ms var(--ease-out);
+  }
+  .tool.held .marker { transform: translateY(-17px) rotate(-7deg); }
+  .tool.held .cap { transform: translate(11px, 16px) rotate(74deg); }
+  .tool.held.using .marker { transform: translateY(-27px) rotate(-16deg); }
+  .eraser {
+    position:relative; width:31px; height:23px; border-radius:3px;
+    background:linear-gradient(180deg,#fbf6ee,#dbd0bf);
+    box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -4px 0 rgba(0,0,0,.07);
+    transition: transform 280ms var(--ease-out);
+  }
+  .eraser::after {
+    content:""; position:absolute; left:0; right:0; top:7px; height:9px;
+    background:linear-gradient(180deg,#cdbde9,#b7a4d8); box-shadow:0 0 0 1px rgba(0,0,0,.08) inset;
+  }
+  .tool.held .eraser { transform: translateY(-17px) rotate(-6deg); }
+  .tool.held.using .eraser { transform: translateY(-26px) rotate(-13deg); }
+
+  /* draw / write rocker */
+  #mode {
+    position:relative; display:flex; align-items:stretch; height:40px; border-radius:5px;
+    background:linear-gradient(180deg,#f6efe2,#ddd2bd);
+    box-shadow:0 4px 7px rgba(0,0,0,.42), inset 0 -3px 0 rgba(0,0,0,.09);
+  }
+  #mode .half { position:relative; width:30px; display:flex; align-items:center; justify-content:center; color:#59513f;
+    transition: transform 200ms var(--ease-out), background 200ms, color 200ms; }
+  #mode .half + .half { border-left:1px solid rgba(0,0,0,.14); }
+  #mode .half.on { background:rgba(0,0,0,.10); color:var(--ink-black); transform: translateY(2px); }
+  #mode .half.on::after {
+    content:""; position:absolute; bottom:3px; height:3px; width:20px; border-radius:2px;
+    background:currentColor; opacity:.75;
+  }
+  #mode .aa { font-family:"Patrick Hand", cursive; font-size:19px; line-height:1; }
+  #fonts {
+    position:absolute; bottom:50px; left:50%; width:100px; margin-left:-50px;
+    display:grid; grid-template-columns:1fr 1fr; gap:5px;
+    transform-origin:50% 120%; transform: scale(.35) translateY(18px); opacity:0; pointer-events:none;
+    transition: transform 280ms var(--overshoot), opacity 200ms;
+  }
+  #fonts.open { transform:none; opacity:1; pointer-events:auto; }
+  .fchip {
+    height:34px; display:flex; align-items:center; justify-content:center; border-radius:2px;
+    background:linear-gradient(180deg,#fffdf6,#ece3cf); color:var(--ink-black); font-size:18px; line-height:1;
+    box-shadow:0 3px 5px rgba(0,0,0,.4); transition: transform 160ms var(--ease-out);
+  }
+  .fchip.on { outline:2px solid var(--ink-green); outline-offset:-2px; transform: translateY(-3px); }
+
+  /* sticker tab + bin */
+  #sheetTab {
+    position:relative; width:32px; height:44px; border-radius:3px 3px 0 0;
+    background:linear-gradient(180deg,#ffffff,#e9e5db); box-shadow:0 -2px 8px rgba(0,0,0,.35);
+    display:flex; align-items:center; justify-content:center; font-size:17px;
+    transition: transform 240ms var(--ease-out);
+  }
+  #sheetTab::before {
+    content:""; position:absolute; top:0; right:0; border-width:0 9px 9px 0; border-style:solid;
+    border-color: transparent #cfcabd transparent transparent;
+  }
+  #sheetTab:active { transform: translateY(-4px); }
+  .bin {
+    position:relative; width:30px; height:38px; align-self:flex-end;
+    background:linear-gradient(100deg,#98a3b0,#5a636e);
+    clip-path: polygon(7% 0, 93% 0, 81% 100%, 19% 100%);
+    box-shadow:0 5px 8px rgba(0,0,0,.5);
+    transition: transform 200ms var(--ease-out);
+  }
+  .bin::before {
+    content:""; position:absolute; top:-4px; left:-3px; right:-3px; height:6px; border-radius:3px;
+    background:linear-gradient(180deg,#b4bec9,#6d7683); box-shadow:0 1px 2px rgba(0,0,0,.45);
+  }
+  .bin::after {
+    content:""; position:absolute; inset:8px 5px 3px;
+    background:repeating-linear-gradient(96deg, rgba(0,0,0,.3) 0 1px, transparent 1px 7px);
+  }
+  .bin.tossing { transform: translateY(-5px) rotate(-6deg); }
+
+  /* ---------- sticker sheet ---------- */
+  #sheet {
+    position:absolute; left:0; right:0; bottom:var(--strip-h); margin:0 auto;
+    max-width:560px; height:35vh; z-index:7;
+    padding:16px 12px 14px;
+    background:linear-gradient(180deg,#ffffff,#f2efe6);
+    border-radius:8px 8px 0 0;
+    box-shadow:0 -10px 24px rgba(0,0,0,.45);
+    /* parked fully below the strip, not just below itself */
+    transform: translateY(calc(100% + var(--strip-h) + 16px));
+    transition: transform 500ms var(--ease-out);
+    overflow:auto; touch-action:none;
+  }
+  #sheet.up { transform:none; }
+  #sheet::before {
+    content:""; position:absolute; left:50%; top:6px; width:44px; height:4px; margin-left:-22px;
+    border-radius:3px; background:rgba(0,0,0,.16);
+  }
+  #sheetGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(44px,1fr)); gap:6px; }
+  .slot { position:relative; height:44px; display:flex; align-items:center; justify-content:center; font-size:25px; }
+  .slot .ghost {
+    position:absolute; left:50%; top:50%; transform:translate(calc(-50% + 1px), calc(-50% + 1px));
+    filter:grayscale(1); opacity:.22; pointer-events:none;
+  }
+  .slot .face { position:relative; transition: opacity 120ms; }
+  .slot.peeled .face { opacity:0; }
+  .fly { position:fixed; z-index:40; pointer-events:none; filter:drop-shadow(0 5px 5px rgba(0,0,0,.35)); }
+
+  /* ---------- held tool following a mouse ---------- */
+  #cursorTool { position:fixed; left:0; top:0; z-index:50; pointer-events:none; opacity:0; transition: opacity 140ms; }
+  #cursorTool.on { opacity:1; }
+  #cursorTool .marker, #cursorTool .eraser, #cursorTool .cap { transition:none; }
+  #cursorTool .marker { box-shadow: 4px 10px 10px rgba(0,0,0,.35); }
+
+  /* ---------- write-mode overlay input ---------- */
+  #writeBox {
+    position:fixed; z-index:45; background:transparent; border:0; border-bottom:1.5px dashed rgba(0,0,0,.32);
+    padding:0 2px 2px; outline:none; min-width:110px; display:none;
+  }
+
+  /* ---------- flight layer / landed note ---------- */
+  #flight { position:absolute; inset:0; z-index:9; pointer-events:none; }
+  #flight > * { pointer-events:auto; }
+  .flown { position:fixed; }
+  .flown svg { filter: drop-shadow(2px 6px 9px rgba(0,0,0,.4)); }
+  /* origin ≈ the fastener itself (note y = 28 inside the -40..500 viewBox) */
+  #appliedFastener { position:fixed; z-index:10; pointer-events:none; opacity:0; transform-origin:50% 13%; }
+  #appliedFastener.on { opacity:1; animation: pressOn 350ms var(--overshoot); }
+  @keyframes pressOn { from { transform: scale(1.4); } to { transform: scale(1); } }
+
+  /* ---------- fastener drawer ---------- */
+  #drawer {
+    position:absolute; left:0; right:0; bottom:0; z-index:12;
+    padding:18px 10px 20px;
+    background:linear-gradient(180deg,#3a4149,#232930);
+    border-top:2px solid rgba(190,210,220,.2);
+    border-radius:10px 10px 0 0;
+    box-shadow:0 -12px 26px rgba(0,0,0,.5);
+    transform: translateY(102%); transition: transform 500ms var(--ease-out);
+  }
+  #drawer.up { transform:none; }
+  #drawer.collapsed { transform: translateY(calc(100% - 22px)); }
+  #drawer::before {
+    content:""; position:absolute; left:50%; top:8px; width:46px; height:4px; margin-left:-23px;
+    border-radius:3px; background:rgba(230,240,245,.3);
+  }
+  #fastGrid { display:grid; grid-template-columns:repeat(5, 1fr); gap:8px; }
+  .fast {
+    border-radius:4px; padding:3px; overflow:hidden;
+    background:linear-gradient(180deg,#4c545d,#39414a);
+    box-shadow:0 3px 5px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
+    transition: transform 180ms var(--ease-out);
+  }
+  .fast svg { display:block; width:100%; height:auto; }
+  .fast:active { transform: translateY(2px) scale(.96); }
+  .fast.chosen { outline:2px solid rgba(220,235,240,.7); outline-offset:-2px; }
+
+  /* ---------- the name tag ---------- */
+  #tag {
+    position:fixed; z-index:11; width:150px; padding:9px 10px 8px;
+    background:linear-gradient(180deg,#fffdf5,#efe8d6);
+    box-shadow:0 4px 9px rgba(0,0,0,.4);
+    clip-path: polygon(0 16%, 8% 0, 100% 0, 100% 100%, 8% 100%, 0 84%);
+    transform-origin:50% 0; transform: rotate(-1.5deg) scale(.5); opacity:0;
+    transition: transform 340ms var(--overshoot), opacity 240ms;
+    display:flex; align-items:center; gap:6px;
+  }
+  #tag.on { transform: rotate(-1.5deg) scale(1); opacity:1; }
+  #tag::before { /* the punched hole */
+    content:""; position:absolute; left:5px; top:50%; width:7px; height:7px; margin-top:-3.5px;
+    border-radius:50%; background:rgba(0,0,0,.26);
+  }
+  #tagInput {
+    flex:1; margin-left:9px; min-width:0; background:transparent; border:0; outline:none;
+    border-bottom:1.5px dashed rgba(0,0,0,.26); padding-bottom:2px;
+    font-family:"Patrick Hand", cursive; font-size:17px; color:var(--ink-black);
+    text-transform: lowercase;
+  }
+  #tagInput::placeholder { color:rgba(0,0,0,.3); }
+  #tagOk {
+    flex:0 0 auto; width:26px; height:26px; border-radius:50%; border:0; padding:0;
+    background:radial-gradient(circle at 34% 28%, #fffdf5, #e6dcc4);
+    box-shadow:0 2px 4px rgba(0,0,0,.32);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-green); font-size:15px; line-height:1;
+    transition: transform 160ms var(--ease-out);
+  }
+  #tagOk:active { transform: scale(.9); }
+  #tag.done #tagInput { border-bottom-color:transparent; }
+  #tag.done #tagOk { display:none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cork"><div id="wall"><div id="slot0"></div></div></div>
+
+  <div id="flight"></div>
+
+  <div id="mat">
+    <div class="tape-label" id="tapeBack">← the wall</div>
+    <div class="tape-label" id="tapePin">pin it up</div>
+
+    <div id="noteShift"><div id="noteWrap"><div id="note"></div></div></div>
+
+    <div id="strip">
+      <div id="pads"></div>
+      <div class="group" id="tools"></div>
+      <div class="group">
+        <div id="mode">
+          <div class="half on" data-mode="draw">
+            <svg width="23" height="16" viewBox="0 0 24 16" aria-hidden="true"><path d="M2 11 Q6 1 10 8 T18 6 Q21 5 22 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+          </div>
+          <div class="half aa" data-mode="write">Aa</div>
+        </div>
+        <div id="fonts"></div>
+      </div>
+      <div class="group">
+        <div id="sheetTab">🌈</div>
+        <div class="bin" id="bin"></div>
+      </div>
+    </div>
+
+    <div id="sheet"><div id="sheetGrid"></div></div>
+  </div>
+
+  <div id="matTab"></div>
+
+  <div id="drawer"><div id="fastGrid"></div></div>
+  <div id="tag"><input id="tagInput" placeholder="your name" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"><button id="tagOk">✓</button></div>
+
+  <div id="cursorTool"></div>
+  <input id="writeBox" autocomplete="off" autocapitalize="none" spellcheck="false">
+  <div id="appliedFastener"></div>
+</div>
+
+<script type="module">
+import { getStroke } from "https://esm.sh/perfect-freehand@1.2.3";
+
+/* ============================================================
+   Throwaway desk-scene probe for #70. Feel over code quality.
+
+   The note itself is NOT re-invented here: everything between the
+   "ported from note-render.tsx" markers is that file's paper +
+   fastener layers (T2, #72) transliterated from JSX to template
+   strings, same coordinates, same shades. Only the desk around it
+   is new. If the probe's note looks right, the real one already is.
+   ============================================================ */
+
+const PAPER = { yellow:"#fde68a", pink:"#fbcfe8", blue:"#bfdbfe", green:"#bbf7d0", orange:"#fed7aa", white:"#f8fafc" };
+const INK   = { black:"#1f2937", green:"#16a34a", red:"#dc2626", blue:"#2563eb" };
+const PAPER_KEYS = Object.keys(PAPER);
+const INK_KEYS = Object.keys(INK);
+const FONT_CSS = {
+  print: '"IBM Plex Sans", sans-serif',
+  handwritten: '"Caveat", cursive',
+  casual: '"Patrick Hand", cursive',
+  marker: '"Permanent Marker", cursive',
+};
+const FONT_KEYS = ["casual", "handwritten", "marker", "print"];
+const STICKERS = ["⭐","❤️","🔥","✨","🎉","👍","😀","😎","🥳","🤔","😭","💀","🙏","👀","💯","🌈","🌟","🍀","🌸","🎈","☕","🍕","🐸","🧷"];
+const FASTENERS = ["pin-red","pin-green","pin-yellow","pin-blue","tape-masking","tape-clear","staple","staples","stick"];
+
+const CANVAS = 500, MAX_FOLD = 120, FASTENER_MARGIN = 40;
+const TEXT_SIZE = 30, TEXT_W = 240, STICKER_BASE = 48;
+const STROKE_OPTS = { thinning:0.6, smoothing:0.5, streamline:0.5, simulatePressure:false };
+const NIB = 8; // the editor's one fixed nib
+
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), mat = $("mat"), matTab = $("matTab"), note = $("note");
+const noteWrap = $("noteWrap"), noteShift = $("noteShift"), flight = $("flight");
+const sheet = $("sheet"), drawer = $("drawer"), tag = $("tag"), tagInput = $("tagInput");
+const cursorTool = $("cursorTool"), writeBox = $("writeBox"), appliedFastener = $("appliedFastener");
+const fine = matchMedia("(pointer: fine)").matches;
+const rand = (a, b) => a + Math.random() * (b - a);
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" })[c]);
+
+let uid = 0;
+let phase = "wall"; // wall | desk | flight | fastener | tag | done
+const st = {
+  paper: "yellow", rotation: -2.4, curlL: 0.2, curlR: 0.28,
+  elements: [], tool: null, mode: "draw", font: "casual", fastener: null,
+};
+
+/* ===== ported from note-render.tsx (JSX → template strings) ===== */
+
+const url = (id) => `url(#${id})`;
+
+function paperPath(fbl, fbr) {
+  const c = CANVAS;
+  return `M 0 0 L ${c} 0 L ${c} ${c - fbr} L ${c - fbr} ${c} L ${fbl} ${c} L 0 ${c - fbl} Z`;
+}
+const tri = (a, b, t) => `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]} L ${t[0]} ${t[1]} Z`;
+
+function mix(a, b, t) {
+  const ch = (h, i) => parseInt(h.slice(i, i + 2), 16);
+  const c = (i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, "0");
+  return "#" + c(1) + c(3) + c(5);
+}
+
+function svgPathFromStroke(stroke) {
+  if (stroke.length < 2) return "";
+  const [fx, fy] = stroke[0];
+  const parts = ["M", fx, fy, "Q"];
+  for (let i = 0; i < stroke.length; i++) {
+    const [x0, y0] = stroke[i];
+    const [x1, y1] = stroke[(i + 1) % stroke.length];
+    parts.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+  }
+  parts.push("Z");
+  return parts.join(" ");
+}
+const strokePath = (points, size = NIB) =>
+  svgPathFromStroke(getStroke(points, { ...STROKE_OPTS, size }));
+
+function wrapLines(text, width, fontSize) {
+  const maxChars = Math.max(1, Math.floor(width / (fontSize * 0.55)));
+  const lines = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const word of para.split(" ")) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > maxChars && line) { lines.push(line); line = word; }
+      else line = next;
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+const PIN_SHADES = {
+  "pin-red": ["#fb7185", "#e11d48", "#881337"],
+  "pin-green": ["#6ee7a0", "#16a34a", "#14532d"],
+  "pin-yellow": ["#fde68a", "#eab308", "#854d0e"],
+  "pin-blue": ["#93c5fd", "#2563eb", "#1e3a8a"],
+};
+
+function fastenerDefs(fastener, ids) {
+  if (!fastener || fastener === "none") return "";
+  const shades = PIN_SHADES[fastener];
+  let out = `<filter id="${ids.blur}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.5"/></filter>`;
+  if (shades)
+    out += `<radialGradient id="${ids.grad}" cx="35%" cy="30%" r="75%">
+      <stop offset="0" stop-color="${shades[0]}"/><stop offset="0.55" stop-color="${shades[1]}"/><stop offset="1" stop-color="${shades[2]}"/>
+    </radialGradient>`;
+  if (fastener === "tape-clear")
+    out += `<linearGradient id="${ids.grad}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/><stop offset="0.35" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="0.7" stop-color="#ffffff" stop-opacity="0.18"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.45"/>
+    </linearGradient>`;
+  if (fastener === "staple" || fastener === "staples")
+    out += `<linearGradient id="${ids.grad}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/><stop offset="0.45" stop-color="#b8bec8"/><stop offset="1" stop-color="#6b7280"/>
+    </linearGradient>`;
+  if (fastener === "stick")
+    out += `<linearGradient id="${ids.grad}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#93aee0"/><stop offset="1" stop-color="#5b7fc4"/>
+    </linearGradient>`;
+  return out;
+}
+
+function pin(ids) {
+  const cx = CANVAS / 2, cy = 28;
+  return `<g>
+    <ellipse cx="${cx + 7}" cy="${cy + 24}" rx="27" ry="12" fill="#000000" opacity="0.3" filter="${url(ids.blur)}"/>
+    <line x1="${cx + 2}" y1="${cy + 12}" x2="${cx + 13}" y2="${cy + 36}" stroke="#4b5563" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${cx + 1}" y1="${cy + 12}" x2="${cx + 12}" y2="${cy + 35}" stroke="#e5e7eb" stroke-width="1.4" stroke-linecap="round"/>
+    <ellipse cx="${cx + 13.5}" cy="${cy + 36.5}" rx="3" ry="1.6" fill="#000000" opacity="0.55"/>
+    <circle cx="${cx}" cy="${cy}" r="26" fill="${url(ids.grad)}"/>
+    <ellipse cx="${cx - 10}" cy="${cy - 10}" rx="9" ry="5.5" fill="#ffffff" opacity="0.6" transform="rotate(-35 ${cx - 10} ${cy - 10})"/>
+  </g>`;
+}
+
+function tornStrip(x0, y0, x1, y1, amp = 5, step = 7) {
+  const pts = [[x0, y0], [x1, y0]];
+  for (let y = y0 + step; y < y1; y += step) {
+    const dir = Math.round(y / step) % 2 ? 1 : -1;
+    pts.push([x1 + dir * amp * (0.6 + 0.4 * Math.sin(y)), y]);
+  }
+  pts.push([x1, y1], [x0, y1]);
+  for (let y = y1 - step; y > y0; y -= step) {
+    const dir = Math.round(y / step) % 2 ? -1 : 1;
+    pts.push([x0 + dir * amp * (0.6 + 0.4 * Math.cos(y)), y]);
+  }
+  return pts.map(([x, y]) => `${x.toFixed(1)},${y}`).join(" ");
+}
+function serratedStrip(x0, y0, x1, y1, t = 3) {
+  const pts = [[x0, y0], [x1, y0]];
+  for (let y = y0; y < y1; y += t * 2) pts.push([x1 - t, y + t], [x1, y + t * 2]);
+  pts.push([x1, y1], [x0, y1]);
+  for (let y = y1; y > y0; y -= t * 2) pts.push([x0 + t, y - t], [x0, y - t * 2]);
+  return pts.map(([x, y]) => `${x},${y}`).join(" ");
+}
+
+function tapeMasking(ids) {
+  const cx = CANVAS / 2;
+  const o = tornStrip(cx - 90, -34, cx + 90, 30);
+  return `<g transform="rotate(-6 ${cx} 0)">
+    <polygon points="${o}" fill="#000000" opacity="0.18" transform="translate(1 4)" filter="${url(ids.blur)}"/>
+    <polygon points="${o}" fill="#f4ecc6" fill-opacity="0.7"/>
+    <line x1="${cx - 80}" y1="26" x2="${cx - 54}" y2="-30" stroke="#ffffff" stroke-opacity="0.28" stroke-width="7"/>
+    <line x1="${cx + 40}" y1="26" x2="${cx + 54}" y2="-30" stroke="#ffffff" stroke-opacity="0.2" stroke-width="4"/>
+    <line x1="${cx - 88}" y1="-33" x2="${cx + 88}" y2="-33" stroke="#000000" stroke-opacity="0.07" stroke-width="1.5"/>
+    <line x1="${cx - 88}" y1="29" x2="${cx + 88}" y2="29" stroke="#000000" stroke-opacity="0.09" stroke-width="1.5"/>
+  </g>`;
+}
+function tapeClear(ids) {
+  const cx = CANVAS / 2;
+  const o = serratedStrip(cx - 85, -32, cx + 85, 28);
+  return `<g transform="rotate(-5 ${cx} 0)">
+    <polygon points="${o}" fill="#000000" opacity="0.12" transform="translate(1 3)" filter="${url(ids.blur)}"/>
+    <polygon points="${o}" fill="#e8f1ff" fill-opacity="0.28"/>
+    <polygon points="${o}" fill="${url(ids.grad)}"/>
+    <polygon points="${o}" fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1"/>
+    <line x1="${cx - 54}" y1="26" x2="${cx - 28}" y2="-30" stroke="#ffffff" stroke-opacity="0.5" stroke-width="9"/>
+  </g>`;
+}
+function staple(ids, x, y, angle, w) {
+  const l = x - w / 2;
+  return `<g transform="rotate(${angle} ${x} ${y})">
+    <rect x="${l}" y="${y - 1}" width="${w}" height="12" rx="3" fill="#000000" opacity="0.3" filter="${url(ids.blur)}"/>
+    <rect x="${l - 3}" y="${y - 4}" width="7" height="10" rx="1.5" fill="#111827" opacity="0.75"/>
+    <rect x="${x + w / 2 - 4}" y="${y - 4}" width="7" height="10" rx="1.5" fill="#111827" opacity="0.75"/>
+    <rect x="${l}" y="${y - 5}" width="${w}" height="10" rx="1.5" fill="${url(ids.grad)}"/>
+    <rect x="${l + 1}" y="${y - 4.5}" width="${w - 2}" height="2" rx="1" fill="#ffffff" opacity="0.7"/>
+  </g>`;
+}
+function lump(ids, cx, w, h, k) {
+  const l = cx - w / 2, r = cx + w / 2;
+  const d = [
+    `M ${l} 6`,
+    `C ${l - 3} ${-h * 0.4} ${l + w * 0.1} ${-h * 0.95} ${l + w * 0.27} ${-h * 0.78}`,
+    `C ${l + w * 0.35} ${-h * 0.7} ${l + w * 0.4} ${-h * 1.05} ${l + w * 0.55 + k} ${-h * 0.98}`,
+    `C ${l + w * 0.67} ${-h * 0.92} ${l + w * 0.72} ${-h * 0.66} ${l + w * 0.83} ${-h * 0.62}`,
+    `C ${r + 2} ${-h * 0.5} ${r + 3} 0 ${r} 6 Z`,
+  ].join(" ");
+  return `<g>
+    <path d="${d}" fill="${url(ids.grad)}"/>
+    <ellipse cx="${l + w * 0.3}" cy="${-h * 0.5}" rx="${w * 0.12}" ry="${h * 0.18}" fill="#ffffff" opacity="0.18"/>
+    <rect x="${l - 6}" y="-6" width="${w + 12}" height="14" fill="#000000" opacity="0.3" filter="${url(ids.blur)}"/>
+  </g>`;
+}
+function fastenerBehind(fastener, ids) {
+  if (fastener !== "stick") return "";
+  return lump(ids, 58, 66, 18, 3) + lump(ids, CANVAS - 58, 60, 17, -3);
+}
+function fastenerFront(fastener, ids) {
+  switch (fastener) {
+    case "pin-red": case "pin-green": case "pin-yellow": case "pin-blue": return pin(ids);
+    case "tape-masking": return tapeMasking(ids);
+    case "tape-clear": return tapeClear(ids);
+    case "staple": return staple(ids, CANVAS / 2, 30, 0, 70);
+    case "staples": return staple(ids, 58, 42, -40, 60) + staple(ids, CANVAS - 58, 42, 40, 60);
+    default: return "";
+  }
+}
+
+function renderElement(el) {
+  if (el.type === "stroke")
+    return `<path d="${strokePath(el.points, el.size)}" fill="${INK[el.ink]}"/>`;
+  if (el.type === "sticker")
+    return `<text x="${el.x}" y="${el.y}" font-size="${STICKER_BASE * el.scale}" text-anchor="middle"
+              dominant-baseline="central" transform="rotate(${el.rotation} ${el.x} ${el.y})">${el.emoji}</text>`;
+  const lines = wrapLines(el.text, el.w, el.fontSize)
+    .map((line, i) => `<tspan x="${el.x}" dy="${i === 0 ? el.fontSize : el.fontSize * 1.2}">${esc(line)}</tspan>`).join("");
+  return `<text x="${el.x}" y="${el.y}" fill="${INK[el.color]}" font-family='${FONT_CSS[el.font]}'
+            font-size="${el.fontSize}" transform="rotate(${el.rotation} ${el.x} ${el.y})">${lines}</text>`;
+}
+
+// paperLayers(): the sheet, the elements clipped to it, the folded corners.
+function paperLayers(id, s) {
+  const c = CANVAS;
+  const paperFill = PAPER[s.paper];
+  const fbl = s.curlL * MAX_FOLD, fbr = s.curlR * MAX_FOLD;
+  const hasFold = fbl > 0 || fbr > 0;
+  const paper = paperPath(fbl, fbr);
+  const foldTip = mix(paperFill, "#ffffff", 0.6);
+  const foldCrease = mix(paperFill, "#ffffff", 0.15);
+  const defs = `<clipPath id="${id}-clip"><path d="${paper}"/></clipPath>` + (hasFold ? `
+    <linearGradient id="${id}-face-br" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${foldTip}"/><stop offset="1" stop-color="${foldCrease}"/></linearGradient>
+    <linearGradient id="${id}-face-bl" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${foldTip}"/><stop offset="1" stop-color="${foldCrease}"/></linearGradient>
+    <filter id="${id}-shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.3"/></filter>` : "");
+  const body = `
+    <path class="paper-fill" d="${paper}" fill="${paperFill}"/>
+    <g class="els" clip-path="${url(id + "-clip")}">${s.elements.map(renderElement).join("")}</g>
+    ${fbr > 0 ? `<path d="${tri([c - fbr, c], [c, c - fbr], [c - fbr, c - fbr])}" fill="${url(id + "-face-br")}" filter="${url(id + "-shadow")}"/>` : ""}
+    ${fbl > 0 ? `<path d="${tri([fbl, c], [0, c - fbl], [fbl, c - fbl])}" fill="${url(id + "-face-bl")}" filter="${url(id + "-shadow")}"/>` : ""}`;
+  return { defs, body };
+}
+
+// NotePaper: bare sheet, no fastener, no headroom — what the mat shows.
+function notePaperSVG(s) {
+  const id = "n" + ++uid;
+  const p = paperLayers(id, s);
+  return `<svg viewBox="0 0 ${CANVAS} ${CANVAS}" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${s.rotation}deg)">
+    <defs>${p.defs}</defs>${p.body}</svg>`;
+}
+
+// NoteRender: paper + fastener composed, with the board headroom — the wall.
+function noteRenderSVG(s) {
+  const id = "n" + ++uid;
+  const ids = { grad: `${id}-fg`, blur: `${id}-fb` };
+  const p = paperLayers(id, s);
+  return `<svg viewBox="0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS + FASTENER_MARGIN}" xmlns="http://www.w3.org/2000/svg"
+      style="transform:rotate(${s.rotation}deg)">
+    <defs>${p.defs}${fastenerDefs(s.fastener, ids)}</defs>
+    ${fastenerBehind(s.fastener, ids)}${p.body}${fastenerFront(s.fastener, ids)}</svg>`;
+}
+
+// FastenerPreview: the fastener as applied on a note's top strip — the drawer.
+function fastenerPreviewSVG(fastener, colour) {
+  const id = "f" + ++uid;
+  const ids = { grad: `${id}-fg`, blur: `${id}-fb` };
+  return `<svg viewBox="0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS * 0.2 + FASTENER_MARGIN}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>${fastenerDefs(fastener, ids)}</defs>
+    ${fastenerBehind(fastener, ids)}
+    <rect class="preview-paper" x="0" y="0" width="${CANVAS}" height="${CANVAS * 0.2}" fill="${PAPER[colour]}"/>
+    ${fastenerFront(fastener, ids)}</svg>`;
+}
+
+/* ===== end of the port; the desk below is prototype-only ===== */
+
+function render() {
+  note.innerHTML = notePaperSVG(st);
+}
+
+/* ---------- the cork wall: placeholder notes + the empty first slot ---------- */
+
+function placeholders() {
+  const wall = $("wall");
+  const txt = (x, y, text, color, font) => ({ type:"text", x, y, text, color, font, w:TEXT_W, fontSize:TEXT_SIZE, rotation:0 });
+  const stk = (x, y, emoji) => ({ type:"sticker", x, y, emoji, scale:1, rotation:0 });
+  const seeds = [
+    { paper:"pink", rotation:2.6, fastener:"pin-red", elements:[ txt(56, 120, "hello", "black", "casual"), stk(370, 340, "⭐") ] },
+    { paper:"blue", rotation:-3.4, fastener:"tape-masking", elements:[ txt(44, 150, "nice wall", "blue", "handwritten") ] },
+    { paper:"green", rotation:1.4, fastener:"stick", elements:[ stk(250, 230, "🐸") ] },
+    { paper:"orange", rotation:-1.8, fastener:"staples", elements:[ txt(40, 140, "hi!", "red", "marker"), stk(350, 340, "🔥") ] },
+    { paper:"white", rotation:3.2, fastener:"pin-blue", elements:[ stk(250, 250, "👀") ] },
+  ];
+  for (const seed of seeds) {
+    const d = document.createElement("div");
+    d.className = "tile";
+    d.innerHTML = noteRenderSVG({ curlL:rand(.1,.3), curlR:rand(.1,.3), ...seed });
+    wall.appendChild(d);
+  }
+}
+
+/* ---------- pointer → note coordinates (through the note's rotation) ---------- */
+
+// The note's centre and its *rendered* size (the sticker sheet scales it down),
+// read off the unrotated wrapper so rotation never distorts the mapping.
+function noteGeom() {
+  const r = noteShift.getBoundingClientRect();
+  return {
+    cx: r.left + r.width / 2, cy: r.top + r.height / 2,
+    size: r.width, scale: r.width / note.offsetWidth,
+  };
+}
+function toNote(e) {
+  const g = noteGeom();
+  const t = -st.rotation * Math.PI / 180;
+  const dx = e.clientX - g.cx, dy = e.clientY - g.cy;
+  const k = CANVAS / g.size;
+  return [250 + (dx * Math.cos(t) - dy * Math.sin(t)) * k, 250 + (dx * Math.sin(t) + dy * Math.cos(t)) * k];
+}
+const onPaper = (x, y) => x >= 0 && x <= CANVAS && y >= 0 && y <= CANVAS;
+
+/* ---------- the pad stack ---------- */
+
+function buildPads() {
+  const pads = $("pads");
+  PAPER_KEYS.forEach((key, i) => {
+    const a = (i - (PAPER_KEYS.length - 1) / 2) * 5.5;
+    const p = document.createElement("div");
+    p.className = "pad" + (key === st.paper ? " active" : "");
+    p.dataset.colour = key;
+    p.style.setProperty("--a", a);
+    p.style.transform = `rotate(${a}deg)`;
+    p.style.background = PAPER[key];
+    p.style.backgroundImage = "linear-gradient(170deg, rgba(255,255,255,.4), rgba(255,255,255,0) 45%)";
+    p.style.zIndex = 10 + i;
+    p.addEventListener("pointerdown", (e) => { e.preventDefault(); takeSheet(key); });
+    pads.appendChild(p);
+  });
+}
+function padEl(colour) { return $("pads").querySelector(`[data-colour="${colour}"]`); }
+
+// Tear a fresh sheet off a pad: the pad peels, the note flies from it and lands.
+// The sheet is not drawable mid-flight (the pointer map assumes it is parked).
+let busy = false;
+function tearOff(colour) {
+  busy = true;
+  setTimeout(() => { busy = false; }, 540);
+  const pad = padEl(colour), from = pad.getBoundingClientRect();
+  pad.classList.add("tearing");
+  setTimeout(() => pad.classList.remove("tearing"), 260);
+  render();
+  const g = noteGeom();
+  const dx = (from.left + from.width / 2 - g.cx) / g.scale;
+  const dy = (from.top + from.height / 2 - g.cy) / g.scale;
+  noteWrap.style.transition = "none";
+  noteWrap.style.opacity = "1";
+  noteWrap.style.transform = `translate(${dx}px, ${dy}px) scale(${from.width / g.size}) rotate(-14deg)`;
+  requestAnimationFrame(() => {
+    noteWrap.style.transition = "transform 520ms var(--ease-out)";
+    noteWrap.style.transform = "none";
+  });
+}
+
+// Tap a pad: swap the paper under the content, or tear a fresh sheet if bare.
+function takeSheet(colour) {
+  if (phase !== "desk") return;
+  const fresh = st.elements.length === 0;
+  st.paper = colour;
+  for (const p of $("pads").children) p.classList.toggle("active", p.dataset.colour === colour);
+  if (fresh) { st.curlL = rand(.12, .34); st.curlR = rand(.12, .34); st.rotation = rand(-4, 4); tearOff(colour); }
+  else recolour(colour);
+}
+
+// Swap the stock under existing content: the sheet crossfades, and the fold
+// faces (gradients, so no CSS transition) follow to the new shade at once.
+function recolour(colour) {
+  const svg = note.firstElementChild;
+  svg.querySelector(".paper-fill").setAttribute("fill", PAPER[colour]);
+  const tip = mix(PAPER[colour], "#ffffff", 0.6);
+  const crease = mix(PAPER[colour], "#ffffff", 0.15);
+  for (const g of svg.querySelectorAll("linearGradient")) {
+    if (!g.id.includes("-face-")) continue;
+    g.children[0].setAttribute("stop-color", tip);
+    g.children[1].setAttribute("stop-color", crease);
+  }
+}
+
+/* ---------- markers + eraser ---------- */
+
+function markerMarkup(ink) {
+  return `<div class="marker" style="--c:${INK[ink]}"></div><div class="cap" style="--c:${INK[ink]}"></div>`;
+}
+function buildTools() {
+  const tools = $("tools");
+  for (const ink of INK_KEYS) {
+    const t = document.createElement("div");
+    t.className = "tool"; t.dataset.tool = ink;
+    t.innerHTML = markerMarkup(ink);
+    tools.appendChild(t);
+  }
+  const e = document.createElement("div");
+  e.className = "tool"; e.dataset.tool = "eraser";
+  e.innerHTML = `<div class="eraser"></div>`;
+  tools.appendChild(e);
+  tools.addEventListener("pointerdown", (ev) => {
+    const t = ev.target.closest(".tool");
+    if (!t) return;
+    ev.preventDefault();
+    pickUp(t.dataset.tool === st.tool ? null : t.dataset.tool);
+  });
+}
+function heldToolEl() { return st.tool ? $("tools").querySelector(`[data-tool="${st.tool}"]`) : null; }
+
+function pickUp(tool) {
+  st.tool = tool;
+  for (const t of $("tools").children) t.classList.toggle("held", t.dataset.tool === tool);
+  if (!tool) closeFonts();
+  // the mouse carries the tool; a finger leaves it docked on the mat
+  if (fine) {
+    cursorTool.innerHTML = tool
+      ? (tool === "eraser" ? `<div class="eraser"></div>` : `<div class="marker" style="--c:${INK[tool]}"></div>`)
+      : "";
+    cursorTool.classList.remove("on");
+    if (!tool) note.classList.remove("hide-cursor"); // don't leave a blind cursor
+  }
+}
+
+// Mouse only: the tool image rides the cursor with its nib on the hotspot.
+function moveCursorTool(e) {
+  if (!fine || !st.tool) return;
+  const over = e.target.closest("#note");
+  cursorTool.classList.toggle("on", !!over);
+  note.classList.toggle("hide-cursor", !!over);
+  if (!over) return;
+  const child = cursorTool.firstElementChild;
+  if (!child) return;
+  if (st.tool === "eraser") {
+    child.style.transformOrigin = "4px 21px";
+    cursorTool.style.transform = `translate(${e.clientX - 4}px, ${e.clientY - 21}px)`;
+    child.style.transform = "rotate(-22deg)";
+  } else {
+    child.style.transformOrigin = "9px 74px";
+    cursorTool.style.transform = `translate(${e.clientX - 9}px, ${e.clientY - 74}px)`;
+    child.style.transform = "rotate(-28deg)";
+  }
+}
+
+/* ---------- draw / write control ---------- */
+
+function buildFonts() {
+  const box = $("fonts");
+  for (const f of FONT_KEYS) {
+    const c = document.createElement("div");
+    c.className = "fchip" + (f === st.font ? " on" : "");
+    c.dataset.font = f;
+    c.style.fontFamily = FONT_CSS[f];
+    c.textContent = "Aa";
+    box.appendChild(c);
+  }
+  box.addEventListener("pointerdown", (e) => {
+    const c = e.target.closest(".fchip");
+    if (!c) return;
+    e.preventDefault();
+    st.font = c.dataset.font;
+    for (const k of box.children) k.classList.toggle("on", k.dataset.font === st.font);
+    setMode("write");
+  });
+  $("mode").addEventListener("pointerdown", (e) => {
+    const h = e.target.closest(".half");
+    if (!h) return;
+    e.preventDefault();
+    if (h.dataset.mode === "write" && st.mode === "write") { $("fonts").classList.toggle("open"); return; }
+    setMode(h.dataset.mode);
+  });
+}
+function setMode(mode) {
+  st.mode = mode;
+  for (const h of $("mode").children) h.classList.toggle("on", h.dataset.mode === mode);
+  $("fonts").classList.toggle("open", mode === "write");
+}
+function closeFonts() { $("fonts").classList.remove("open"); }
+
+/* ---------- sticker sheet: peel and drag ---------- */
+
+function buildSheet() {
+  const grid = $("sheetGrid");
+  for (const emoji of STICKERS) {
+    const s = document.createElement("div");
+    s.className = "slot"; s.dataset.emoji = emoji;
+    s.innerHTML = `<span class="ghost">${emoji}</span><span class="face">${emoji}</span>`;
+    grid.appendChild(s);
+  }
+  grid.addEventListener("pointerdown", peel);
+  $("sheetTab").addEventListener("pointerdown", (e) => { e.preventDefault(); toggleSheet(); });
+}
+function toggleSheet(open = !sheet.classList.contains("up")) {
+  sheet.classList.toggle("up", open);
+  stage.classList.toggle("sheet-open", open);
+}
+function peel(e) {
+  const slot = e.target.closest(".slot");
+  if (!slot) return;
+  e.preventDefault();
+  slot.classList.add("peeled");
+  const fly = document.createElement("div");
+  fly.className = "fly";
+  fly.textContent = slot.dataset.emoji;
+  const g = noteGeom();
+  fly.style.fontSize = (STICKER_BASE * g.size / CANVAS) + "px";
+  fly.style.lineHeight = "1";
+  document.body.appendChild(fly);
+  const at = (ev) => { fly.style.transform = `translate(${ev.clientX - 18}px, ${ev.clientY - 20}px) rotate(-9deg) scale(1.12)`; };
+  at(e);
+  try { e.target.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
+  const move = (ev) => at(ev);
+  const up = (ev) => {
+    e.target.removeEventListener("pointermove", move);
+    e.target.removeEventListener("pointerup", up);
+    e.target.removeEventListener("pointercancel", up);
+    const [x, y] = toNote(ev);
+    if (phase === "desk" && !busy && onPaper(x, y)) {
+      st.elements.push({ type:"sticker", x, y, emoji: slot.dataset.emoji, scale:1, rotation:0 });
+      render();
+      fly.remove();
+      slot.classList.remove("peeled");
+    } else {
+      // a miss: it goes back to the sheet
+      const home = slot.getBoundingClientRect();
+      fly.style.transition = "transform 320ms var(--ease-out), opacity 320ms";
+      fly.style.transform = `translate(${home.left + 8}px, ${home.top + 6}px) rotate(0deg) scale(.8)`;
+      fly.style.opacity = "0";
+      setTimeout(() => { fly.remove(); slot.classList.remove("peeled"); }, 330);
+    }
+  };
+  e.target.addEventListener("pointermove", move);
+  e.target.addEventListener("pointerup", up);
+  e.target.addEventListener("pointercancel", up);
+}
+
+/* ---------- drawing / erasing / rotating / curling on the paper ---------- */
+
+const EDGE_BAND = 34;   // note units: the rotate band along the paper's edge
+const CORNER = 110;     // note units: the curl corners
+
+function hitElement(x, y) {
+  for (let i = st.elements.length - 1; i >= 0; i--) {
+    const el = st.elements[i];
+    if (el.type === "stroke") {
+      for (const [px, py] of el.points) if (Math.hypot(px - x, py - y) < 16) return i;
+    } else if (el.type === "sticker") {
+      const r = STICKER_BASE * el.scale / 2 + 4;
+      if (Math.abs(el.x - x) < r && Math.abs(el.y - y) < r) return i;
+    } else {
+      const lines = wrapLines(el.text, el.w, el.fontSize);
+      const w = Math.min(el.w, Math.max(...lines.map((l) => l.length)) * el.fontSize * 0.55);
+      const h = el.fontSize * (1 + (lines.length - 1) * 1.2) + 8;
+      if (x > el.x - 6 && x < el.x + w + 6 && y > el.y - 4 && y < el.y + h) return i;
+    }
+  }
+  return -1;
+}
+
+note.addEventListener("pointerdown", (e) => {
+  if (phase !== "desk" || busy) return;
+  const [x, y] = toNote(e);
+  if (!onPaper(x, y)) return;
+  e.preventDefault();
+  try { note.setPointerCapture(e.pointerId); } catch { /* no live pointer */ }
+
+  const nearBL = x < CORNER && y > CANVAS - CORNER;
+  const nearBR = x > CANVAS - CORNER && y > CANVAS - CORNER;
+  const nearEdge = x < EDGE_BAND || y < EDGE_BAND || x > CANVAS - EDGE_BAND || y > CANVAS - EDGE_BAND;
+
+  if (nearBL || nearBR) return startCurl(e, nearBL ? "curlL" : "curlR");
+  if (nearEdge) return startRotate(e);
+  if (!st.tool) return;
+  if (st.tool === "eraser") return startErase(e);
+  if (st.mode === "write") return openWriteBox(e, x, y);
+  return startStroke(e);
+});
+
+function drag(e, onMove, onEnd) {
+  const move = (ev) => onMove(ev);
+  const up = (ev) => {
+    note.removeEventListener("pointermove", move);
+    note.removeEventListener("pointerup", up);
+    note.removeEventListener("pointercancel", up);
+    heldToolEl()?.classList.remove("using");
+    onEnd?.(ev);
+  };
+  note.addEventListener("pointermove", move);
+  note.addEventListener("pointerup", up);
+  note.addEventListener("pointercancel", up);
+}
+
+function startStroke(e) {
+  heldToolEl()?.classList.add("using");
+  const ink = st.tool;
+  const points = [[...toNote(e), e.pressure || 0.5]];
+  const live = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  live.setAttribute("fill", INK[ink]);
+  note.querySelector(".els").appendChild(live);
+  drag(e, (ev) => {
+    for (const c of (ev.getCoalescedEvents?.() ?? [ev])) points.push([...toNote(c), c.pressure || 0.5]);
+    live.setAttribute("d", strokePath(points));
+  }, () => {
+    live.remove();
+    if (points.length < 2) return;
+    st.elements.push({ type:"stroke", ink, size:NIB, points });
+    render();
+  });
+}
+
+function startErase(e) {
+  heldToolEl()?.classList.add("using");
+  const rub = (ev) => {
+    const i = hitElement(...toNote(ev));
+    if (i < 0) return;
+    const n = note.querySelector(".els").children[i];
+    if (n) { n.style.transition = "opacity 200ms"; n.style.opacity = "0"; }
+    st.elements.splice(i, 1);
+    setTimeout(render, 200);
+  };
+  rub(e);
+  drag(e, rub);
+}
+
+function startRotate(e) {
+  const g = noteGeom();
+  const ang = (ev) => Math.atan2(ev.clientY - g.cy, ev.clientX - g.cx) * 180 / Math.PI;
+  const start = ang(e), from = st.rotation;
+  const svg = note.firstElementChild;
+  drag(e, (ev) => {
+    st.rotation = from + (ang(ev) - start);
+    svg.style.transform = `rotate(${st.rotation}deg)`;
+  });
+}
+
+function startCurl(e, which) {
+  const corner = which === "curlL" ? [0, CANVAS] : [CANVAS, CANVAS];
+  drag(e, (ev) => {
+    const [x, y] = toNote(ev);
+    const d = Math.hypot(x - corner[0], y - corner[1]);
+    st[which] = Math.max(0.04, Math.min(1, d / 170));
+    render();
+  });
+}
+
+/* ---------- write mode: a plain overlay input, committed to the note ---------- */
+
+function openWriteBox(e, x, y) {
+  const g = noteGeom();
+  const px = TEXT_SIZE * g.size / CANVAS;
+  writeBox.style.display = "block";
+  writeBox.style.left = e.clientX + "px";
+  writeBox.style.top = (e.clientY - px * 0.9) + "px";
+  writeBox.style.fontFamily = FONT_CSS[st.font];
+  writeBox.style.fontSize = px + "px";
+  writeBox.style.color = INK[st.tool];
+  writeBox.style.transform = `rotate(${st.rotation}deg)`;
+  writeBox.value = "";
+  writeBox.dataset.x = x; writeBox.dataset.y = y; writeBox.dataset.ink = st.tool; writeBox.dataset.font = st.font;
+  setTimeout(() => writeBox.focus(), 0);
+}
+function commitWrite() {
+  if (writeBox.style.display === "none") return;
+  const text = writeBox.value.trim();
+  writeBox.style.display = "none";
+  if (!text) return;
+  st.elements.push({
+    type:"text", text, x:+writeBox.dataset.x, y:+writeBox.dataset.y,
+    color: writeBox.dataset.ink, font: writeBox.dataset.font,
+    w: TEXT_W, fontSize: TEXT_SIZE, rotation: 0,
+  });
+  render();
+}
+writeBox.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitWrite(); } });
+writeBox.addEventListener("blur", commitWrite);
+
+/* ---------- the bin: crumple, then a fresh sheet off the same pad ---------- */
+
+$("bin").addEventListener("pointerdown", (e) => {
+  if (phase !== "desk") return;
+  e.preventDefault();
+  const bin = $("bin");
+  bin.classList.add("tossing");
+  setTimeout(() => bin.classList.remove("tossing"), 260);
+  const b = bin.getBoundingClientRect(), g = noteGeom();
+  noteWrap.style.transition = "transform 400ms cubic-bezier(.5,0,.8,.35), opacity 400ms ease-in";
+  noteWrap.style.transform =
+    `translate(${(b.left + b.width / 2 - g.cx) / g.scale}px, ${(b.top - g.cy) / g.scale}px) rotate(260deg) scale(.06)`;
+  noteWrap.style.opacity = "0";
+  setTimeout(() => { st.elements = []; takeSheetFresh(); }, 420);
+});
+function takeSheetFresh() {
+  st.curlL = rand(.12, .34); st.curlR = rand(.12, .34); st.rotation = rand(-4, 4);
+  tearOff(st.paper);
+}
+
+/* ---------- the mat: up over the cork, back down ---------- */
+
+let hasSheet = false;
+function matUp() {
+  phase = "desk";
+  mat.classList.remove("down");
+  matTab.classList.remove("show");
+  if (!hasSheet) { hasSheet = true; setTimeout(() => takeSheetFresh(), 260); }
+}
+function matDown() {
+  phase = "wall";
+  mat.classList.add("down");
+  matTab.classList.add("show");
+  toggleSheet(false);
+}
+matTab.addEventListener("pointerdown", (e) => { e.preventDefault(); if (phase === "wall") matUp(); });
+$("tapeBack").addEventListener("pointerdown", (e) => { e.preventDefault(); matDown(); });
+
+/* ---------- pin it up: travel, fastener drawer, tag ---------- */
+
+$("tapePin").addEventListener("pointerdown", (e) => { e.preventDefault(); pinItUp(); });
+
+let landed = null;
+function pinItUp() {
+  if (phase !== "desk") return;
+  phase = "flight";
+  commitWrite();
+  toggleSheet(false);
+  pickUp(null);
+
+  // measure both rects, then animate one transform between them.
+  // Layout, not getBoundingClientRect: the sheet may still be sliding down.
+  const size = note.offsetWidth;
+  const g = {
+    cx: noteShift.offsetLeft + noteShift.offsetWidth / 2,
+    cy: noteShift.offsetTop + noteShift.offsetHeight / 2,
+  };
+  landed = document.createElement("div");
+  landed.className = "flown";
+  landed.style.left = (g.cx - size / 2) + "px";
+  landed.style.top = (g.cy - size / 2) + "px";
+  landed.style.width = size + "px";
+  landed.appendChild(note.firstElementChild.cloneNode(true));
+  flight.appendChild(landed);
+  noteWrap.style.opacity = "0";
+
+  mat.classList.add("down");
+  requestAnimationFrame(() => {
+    const slot = $("slot0").getBoundingClientRect();
+    const head = slot.width * FASTENER_MARGIN / CANVAS; // the tiles' fastener headroom
+    const k = slot.width / size;
+    landed.style.transition = "transform 560ms var(--ease-out)";
+    landed.style.transform =
+      `translate(${slot.left + slot.width / 2 - g.cx}px, ${slot.top + head + slot.width / 2 - g.cy}px) scale(${k})`;
+  });
+  setTimeout(openDrawer, 560);
+}
+
+function buildDrawer() {
+  const grid = $("fastGrid");
+  for (const key of FASTENERS) {
+    const d = document.createElement("div");
+    d.className = "fast"; d.dataset.fastener = key;
+    d.innerHTML = fastenerPreviewSVG(key, st.paper);
+    grid.appendChild(d);
+  }
+  grid.addEventListener("pointerdown", (e) => {
+    const f = e.target.closest(".fast");
+    if (!f) return;
+    e.preventDefault();
+    chooseFastener(f.dataset.fastener);
+  });
+  drawer.addEventListener("pointerdown", (e) => {
+    if (e.target === drawer && drawer.classList.contains("collapsed")) drawer.classList.remove("collapsed");
+  });
+}
+function openDrawer() {
+  phase = "fastener";
+  // the drawer previews sit on the note's own paper colour
+  for (const r of $("fastGrid").querySelectorAll(".preview-paper")) r.setAttribute("fill", PAPER[st.paper]);
+  drawer.classList.add("up");
+}
+
+function chooseFastener(key) {
+  st.fastener = key;
+  for (const d of $("fastGrid").children) d.classList.toggle("chosen", d.dataset.fastener === key);
+
+  // press-on: the fastener scales 1.4 → 1 with a small overshoot, the note dips.
+  // The overlay shares the landed note's box + headroom, so note coordinates line up.
+  const slot = $("slot0").getBoundingClientRect();
+  const id = "ap" + ++uid;
+  const ids = { grad:`${id}-fg`, blur:`${id}-fb` };
+  appliedFastener.style.left = slot.left + "px";
+  appliedFastener.style.top = slot.top + "px";
+  appliedFastener.style.width = slot.width + "px";
+  appliedFastener.innerHTML =
+    `<svg viewBox="0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS + FASTENER_MARGIN}" width="${slot.width}"
+       xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${st.rotation}deg)">
+      <defs>${fastenerDefs(key, ids)}</defs>${fastenerBehind(key, ids)}${fastenerFront(key, ids)}</svg>`;
+  appliedFastener.classList.remove("on");
+  void appliedFastener.offsetWidth;
+  appliedFastener.classList.add("on");
+  landed.classList.remove("dipping");
+  void landed.offsetWidth;
+  landed.classList.add("dipping");
+
+  setTimeout(() => { drawer.classList.add("collapsed"); showTag(); }, 380);
+}
+
+function showTag() {
+  phase = "tag";
+  const slot = $("slot0").getBoundingClientRect();
+  tag.style.left = (slot.left + slot.width / 2 - 75) + "px";
+  tag.style.top = (slot.top + slot.width + 14) + "px";
+  tag.classList.add("on");
+  setTimeout(() => tagInput.focus(), 220);
+}
+function commitTag() {
+  const name = tagInput.value.trim().toLowerCase();
+  if (!name) { tagInput.focus(); return; }
+  phase = "done";
+  tagInput.value = name;
+  tagInput.readOnly = true;
+  tag.classList.add("done");
+  tagInput.blur();
+  drawer.classList.remove("up", "collapsed");
+  matTab.classList.add("show");   // the desk is there to go back to
+}
+$("tagOk").addEventListener("pointerdown", (e) => { e.preventDefault(); commitTag(); });
+tagInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitTag(); } });
+
+// Going back to the desk after pinning: the note joins the wall, a fresh sheet waits.
+function resetDesk() {
+  if (landed) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.innerHTML = noteRenderSVG({ ...st });
+    $("wall").insertBefore(tile, $("slot0").nextSibling);
+    landed.remove(); landed = null;
+  }
+  appliedFastener.classList.remove("on");
+  appliedFastener.innerHTML = "";
+  tag.classList.remove("on", "done");
+  tagInput.value = ""; tagInput.readOnly = false;
+  drawer.classList.remove("up", "collapsed");
+  st.elements = []; st.fastener = null;
+  noteWrap.style.opacity = "1";
+  render();
+  matUp();
+  takeSheetFresh();
+}
+matTab.addEventListener("pointerdown", () => { if (phase === "done") resetDesk(); });
+
+/* ---------- boot ---------- */
+
+placeholders();
+buildPads();
+buildTools();
+buildFonts();
+buildSheet();
+buildDrawer();
+render();
+stage.addEventListener("pointermove", moveCursorTool);
+stage.addEventListener("pointerleave", () => { cursorTool.classList.remove("on"); note.classList.remove("hide-cursor"); });
+// the wall first, mat parked at the bottom edge: tap it to come to the desk
+noteWrap.style.opacity = "0";
+mat.style.transition = "none";
+mat.classList.add("down");
+requestAnimationFrame(() => { mat.style.transition = ""; matTab.classList.add("show"); });
+addEventListener("resize", () => { if (phase === "done" || phase === "tag") showTag(); });
+</script>
+</body>
+</html>
