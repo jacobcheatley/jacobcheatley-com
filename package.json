@@ -9,7 +9,7 @@
     "bun": ">=1.4"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev": "bun --bun vite dev --port 3000",
     "build": "vite build",
     "start": "bun run server.ts",
