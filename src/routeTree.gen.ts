@@ -10,16 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShellRouteImport } from './routes/_shell'
-import { Route as GuestbookRouteImport } from './routes/guestbook'
 import { Route as ShellIndexRouteImport } from './routes/_shell.index'
 
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GuestbookRoute = GuestbookRouteImport.update({
-  id: '/guestbook',
-  path: '/guestbook',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShellIndexRoute = ShellIndexRouteImport.update({
@@ -30,29 +24,25 @@ const ShellIndexRoute = ShellIndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
-  '/guestbook': typeof GuestbookRoute
 }
 export interface FileRoutesByTo {
-  '/guestbook': typeof GuestbookRoute
   '/': typeof ShellIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shell': typeof ShellRouteWithChildren
-  '/guestbook': typeof GuestbookRoute
   '/_shell/': typeof ShellIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/guestbook'
+  fullPaths: '/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/guestbook' | '/'
-  id: '__root__' | '/_shell' | '/guestbook' | '/_shell/'
+  to: '/'
+  id: '__root__' | '/_shell' | '/_shell/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   ShellRoute: typeof ShellRouteWithChildren
-  GuestbookRoute: typeof GuestbookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -62,13 +52,6 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShellRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/guestbook': {
-      id: '/guestbook'
-      path: '/guestbook'
-      fullPath: '/guestbook'
-      preLoaderRoute: typeof GuestbookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_shell/': {
@@ -93,7 +76,6 @@ const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   ShellRoute: ShellRouteWithChildren,
-  GuestbookRoute: GuestbookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

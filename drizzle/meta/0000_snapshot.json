@@ -1,11 +1,11 @@
 {
-  "id": "aa13f2aa-f2ab-401f-869c-e18529fca29a",
+  "id": "97e4b679-36bf-43e0-8bba-92ca0cbbbee5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.guestbook_entries": {
-      "name": "guestbook_entries",
+    "public.sticky_notes": {
+      "name": "sticky_notes",
       "schema": "",
       "columns": {
         "id": {
@@ -15,7 +15,7 @@
           "notNull": true,
           "identity": {
             "type": "always",
-            "name": "guestbook_entries_id_seq",
+            "name": "sticky_notes_id_seq",
             "schema": "public",
             "increment": "1",
             "startWith": "1",
@@ -25,15 +25,15 @@
             "cycle": false
           }
         },
-        "name": {
-          "name": "name",
+        "author": {
+          "name": "author",
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": true
         },
-        "message": {
-          "name": "message",
-          "type": "varchar(500)",
+        "content": {
+          "name": "content",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
