@@ -4,7 +4,7 @@ How skills should consume this repo's domain documentation when exploring the co
 
 ## Status
 
-Architecture decided 2026-09-12 (wayfinder map, issue #1). `CONTEXT.md` (glossary: Project, Portfolio) and `docs/adr/0001–0003` exist. The `src/` layout below is the one chosen in issue #14 and built by the scaffold spec in issue #15; until the scaffold lands, treat it as intended rather than present.
+Architecture decided 2026-09-12 (wayfinder map, issue #1). `CONTEXT.md` (glossary: Project, Portfolio) and `docs/adr/0001–0003` exist. The `src/` layout below is the one chosen in issue #14 and built by the scaffold spec in issue #15.
 
 ## Before exploring, read these
 
@@ -31,7 +31,7 @@ Single-context repo. One feature folder per Project plus a thin route file; fold
 └── server.ts              Bun.serve wrapper (canonical host, assets, future WebSocket seam)
 ```
 
-Conventions (file roles, tests, seams policy) live in the README's "Layout and conventions" section once the scaffold lands.
+Conventions (file roles, tests, seams policy) live alongside the Layout above and in the relevant `docs/adr/` records.
 
 ## Use the glossary's vocabulary
 
