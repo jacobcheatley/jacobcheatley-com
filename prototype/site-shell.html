@@ -66,6 +66,25 @@
     --spacing: 0.3rem;
   }
 
+  /* ===== Variant D: Tree frog. B's structure without the grid; greens and oranges, one red on the name. ===== */
+  :root[data-variant="D"] {
+    --color-paper: light-dark(#F4F5F0, #171B19);
+    --color-ink: light-dark(#1E2A22, #E6E9E4);
+    --color-accent: light-dark(#28714A, #7DD69A);    /* leaf green: links, active nav, section rules, primary button */
+    --color-accent-2: light-dark(#D96C1E, #F2A05A);  /* toe orange: status chips and thumbnail tints */
+    --color-on-accent-2: #1E2A22;
+    --color-name: light-dark(#D63A2F, #F26B5E);      /* eye red: the name, nowhere else */
+    --color-highlight: light-dark(#CDE8D5, #244A36); /* pale green mark under the active nav item */
+    --color-muted: light-dark(#5C665F, #97A29B);
+    --color-line: light-dark(#D7DBD3, #2C3530);
+    --color-surface: light-dark(#FFFFFF, #1F2522);
+    --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+    --font-body: "Newsreader", Georgia, "Times New Roman", serif;
+    --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+    --radius-field: 2px;
+    --spacing: 0.25rem;
+  }
+
   /* ---- shared reset ---- */
   * { box-sizing: border-box; }
   body {
@@ -298,6 +317,40 @@
     .vB .b-rail nav { display: flex; gap: 1.25rem; }
     .vB .b-main, .vB .b-foot { grid-column: 1; }
     .vB .b-entry { grid-template-columns: minmax(0, 1fr); row-gap: 0.35rem; }
+  }
+
+  /* ---- D: Tree frog (inherits B's layout via .vB) ---- */
+  .vD { background-image: none; }
+  .vD .b-mark { color: var(--color-name); }
+  .vD .b-foot { border-top-color: var(--color-line); }
+  .vD .b-form input, .vD .b-form textarea { border-color: var(--color-line); }
+  .vD .d-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+  .vD .d-card { display: grid; gap: 0.4rem; align-content: start; text-decoration: none; }
+  .vD .d-thumb {
+    position: relative;
+    aspect-ratio: 3 / 2;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-field);
+    background: var(--thumb, var(--color-surface));
+    margin-bottom: 0.25rem;
+  }
+  .vD .d-chip {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.3rem 0.5rem;
+    border-radius: var(--radius-field);
+    background: var(--color-accent-2);
+    color: var(--color-on-accent-2);
+  }
+  .vD .d-card h3 { font-size: 1.25rem; margin: 0; }
+  .vD .d-card p { font-size: 1rem; line-height: 1.45; color: var(--color-muted); }
+  @media (max-width: 40rem) {
+    .vD .d-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   /* ---- C: Cartridges ---- */
@@ -634,6 +687,54 @@
   </footer>
 </div>
 
+<!-- ============================ D: Tree frog ============================ -->
+<div class="variant vB vD" id="variant-D" data-name="Tree frog" hidden>
+  <div class="b-page">
+    <header class="b-rail">
+      <a class="b-mark" href="#">Jacob Cheatley</a>
+      <nav aria-label="Site">
+        <a href="#" aria-current="page">Projects</a>
+        <a href="#">Guestbook</a>
+        <a href="#">About</a>
+      </nav>
+    </header>
+    <main class="b-main">
+      <section class="b-entry">
+        <div class="b-text">
+          <h1>Small things, built to learn.</h1>
+          <p>Quizzes, games and browser toys, made to learn the modern web stack.</p>
+        </div>
+      </section>
+
+      <h2 class="b-h2">Projects</h2>
+      <section class="b-entry">
+        <ul class="d-grid b-text">
+          <li><a class="d-card" href="#"><span class="d-thumb" style="--thumb: color-mix(in oklab, var(--color-accent) 22%, var(--color-surface))"><span class="d-chip">Live</span></span><h3>Guestbook</h3><p>Leave a note for the next visitor.</p></a></li>
+          <li><a class="d-card" href="#"><span class="d-thumb" style="--thumb: color-mix(in oklab, var(--color-accent-2) 22%, var(--color-surface))"></span><h3>Word ladder</h3><p>One letter at a time, one puzzle a day.</p></a></li>
+          <li><a class="d-card" href="#"><span class="d-thumb" style="--thumb: color-mix(in oklab, var(--color-muted) 16%, var(--color-surface))"></span><h3>Colour distance</h3><p>How far apart are two colours?</p></a></li>
+        </ul>
+      </section>
+
+      <h2 class="b-h2">Guestbook</h2>
+      <section class="b-entry">
+        <form class="gb-form b-form">
+          <label for="d-name">Your name</label>
+          <input id="d-name" name="name" required maxlength="40" autocomplete="name">
+          <label for="d-message">Message</label>
+          <textarea id="d-message" name="message" rows="3" required maxlength="280"></textarea>
+          <div class="b-actions"><button type="submit">Sign the guestbook</button><output aria-live="polite"></output></div>
+        </form>
+        <aside class="b-side">A name and a message, nothing else.</aside>
+      </section>
+      <ul class="gb-list b-entries">
+        <li class="b-entry"><div class="b-text"><p class="gb-msg">First! Nice to see this live.</p><p class="b-by"><span class="gb-name">Maddy</span></p></div><aside class="b-side"><time class="gb-date" datetime="2026-09-11">11 Sep 2026</time></aside></li>
+        <li class="b-entry"><div class="b-text"><p class="gb-msg">Testing the guestbook from the staging app. If you can read this, the deploy worked.</p><p class="b-by"><span class="gb-name">Jacob</span></p></div><aside class="b-side"><time class="gb-date" datetime="2026-09-08">8 Sep 2026</time></aside></li>
+      </ul>
+    </main>
+    <footer class="b-foot">Built with TanStack Start, Postgres and Fly.io. <a href="https://github.com/jacobcheatley/jacobcheatley-com">Source on GitHub</a>.</footer>
+  </div>
+</div>
+
 <!-- prototype chrome -->
 <div class="proto-bar" role="toolbar" aria-label="Prototype controls">
   <button type="button" id="proto-prev" aria-label="Previous variant">&lsaquo;</button>
@@ -647,7 +748,7 @@
 
 <script>
   (function () {
-    var VARIANTS = ['A', 'B', 'C'];
+    var VARIANTS = ['A', 'B', 'C', 'D'];
     var root = document.documentElement;
     var label = document.getElementById('proto-label');
 
