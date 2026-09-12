@@ -17,6 +17,7 @@ import {
   isOffNote,
   moveElement,
   removeElement,
+  settleElement,
   updateElement,
 } from "./note-editor";
 import { FONT_FAMILIES, loadFont } from "./note-fonts";
@@ -221,11 +222,17 @@ export function StickyEditor() {
     const drag = dragRef.current;
     if (drag) {
       dragRef.current = null;
-      // Dragged fully off the paper → delete it (the physical drag-off-to-bin).
+      // The drag itself is unclamped. On release: fully off the paper → delete
+      // it (the physical drag-off-to-bin); otherwise settle it back inside the
+      // contract's coordinate range so submit can't fail on a wild drag.
       const el = content.elements[drag.index];
       if (el && isOffNote(el)) {
         setContent((c) => removeElement(c, drag.index));
         setSelected(-1);
+      } else if (el) {
+        const settled = settleElement(el);
+        if (settled !== el)
+          setContent((c) => updateElement(c, drag.index, settled));
       }
     }
   }

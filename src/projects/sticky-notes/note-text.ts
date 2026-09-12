@@ -3,6 +3,10 @@
 // copies of this heuristic would drift and put the selection box in the wrong
 // place.
 
+// Baselines after the first sit this many font-sizes apart. Shared so the
+// renderer's tspans and the editor's text bounds can never disagree.
+export const LINE_HEIGHT = 1.2;
+
 // ponytail: naive width→char estimate (avg glyph ≈ 0.55·fontSize) plus explicit
 // newlines. Good enough for the wall/CLI; swap for real text measurement if
 // wrapping visibly drifts from the editor.

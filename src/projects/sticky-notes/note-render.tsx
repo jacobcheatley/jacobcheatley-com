@@ -2,7 +2,7 @@ import { getStroke } from "perfect-freehand";
 import { useId } from "react";
 import { FONT_FAMILIES } from "./note-fonts";
 import type { Fastener, Ink, NoteContent, PaperColour } from "./note-schema";
-import { wrapLines } from "./note-text";
+import { LINE_HEIGHT, wrapLines } from "./note-text";
 
 // The one pure, state-free renderer: note `content` JSON → SVG. Every surface
 // (wall tile, zoom view, editor, approval CLI) uses it, so notes render
@@ -29,6 +29,10 @@ export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
 // NotePaper drops the headroom, so the bare sheet is square. Named rather than
 // inlined for the same reason: the mat sizes its note from here.
 export const NOTE_PAPER_ASPECT_RATIO = 1;
+
+// How much paper the fastener drawer's swatch shows below the note's top edge.
+// Exported so a consumer can size the swatch box from the same number.
+export const PREVIEW_DEPTH = 100;
 
 // Paper backgrounds — soft, saturated sticky-note stock. Exported so the editor
 // (#61) tints its paper/ink swatches from the exact rendered shades.
@@ -524,7 +528,7 @@ function renderElement(el: NoteElement, index: number) {
               // biome-ignore lint/suspicious/noArrayIndexKey: wrapped lines are positional.
               key={li}
               x={el.x}
-              dy={li === 0 ? el.fontSize : el.fontSize * 1.2}
+              dy={li === 0 ? el.fontSize : el.fontSize * LINE_HEIGHT}
             >
               {line}
             </tspan>
@@ -695,7 +699,7 @@ export function FastenerPreview({
   const ids = fastenerIdsFor(uid);
   return (
     <svg
-      viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS * 0.2 + FASTENER_MARGIN}`}
+      viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${PREVIEW_DEPTH + FASTENER_MARGIN}`}
       width="100%"
       height="100%"
       // decorative: the drawer's own control carries the name of the fastener
@@ -709,7 +713,7 @@ export function FastenerPreview({
         x={0}
         y={0}
         width={CANVAS}
-        height={CANVAS * 0.2}
+        height={PREVIEW_DEPTH}
         fill={PAPER[colour]}
       />
       {fastenerFront(fastener, ids)}

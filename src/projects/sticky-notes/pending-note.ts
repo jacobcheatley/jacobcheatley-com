@@ -1,10 +1,11 @@
-import type { NoteContent } from "./note-schema";
+import { type NoteContent, noteSchema } from "./note-schema";
 
-// A visitor's own just-submitted note, kept in their browser only. The editor
-// (#61) writes it on submit; the wall (#60) shows it pending at the newest slot
-// until it appears approved in the server list, then drops it. One shared
-// contract so both sides agree on the key and shape. It is an optimistic local
-// overlay, never an endpoint — losing it costs nothing.
+// A visitor's own just-submitted notes, kept in their browser only: a list,
+// newest first, capped at MAX_PENDING. The editor (#61) prepends one on submit;
+// the wall (#60) shows them at the newest slots until each turns up approved in
+// the server list, then drops it. One shared contract so both sides agree on
+// the key and shape. It is an optimistic local overlay, never an endpoint —
+// losing it costs nothing, so every read is defensive rather than repaired.
 
 const KEY = "sticky-notes:pending";
 
@@ -58,6 +59,10 @@ export const MAX_PENDING = 10;
 
 // localStorage can throw (private mode, disabled storage); a missing overlay is
 // harmless, so every access swallows failure and degrades to "nothing pending".
+// Entries are validated against the real write-path contract, not just probed
+// for a `content` key: the wall hands whatever comes back straight to
+// NoteRender, which would throw on a half-shaped note from an older format or a
+// hand-edited key.
 export function readPending(): PendingNote[] {
   try {
     const raw = localStorage.getItem(KEY);
@@ -65,10 +70,18 @@ export function readPending(): PendingNote[] {
     const parsed: unknown = JSON.parse(raw);
     // the key held a single note before #71 — read it as a one-entry list
     const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
-    return list.filter(
-      (n): n is PendingNote =>
-        typeof n === "object" && n !== null && "content" in n,
-    );
+    return list.flatMap((entry) => {
+      const n = entry as Partial<PendingNote> | null;
+      const note = noteSchema.safeParse({
+        author: n?.author,
+        content: n?.content,
+      });
+      if (!note.success) return [];
+      // submittedAt is debug-only, so a legacy entry without one still shows
+      const submittedAt =
+        typeof n?.submittedAt === "number" ? n.submittedAt : 0;
+      return [{ ...note.data, submittedAt }];
+    });
   } catch {
     return [];
   }

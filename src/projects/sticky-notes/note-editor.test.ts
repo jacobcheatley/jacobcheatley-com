@@ -11,6 +11,7 @@ import {
   isOffNote,
   moveElement,
   removeElement,
+  settleElement,
 } from "./note-editor";
 import { MAX_ELEMENTS, noteContentSchema, noteSchema } from "./note-schema";
 
@@ -108,15 +109,17 @@ describe("element ops", () => {
     expect(note.elements).toHaveLength(MAX_ELEMENTS);
   });
 
-  it("moveElement translates and clamps the element's box into range", () => {
+  it("moveElement translates without clamping", () => {
     const note = addElement(emptyNote(seq(0.1)), sticker(10, 10));
-    const moved = moveElement(note, 0, 5, -30);
-    const el = moved.elements[0];
-    expect(el).toMatchObject({ x: 15, y: -20 });
-    // clamp is on the box, not the coord: the sticker's top edge (y - 24)
-    // stops at -50, so its centre stops at -26.
-    const off = moveElement(note, 0, 0, -999);
-    expect((off.elements[0] as { y: number }).y).toBe(-26);
+    expect(moveElement(note, 0, 5, -30).elements[0]).toMatchObject({
+      x: 15,
+      y: -20,
+    });
+    // mid-drag an element may leave the stored range entirely: that's what
+    // makes drag-off-to-delete reachable. settleElement puts it back.
+    expect(moveElement(note, 0, 0, -999).elements[0]).toMatchObject({
+      y: -989,
+    });
   });
 
   it("moveElement is rigid: a stroke dragged past the edge keeps its shape", () => {
@@ -126,18 +129,19 @@ describe("element ops", () => {
         size: 8,
         points: [
           [10, 10, 0.5],
-          [60, 10, 0.5],
+          [50, 10, 0.5],
         ],
       }),
     );
-    // bounds x0 = 10 - 4 = 6, so the biggest leftward delta is -56
-    const moved = moveElement(note, 0, -999, 0);
-    const pts = (moved.elements[0] as { points: [number, number, number][] })
-      .points;
-    expect(pts[0]?.[0]).toBe(-46);
-    expect(pts[1]?.[0]).toBe(4);
-    // the 50-unit gap survives: no per-point collapse onto the boundary
-    expect((pts[1]?.[0] ?? 0) - (pts[0]?.[0] ?? 0)).toBe(50);
+    const pts = (
+      moveElement(note, 0, -130, 0).elements[0] as {
+        points: [number, number, number][];
+      }
+    ).points;
+    expect(pts[0]?.[0]).toBe(-120);
+    expect(pts[1]?.[0]).toBe(-80);
+    // the 40-unit gap survives: no per-point collapse onto the boundary
+    expect((pts[1]?.[0] ?? 0) - (pts[0]?.[0] ?? 0)).toBe(40);
   });
 
   it("removeElement drops the given index", () => {
@@ -147,6 +151,55 @@ describe("element ops", () => {
     const after = removeElement(note, 0);
     expect(after.elements).toHaveLength(1);
     expect((after.elements[0] as { x: number }).x).toBe(20);
+  });
+});
+
+describe("settleElement", () => {
+  it("leaves an in-range element alone, object identity included", () => {
+    const el = sticker(250, 250);
+    expect(settleElement(el)).toBe(el);
+  });
+
+  it("shifts a stroke by the minimum that puts every point back in range", () => {
+    const dragged = moveElement(
+      addElement(
+        emptyNote(seq(0.1)),
+        stroke({
+          points: [
+            [10, 40, 0.5],
+            [50, 40, 0.5],
+          ],
+        }),
+      ),
+      0,
+      -130,
+      0,
+    ).elements[0] as Element;
+    const pts = (
+      settleElement(dragged) as { points: [number, number, number][] }
+    ).points;
+    // min x -120 back to -50: every point moves by the same +70, y untouched
+    expect(pts.map((p) => p[0])).toEqual([-50, -10]);
+    expect(pts.map((p) => p[1])).toEqual([40, 40]);
+  });
+
+  it("settles a sticker's anchor, not its silhouette", () => {
+    expect(settleElement(sticker(-90, 250))).toMatchObject({
+      x: -50,
+      y: 250,
+    });
+  });
+
+  it("settles a text anchor dragged past the right edge", () => {
+    const el = text({ x: 560, y: 100 });
+    expect(isOffNote(el)).toBe(true);
+    expect(settleElement(el)).toMatchObject({ x: 550, y: 100 });
+  });
+
+  it("a sticker dragged fully off the paper is deletable, not settled onto it", () => {
+    // the drag-off-to-delete path: the shell sees isOffNote first and removes
+    // the element, so it never reaches settleElement
+    expect(isOffNote(sticker(-100, 250))).toBe(true);
   });
 });
 

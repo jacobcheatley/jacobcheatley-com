@@ -4,13 +4,19 @@ import {
   type NoteContent,
   PAPER_COLOURS,
 } from "./note-schema";
-import { wrapLines } from "./note-text";
+import { LINE_HEIGHT, wrapLines } from "./note-text";
 
 // The editor's pure model layer: seeding a blank note and the immutable
 // element operations (add / update / move / remove) plus the geometry the
 // interaction shell needs (bounds, hit-test, off-note). No React, no DOM — so
 // the tricky bits (drag-off-to-delete, topmost hit-test, coord clamping) are
 // unit-tested here and StickyEditor stays a thin pointer→model shell.
+//
+// A drag is deliberately unclamped: `moveElement` lets coordinates leave the
+// schema's -50..550 range, because an element that can't leave the paper can
+// never be dragged off it to be deleted. Out-of-range coords are editor runtime
+// state, never stored — on release the shell deletes the element if `isOffNote`,
+// and otherwise calls `settleElement` to shift it back into contract range.
 
 export type Element = NoteContent["elements"][number];
 
@@ -90,17 +96,10 @@ function translate(el: Element, dx: number, dy: number): Element {
   return { ...el, x: el.x + dx, y: el.y + dy };
 }
 
-// Clamp a delta so [lo, hi] lands inside -50..550. A box wider than that range
-// can't be clamped either way, so it just doesn't move on that axis.
-function clampDelta(d: number, lo: number, hi: number): number {
-  const min = -50 - lo;
-  const max = CANVAS + 50 - hi;
-  return min > max ? 0 : Math.max(min, Math.min(max, d));
-}
-
-// Rigid translation: the delta is clamped once against the element's bounds,
-// then every point moves by it. Clamping per point instead would squash a
-// stroke flat against the edge (spec #69, bug 1).
+// Rigid, unclamped translation: every point moves by the same delta, so a
+// stroke keeps its shape instead of squashing flat against an edge, and an
+// element can be dragged fully off the paper (which is how you delete it).
+// The shell settles or deletes on release — see the module header.
 export function moveElement(
   content: NoteContent,
   index: number,
@@ -109,12 +108,42 @@ export function moveElement(
 ): NoteContent {
   const el = content.elements[index];
   if (!el) return content;
-  const b = bounds(el);
-  return updateElement(
-    content,
-    index,
-    translate(el, clampDelta(dx, b.x0, b.x1), clampDelta(dy, b.y0, b.y1)),
-  );
+  return updateElement(content, index, translate(el, dx, dy));
+}
+
+// The minimal shift that brings [lo, hi] back inside -50..550. A span wider
+// than the range can't fit, so its minimum goes to -50 and the overflow hangs
+// off the far end (unreachable via clampCoord'd input, but cheap to be safe).
+function settleShift(lo: number, hi: number): number {
+  const d = hi > 550 ? 550 - hi : 0;
+  return lo + d < -50 ? -50 - lo : d;
+}
+
+// Drop an element back into the contract's coordinate range after an unclamped
+// drag: the smallest rigid shift that puts every STORED coordinate inside
+// -50..550 (a stroke's points; a text or sticker anchor — the schema constrains
+// coords, not silhouettes). Returns the element unchanged when it already fits.
+export function settleElement(el: Element): Element {
+  let x0: number;
+  let x1: number;
+  let y0: number;
+  let y1: number;
+  if (el.type === "stroke") {
+    const xs = el.points.map(([x]) => x);
+    const ys = el.points.map(([, y]) => y);
+    x0 = Math.min(...xs);
+    x1 = Math.max(...xs);
+    y0 = Math.min(...ys);
+    y1 = Math.max(...ys);
+  } else {
+    x0 = el.x;
+    x1 = el.x;
+    y0 = el.y;
+    y1 = el.y;
+  }
+  const dx = settleShift(x0, x1);
+  const dy = settleShift(y0, y1);
+  return dx === 0 && dy === 0 ? el : translate(el, dx, dy);
 }
 
 export type Bounds = { x0: number; y0: number; x1: number; y1: number };
@@ -144,13 +173,13 @@ export function bounds(el: Element): Bounds {
     return { x0: el.x - r, y0: cy - r, x1: el.x + r, y1: cy + r };
   }
   // text: (x, y) is the block's top-left — the renderer drops the first
-  // baseline to y + fontSize — and each wrapped line adds 1.2 line-heights.
+  // baseline to y + fontSize — and each wrapped line adds a LINE_HEIGHT.
   const lines = wrapLines(el.text, el.w, el.fontSize).length;
   return {
     x0: el.x,
     y0: el.y,
     x1: el.x + el.w,
-    y1: el.y + el.fontSize * (1 + (lines - 1) * 1.2),
+    y1: el.y + el.fontSize * (1 + (lines - 1) * LINE_HEIGHT),
   };
 }
 

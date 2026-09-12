@@ -125,6 +125,29 @@ describe("the pending list", () => {
     localStorage.setItem(KEY, JSON.stringify({ nope: true }));
     expect(readPending()).toEqual([]);
   });
+
+  it("drops entries that fail the note contract", () => {
+    // the wall renders whatever comes back, so a shape-only guard would hand
+    // NoteRender a note with no elements array and throw mid-render
+    localStorage.setItem(KEY, JSON.stringify([{ content: 42 }]));
+    expect(readPending()).toEqual([]);
+    localStorage.setItem(KEY, JSON.stringify([{ content: content() }]));
+    expect(readPending()).toEqual([]); // no author
+  });
+
+  it("keeps the valid entries out of a mixed list", () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([{ content: 42 }, pendingNote("ada", 1), null]),
+    );
+    expect(readPending().map((p) => p.author)).toEqual(["ada"]);
+  });
+
+  it("reads a legacy entry with no submittedAt", () => {
+    const { submittedAt: _, ...legacy } = pendingNote("lee", 7);
+    localStorage.setItem(KEY, JSON.stringify([legacy]));
+    expect(readPending()).toEqual([{ ...legacy, submittedAt: 0 }]);
+  });
 });
 
 describe("reconcilePending", () => {

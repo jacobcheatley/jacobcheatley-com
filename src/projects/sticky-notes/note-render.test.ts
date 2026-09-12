@@ -3,12 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FONT_FAMILIES } from "./note-fonts";
 import {
+  FASTENER_MARGIN,
   FastenerPreview,
   NOTE_PAPER_ASPECT_RATIO,
   NotePaper,
   NoteRender,
+  PREVIEW_DEPTH,
 } from "./note-render";
-import { FASTENERS, type NoteContent } from "./note-schema";
+import { CANVAS, FASTENERS, type NoteContent } from "./note-schema";
 
 // createElement (not JSX) keeps this a .test.ts in the node project, which also
 // proves the acceptance criterion: NoteRender renders with no browser/DOM.
@@ -143,7 +145,9 @@ describe("FastenerPreview", () => {
   it("renders a distinct strip for every fastener", () => {
     const outputs = FASTENERS.map(preview);
     expect(new Set(outputs).size).toBe(FASTENERS.length);
-    for (const svg of outputs) expect(svg).toContain('viewBox="0 -40 500 140"');
+    // the strip is the fastener's headroom plus a shallow slice of paper
+    const viewBox = `viewBox="0 ${-FASTENER_MARGIN} ${CANVAS} ${PREVIEW_DEPTH + FASTENER_MARGIN}"`;
+    for (const svg of outputs) expect(svg).toContain(viewBox);
   });
 
   it("reuses the wall's drawing code, so a preview matches the real thing", () => {
