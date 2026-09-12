@@ -18,4 +18,4 @@ Branches are `type/ticket#-short-name` (throwaway `prototype`/`research` may dro
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` (glossary) and `docs/adr/` at the repo root. Layout and conventions: see `docs/agents/domain.md` and, once the scaffold lands, the README's "Layout and conventions" section.
+Single-context: `CONTEXT.md` (glossary) and `docs/adr/` at the repo root. Layout and conventions: see `docs/agents/domain.md`.
