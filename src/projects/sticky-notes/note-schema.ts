@@ -82,11 +82,14 @@ const pressure = z.number().min(0).max(1);
 // outline at render time (#59), so we never store the rendered shape.
 const point = z.tuple([coord, coord, pressure]);
 
-// Author and timestamps are DB columns, not part of the content blob. Interior
-// control characters (newlines included) are rejected outright.
+// Author and timestamps are DB columns, not part of the content blob. Stored
+// lowercase — the wall is a scruffy corkboard, not a masthead, so a name never
+// shouts. Interior control characters (newlines included) are rejected
+// outright, after the lowercasing so caps can't smuggle one past.
 const author = z
   .string()
   .trim()
+  .toLowerCase()
   .min(1)
   .max(50)
   .refine((s) => !/\p{Cc}/u.test(s), "control characters are not allowed");

@@ -26,6 +26,10 @@ export const FASTENER_MARGIN = 40;
 // exactly or the note crops, so derive it from here rather than re-typing it.
 export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
 
+// NotePaper drops the headroom, so the bare sheet is square. Named rather than
+// inlined for the same reason: the mat sizes its note from here.
+export const NOTE_PAPER_ASPECT_RATIO = 1;
+
 // Paper backgrounds — soft, saturated sticky-note stock. Exported so the editor
 // (#61) tints its paper/ink swatches from the exact rendered shades.
 export const PAPER: Record<PaperColour, string> = {
@@ -544,16 +548,17 @@ function renderElement(el: NoteElement, index: number) {
   }
 }
 
-export function NoteRender({ content }: { content: NoteContent }) {
-  const uid = useId();
+// The paper layer: the sheet, the elements clipped to it, and the folded
+// corners — everything except the fastener. Split out so the editor's mat can
+// show bare paper (NotePaper) through the exact code the wall renders, while
+// NoteRender still composes paper and fastener into the one SVG. Returns the
+// two halves because the fastener slots *between* them: tack behind, paper,
+// fastener on top.
+function paperLayers(uid: string, content: NoteContent) {
   const clipId = `${uid}-clip`;
   const faceBr = `${uid}-face-br`;
   const faceBl = `${uid}-face-bl`;
   const shadowId = `${uid}-shadow`;
-  const fastenerIds: FastenerIds = {
-    grad: `${uid}-fastener-grad`,
-    blur: `${uid}-fastener-blur`,
-  };
 
   const c = CANVAS;
   const paperFill = PAPER[content.colour];
@@ -565,16 +570,9 @@ export function NoteRender({ content }: { content: NoteContent }) {
   const foldTip = mix(paperFill, "#ffffff", 0.6);
   const foldCrease = mix(paperFill, "#ffffff", 0.15);
 
-  return (
-    <svg
-      viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS + FASTENER_MARGIN}`}
-      width="100%"
-      height="100%"
-      role="img"
-      aria-label="sticky note"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
+  return {
+    defs: (
+      <>
         <clipPath id={clipId}>
           <path d={paper} />
         </clipPath>
@@ -599,34 +597,122 @@ export function NoteRender({ content }: { content: NoteContent }) {
             </filter>
           </>
         )}
+      </>
+    ),
+    body: (
+      <>
+        {/* paper, then content clipped to the (corner-cut) paper shape */}
+        <path d={paper} fill={paperFill} />
+        <g clipPath={`url(#${clipId})`}>
+          {content.elements.map(renderElement)}
+        </g>
+
+        {/* folded corners last, on top of the content */}
+        {fbr > 0 && (
+          <path
+            d={tri([c - fbr, c], [c, c - fbr], [c - fbr, c - fbr])}
+            fill={`url(#${faceBr})`}
+            filter={`url(#${shadowId})`}
+          />
+        )}
+        {fbl > 0 && (
+          <path
+            d={tri([fbl, c], [0, c - fbl], [fbl, c - fbl])}
+            fill={`url(#${faceBl})`}
+            filter={`url(#${shadowId})`}
+          />
+        )}
+      </>
+    ),
+  };
+}
+
+const fastenerIdsFor = (uid: string): FastenerIds => ({
+  grad: `${uid}-fastener-grad`,
+  blur: `${uid}-fastener-blur`,
+});
+
+export function NoteRender({ content }: { content: NoteContent }) {
+  const uid = useId();
+  const fastenerIds = fastenerIdsFor(uid);
+  const paper = paperLayers(uid, content);
+
+  return (
+    <svg
+      viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS + FASTENER_MARGIN}`}
+      width="100%"
+      height="100%"
+      role="img"
+      aria-label="sticky note"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        {paper.defs}
         {fastenerDefs(content.fastener, fastenerIds)}
       </defs>
 
       {/* sticky tack sits behind the note, peeking out above the top edge */}
       {fastenerBehind(content.fastener, fastenerIds)}
-
-      {/* paper, then content clipped to the (corner-cut) paper shape */}
-      <path d={paper} fill={paperFill} />
-      <g clipPath={`url(#${clipId})`}>{content.elements.map(renderElement)}</g>
-
-      {/* folded corners last, on top of the content */}
-      {fbr > 0 && (
-        <path
-          d={tri([c - fbr, c], [c, c - fbr], [c - fbr, c - fbr])}
-          fill={`url(#${faceBr})`}
-          filter={`url(#${shadowId})`}
-        />
-      )}
-      {fbl > 0 && (
-        <path
-          d={tri([fbl, c], [0, c - fbl], [fbl, c - fbl])}
-          fill={`url(#${faceBl})`}
-          filter={`url(#${shadowId})`}
-        />
-      )}
-
+      {paper.body}
       {/* fastener on top of everything */}
       {fastenerFront(content.fastener, fastenerIds)}
+    </svg>
+  );
+}
+
+// The sheet on its own, no fastener and no board headroom — what the editor's
+// cutting mat shows while a note is being drawn. Same paper code as the wall,
+// so what you draw is what gets pinned up.
+export function NotePaper({ content }: { content: NoteContent }) {
+  const uid = useId();
+  const paper = paperLayers(uid, content);
+  return (
+    <svg
+      viewBox={`0 0 ${CANVAS} ${CANVAS}`}
+      width="100%"
+      height="100%"
+      role="img"
+      aria-label="sticky note"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>{paper.defs}</defs>
+      {paper.body}
+    </svg>
+  );
+}
+
+// A fastener as applied, on a strip of the note's top edge — the fastener
+// drawer's swatch. Same drawing functions as the wall, so what the drawer shows
+// is exactly what lands on the board.
+export function FastenerPreview({
+  fastener,
+  colour = "yellow",
+}: {
+  fastener: Fastener;
+  colour?: PaperColour;
+}) {
+  const uid = useId();
+  const ids = fastenerIdsFor(uid);
+  return (
+    <svg
+      viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${CANVAS * 0.2 + FASTENER_MARGIN}`}
+      width="100%"
+      height="100%"
+      // decorative: the drawer's own control carries the name of the fastener
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>{fastenerDefs(fastener, ids)}</defs>
+      {fastenerBehind(fastener, ids)}
+      {/* the top strip of a note: board above y = 0, paper below */}
+      <rect
+        x={0}
+        y={0}
+        width={CANVAS}
+        height={CANVAS * 0.2}
+        fill={PAPER[colour]}
+      />
+      {fastenerFront(fastener, ids)}
     </svg>
   );
 }

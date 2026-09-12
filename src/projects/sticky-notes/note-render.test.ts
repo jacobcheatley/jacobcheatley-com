@@ -2,13 +2,22 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FONT_FAMILIES } from "./note-fonts";
-import { NoteRender } from "./note-render";
-import type { NoteContent } from "./note-schema";
+import {
+  FastenerPreview,
+  NOTE_PAPER_ASPECT_RATIO,
+  NotePaper,
+  NoteRender,
+} from "./note-render";
+import { FASTENERS, type NoteContent } from "./note-schema";
 
 // createElement (not JSX) keeps this a .test.ts in the node project, which also
 // proves the acceptance criterion: NoteRender renders with no browser/DOM.
 function render(content: NoteContent) {
   return renderToStaticMarkup(createElement(NoteRender, { content }));
+}
+
+function renderPaper(content: NoteContent) {
+  return renderToStaticMarkup(createElement(NotePaper, { content }));
 }
 
 const content: NoteContent = {
@@ -103,5 +112,54 @@ describe("NoteRender", () => {
     expect(FONT_FAMILIES.handwritten).toContain("Caveat");
     expect(FONT_FAMILIES.casual).toContain("Patrick Hand");
     expect(FONT_FAMILIES.marker).toContain("Permanent Marker");
+  });
+});
+
+describe("NotePaper", () => {
+  it("is the bare 500-square sheet: no fastener headroom", () => {
+    expect(renderPaper(content)).toContain('viewBox="0 0 500 500"');
+    expect(NOTE_PAPER_ASPECT_RATIO).toBe(1);
+  });
+
+  it("draws no fastener even when the note carries one", () => {
+    // the note's pin-red would show its head gradient in the composed render
+    expect(render(content)).toContain("#e11d48");
+    expect(renderPaper(content)).not.toContain("#e11d48");
+  });
+
+  it("keeps the paper layer identical to the composed render", () => {
+    const paper = renderPaper({ ...content, curl: { bl: 0.4, br: 0.6 } });
+    // same content, same folds — the mat shows exactly what the wall will
+    expect(paper).toContain("hello");
+    expect(paper).toContain("\u2b50");
+    expect(paper).toContain("feDropShadow");
+  });
+});
+
+describe("FastenerPreview", () => {
+  const preview = (fastener: (typeof FASTENERS)[number]) =>
+    renderToStaticMarkup(createElement(FastenerPreview, { fastener }));
+
+  it("renders a distinct strip for every fastener", () => {
+    const outputs = FASTENERS.map(preview);
+    expect(new Set(outputs).size).toBe(FASTENERS.length);
+    for (const svg of outputs) expect(svg).toContain('viewBox="0 -40 500 140"');
+  });
+
+  it("reuses the wall's drawing code, so a preview matches the real thing", () => {
+    expect(preview("pin-red")).toContain("#e11d48");
+    expect(preview("stick")).toContain("#5b7fc4");
+  });
+
+  it("renders the bare strip for none", () => {
+    expect(preview("none")).not.toContain("radialGradient");
+    expect(preview("none")).toContain("#fde68a"); // default yellow paper
+  });
+
+  it("tints the strip with the note's paper colour", () => {
+    const pink = renderToStaticMarkup(
+      createElement(FastenerPreview, { fastener: "none", colour: "pink" }),
+    );
+    expect(pink).toContain("#fbcfe8");
   });
 });
