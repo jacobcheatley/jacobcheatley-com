@@ -14,4 +14,4 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. Neither exists yet; revisit after the initial architecture is decided. See `docs/agents/domain.md`.
+Single-context: `CONTEXT.md` (glossary) and `docs/adr/` at the repo root. Layout and conventions: see `docs/agents/domain.md` and, once the scaffold lands, the README's "Layout and conventions" section.

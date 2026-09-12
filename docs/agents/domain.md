@@ -4,7 +4,7 @@ How skills should consume this repo's domain documentation when exploring the co
 
 ## Status
 
-The project has no architecture yet. `CONTEXT.md` and `docs/adr/` do not exist, and there is no `src/` structure to describe. Revisit this file once the initial architecture is decided: confirm the layout below still fits and add anything the chosen structure needs.
+Architecture decided 2026-09-12 (wayfinder map, issue #1). `CONTEXT.md` (glossary: Project, Portfolio) and `docs/adr/0001–0003` exist. The `src/` layout below is the one chosen in issue #14 and built by the scaffold spec in issue #15; until the scaffold lands, treat it as intended rather than present.
 
 ## Before exploring, read these
 
@@ -13,17 +13,25 @@ The project has no architecture yet. `CONTEXT.md` and `docs/adr/` do not exist, 
 
 If either is missing, **proceed silently**. Don't flag the absence or suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
-## Intended layout
+## Layout
 
-Single-context repo:
+Single-context repo. One feature folder per Project plus a thin route file; folder names use the glossary.
 
 ```
 /
 ├── CONTEXT.md
 ├── docs/adr/
-│   └── 0001-<decision>.md
-└── src/
+├── src/
+│   ├── routes/            file-based routes at flat URLs; _shell.* is the pathless Portfolio layout
+│   ├── portfolio/         landing-page components
+│   ├── projects/<name>/   schema.ts, *.server.ts, *.fn.ts, components, colocated tests
+│   ├── db/index.server.ts the only reader of DATABASE_URL
+│   └── test/              Vitest global setup and helpers
+├── e2e/                   Playwright smoke
+└── server.ts              Bun.serve wrapper (canonical host, assets, future WebSocket seam)
 ```
+
+Conventions (file roles, tests, seams policy) live in the README's "Layout and conventions" section once the scaffold lands.
 
 ## Use the glossary's vocabulary
 
