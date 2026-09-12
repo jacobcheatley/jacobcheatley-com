@@ -12,6 +12,10 @@ Issues are tracked as GitHub Issues on `jacobcheatley/jacobcheatley-com` via the
 
 Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
 
+### Git workflow
+
+Branches are `type/ticket#-short-name` (throwaway `prototype`/`research` may drop the ticket); PRs squash-merge into `main`. See `docs/agents/git-workflow.md`.
+
 ### Domain docs
 
 Single-context: `CONTEXT.md` (glossary) and `docs/adr/` at the repo root. Layout and conventions: see `docs/agents/domain.md` and, once the scaffold lands, the README's "Layout and conventions" section.
