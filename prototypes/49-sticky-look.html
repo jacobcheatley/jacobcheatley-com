@@ -470,6 +470,32 @@
   .desktop .rail .ico.held{ transform:translateX(6px); outline:2px solid #1f8a45; }
   .desktop .deskarea{ flex:1; position:relative; background:linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px) 0 0/26px 26px, linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px) 0 0/26px 26px, radial-gradient(120% 90% at 50% 0%, #3d525a, #2b3a41 70%); }
   .desktop .deskarea .rnote{ top:60px; }
+
+  /* --- charm pass: tools as real objects in a scrollable pencil tray --- */
+  .pantray{ display:flex; gap:15px; align-items:flex-end; overflow-x:auto; scroll-snap-type:x proximity;
+    padding:18px 14px 10px; background:linear-gradient(180deg,#c79f5f,#a9814a); box-shadow:inset 0 4px 10px rgba(0,0,0,.28); }
+  .pantray::-webkit-scrollbar{ height:0; }
+  .pobj{ position:relative; flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:6px; scroll-snap-align:center; cursor:pointer; }
+  .plabel{ font-family:"IBM Plex Sans"; font-size:.62rem; color:#3a2a12; }
+  .pobj.held .plabel{ color:#0f5a2c; font-weight:600; }
+  .pdiv{ flex:0 0 auto; width:1px; align-self:stretch; margin:6px 2px 20px; background:rgba(58,42,18,.35); }
+  .pmarker{ width:24px; height:80px; border-radius:6px 6px 3px 3px; position:relative; box-shadow:0 4px 6px rgba(0,0,0,.32); transition:transform .12s; }
+  .pmarker::before{ content:""; position:absolute; top:10px; left:0; right:0; height:11px; background:rgba(255,255,255,.4); } /* label band */
+  .pmarker::after{ content:""; position:absolute; bottom:-11px; left:50%; transform:translateX(-50%); border-left:7px solid transparent; border-right:7px solid transparent; border-top:13px solid currentColor; } /* nib */
+  .pmarker.k{ background:#2a2a2a; color:#2a2a2a } .pmarker.g{ background:var(--ink-green); color:var(--ink-green) }
+  .pmarker.r{ background:var(--ink-red); color:var(--ink-red) } .pmarker.b{ background:var(--ink-blue); color:var(--ink-blue) }
+  .pmarker.held{ transform:translateY(-18px) rotate(-5deg); }
+  .ptile{ width:50px; height:50px; border-radius:10px; background:#f4ecdd; display:flex; align-items:center; justify-content:center; font-size:1.35rem; box-shadow:0 3px 5px rgba(0,0,0,.28); }
+  .psheet{ width:58px; height:58px; border-radius:6px; background:#fff; box-shadow:0 3px 6px rgba(0,0,0,.32); display:grid; grid-template-columns:repeat(2,1fr); gap:3px; padding:6px; }
+  .psheet span{ font-size:1rem; text-align:center; }
+  .psheet span.peel{ transform:rotate(-16deg) translateY(-3px); filter:drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+  .peraser{ width:54px; height:36px; border-radius:5px; background:linear-gradient(180deg,#ff9db0 0 52%,#f4ecdd 52%); box-shadow:0 3px 5px rgba(0,0,0,.28); }
+  .ptweez{ width:50px; height:50px; }
+  .scrollcue{ text-align:center; font-family:"IBM Plex Sans"; font-size:.64rem; color:#eadfc7; padding:5px; background:#161b1f; letter-spacing:.03em; }
+  /* drag-a-sticker-off-the-note = delete */
+  .dragoff{ position:absolute; z-index:7; font-size:1.6rem; filter:drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+  .dragoff .trail{ position:absolute; right:26px; top:10px; width:44px; height:2px; background:repeating-linear-gradient(90deg,rgba(255,255,255,.7) 0 5px,transparent 5px 11px); }
+  .dragoff .rm{ position:absolute; top:30px; left:-10px; white-space:nowrap; background:#c0271c; color:#fff; font-family:"IBM Plex Sans"; font-size:.62rem; padding:2px 7px; border-radius:6px; }
 </style>
 
 <section class="refined">
@@ -480,9 +506,9 @@
     <div>
       <div class="phone"><div class="ed">
         <div class="mat">
-          <div class="topbar"><span class="back">‹ corkboard</span><span class="post-hint">draft</span></div>
+          <div class="topbar"><span class="back">‹ corkboard</span><span class="post-hint">draft · autosaved</span></div>
 
-          <div class="inhand">✍️ holding: black marker</div>
+          <div class="inhand">✍️ red marker in hand</div>
 
           <div class="rnote">
             <span class="rh rot"></span><span class="rh tl"></span><span class="rh tr"></span><span class="rh bl"></span><span class="rh br"></span>
@@ -490,28 +516,31 @@
             <div class="rtb sel" style="top:52px; left:20px; font-family:'Caveat'; color:var(--ink-green); font-size:1.3rem">love this
               <span class="h a"></span><span class="h b"></span><span class="h c"></span><span class="h d"></span></div>
             <svg width="150" height="46" viewBox="0 0 150 46" style="position:absolute; top:110px; left:14px"><path d="M6 30 Q30 6 54 30 T120 22" fill="none" stroke="var(--ink-black)" stroke-width="6" stroke-linecap="round"/></svg>
-            <span class="sticker" style="right:14px; bottom:52px; position:absolute; font-size:1.4rem">⭐</span>
             <span class="who">— your name</span>
           </div>
+          <!-- drag a sticker off the note to delete it -->
+          <div class="dragoff" style="bottom:14px; right:20px;">⭐<span class="trail"></span><span class="rm">release to remove</span></div>
         </div>
 
         <div class="dock">
-          <div class="ctx"><span class="lab">ink</span>
-            <span class="dot k on"></span><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
+          <div class="pantray">
+            <div class="pobj held"><div class="pmarker r"></div><span class="plabel">red</span></div>
+            <div class="pobj"><div class="pmarker k"></div><span class="plabel">black</span></div>
+            <div class="pobj"><div class="pmarker g"></div><span class="plabel">green</span></div>
+            <div class="pobj"><div class="pmarker b"></div><span class="plabel">blue</span></div>
+            <div class="pdiv"></div>
+            <div class="pobj"><div class="ptile" style="font-family:'Patrick Hand'; font-size:1.5rem">Aa</div><span class="plabel">text</span></div>
+            <div class="pobj"><div class="psheet"><span class="peel">⭐</span><span>❤️</span><span>😎</span><span>🔥</span></div><span class="plabel">stickers</span></div>
+            <div class="pobj"><div class="peraser"></div><span class="plabel">eraser</span></div>
+            <div class="pobj"><svg class="ptweez" viewBox="0 0 40 40"><path d="M13 4 L19 26 M27 4 L21 26" stroke="#4a3a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M19 26 q1 8 1 10 q0-2 1-10" fill="#4a3a1a"/></svg><span class="plabel">select</span></div>
           </div>
-          <div class="tray">
-            <div class="tool held"><div class="ico">✍️</div>marker</div>
-            <div class="tool"><div class="ico">🅣</div>text</div>
-            <div class="tool"><div class="ico">⭐</div>sticker</div>
-            <div class="tool"><div class="ico">🩹</div>eraser</div>
-            <div class="tool"><div class="ico">🥢</div>tweezers</div>
-          </div>
+          <div class="scrollcue">‹ swipe the tray to rummage for a tool ›</div>
           <div class="finalise">
             <div class="stick">📌 Stick it up</div>
           </div>
         </div>
       </div></div>
-      <p class="cap"><b>Mobile-first.</b> Note on the cutting mat; wooden tray in the thumb zone. Marker is “in hand” (lifted), so the context strip shows the 4 inks. Eraser removes marks &amp; text; tweezers lift stickers. “Stick it up” is the only way out — no Submit button.</p>
+      <p class="cap"><b>Tools are real objects, not buttons.</b> Pick up a <b>marker</b> and its colour IS the ink (no separate colour picker); text boxes reuse the held colour. Peel a sticker off the <b>sheet</b>; erase marks/text with the <b>eraser</b>; the <b>tweezers</b> select &amp; move — drag a sticker off the note to bin it. No undo. The tray scrolls like a pencil case (interim compression — research pass will refine this).</p>
     </div>
 
     <!-- FINALISE choice + POSTED -->
@@ -542,7 +571,7 @@
         <div class="p-note"><span class="pin2"></span>thanks!<br>great site<br><span style="font-size:.72rem;color:rgba(0,0,0,.5)">— your name</span></div>
         <div class="pending">Pinned up — waiting to be approved</div>
       </div>
-      <p class="cap"><b>Posted → pending.</b> Same note object, now on warm cork with its pin. Diegetic pending state while it waits for the approval CLI to clear it onto the public wall.</p>
+      <p class="cap"><b>Posted → pending.</b> Same note object, now on warm cork with its chosen fastener. Your pending note shows on the board straight away, and a copy is kept in your browser (localStorage) until the approval CLI clears it onto the public wall.</p>
     </div>
   </div>
 
