@@ -123,7 +123,7 @@
 <body>
 <header>
   <h1>Sticky Notes — visual direction probe</h1>
-  <p class="sub">Ticket #49 · surface + note object + ink + <b>the editor itself</b> (tools, text boxes). Distinct from the serif tree-frog Portfolio. Nothing here is final — react to it. Sections 1–6 = the world; 7–9 = the editor.</p>
+  <p class="sub">Ticket #49 · surface + note object + ink + <b>the editor itself</b> (tools, text boxes). Distinct from the serif tree-frog Portfolio. Nothing here is final — react to it. §1–6 = the world; §7–9 = first editor pass; <b>§10 = the refined, grounded, mobile-first editor</b> — start there.</p>
 </header>
 
 <section>
@@ -384,8 +384,186 @@
   </div>
 </section>
 
+<style>
+  /* ================= REFINED, GROUNDED, MOBILE-FIRST EDITOR ================= */
+  .refined { background:#101318; }
+  .refined .frames { display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start; }
+  .refined .cap { color:var(--chrome-muted); font-size:.82rem; margin:10px 2px 0; max-width:340px; font-family:"IBM Plex Sans"; }
+
+  /* phone bezel */
+  .phone { width:330px; border-radius:34px; padding:10px; background:#05070a; box-shadow:0 20px 50px rgba(0,0,0,.5), inset 0 0 0 2px #2b3038; }
+  .ed { position:relative; height:640px; border-radius:26px; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* the desk mat = cutting mat, grounds everything */
+  .mat {
+    position:relative; flex:1;
+    background:
+      linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px) 0 0/26px 26px,
+      linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px) 0 0/26px 26px,
+      radial-gradient(120% 90% at 50% 0%, #3d525a, #2b3a41 70%);
+  }
+  .ed .topbar { position:absolute; top:0; left:0; right:0; z-index:5; display:flex; align-items:center; justify-content:space-between;
+    padding:12px 14px; color:#dfe4e6; font-family:"IBM Plex Sans"; font-size:.9rem;
+    background:linear-gradient(180deg, rgba(20,26,30,.75), transparent); }
+  .ed .topbar .back{ display:flex; gap:6px; align-items:center; opacity:.9; }
+  .ed .topbar .post-hint{ font-size:.78rem; color:#9fb0b4; }
+
+  /* the note on the mat */
+  .rnote { position:absolute; top:82px; left:50%; transform:translate(-50%) rotate(-2deg);
+    width:216px; min-height:220px; padding:20px 18px; border-radius:3px; background:var(--n-yellow); color:#1c1c1c;
+    box-shadow:5px 12px 26px rgba(0,0,0,.45); font-family:"Patrick Hand",cursive; font-size:1.1rem;
+    background-image:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0) 42%); }
+  .rnote .who{ position:absolute; bottom:8px; right:12px; font-size:.72rem; color:rgba(0,0,0,.5); font-family:"IBM Plex Sans"; }
+  .rnote .rh{ position:absolute; width:15px; height:15px; border:2px solid rgba(0,0,0,.5); background:#fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .rh.tl{top:-8px;left:-8px}.rh.tr{top:-8px;right:-8px}.rh.bl{bottom:-8px;left:-8px}.rh.br{bottom:-8px;right:-8px}
+  .rh.rot{top:-30px;left:50%;transform:translateX(-50%);border-color:var(--ink-green)}
+  .rh.rot::after{content:"";position:absolute;top:13px;left:50%;transform:translateX(-50%);width:2px;height:16px;background:rgba(0,0,0,.35)}
+  /* free coloured text boxes */
+  .rtb{ position:absolute; padding:1px 3px; }
+  .rtb.sel{ outline:1.4px dashed rgba(0,0,0,.5); }
+  .rtb.sel .h{ position:absolute; width:8px; height:8px; background:#fff; border:1.4px solid rgba(0,0,0,.55); }
+  .rtb .h.a{top:-4px;left:-4px}.rtb .h.b{top:-4px;right:-4px}.rtb .h.c{bottom:-4px;left:-4px}.rtb .h.d{bottom:-4px;right:-4px}
+
+  /* held-tool indicator */
+  .inhand{ position:absolute; top:88px; right:8px; z-index:6; background:#0d1114cc; color:#e7ecee; font-family:"IBM Plex Sans";
+    font-size:.72rem; padding:5px 9px; border-radius:20px; display:flex; gap:6px; align-items:center; box-shadow:0 3px 8px rgba(0,0,0,.4); }
+
+  /* the dock: context strip + wooden tool tray + finalise bar */
+  .dock{ position:relative; z-index:5; }
+  .ctx{ display:flex; gap:10px; align-items:center; justify-content:center; padding:10px; background:#1b2226; }
+  .ctx .lab{ font-family:"IBM Plex Sans"; font-size:.72rem; color:#9fb0b4; margin-right:2px; }
+  .dot{ width:24px; height:24px; border-radius:50%; box-shadow:0 2px 4px rgba(0,0,0,.4); }
+  .dot.k{background:var(--ink-black)} .dot.g{background:var(--ink-green)} .dot.r{background:var(--ink-red)} .dot.b{background:var(--ink-blue)}
+  .dot.on{ outline:3px solid #fff; outline-offset:2px; }
+
+  .tray{ display:flex; justify-content:space-around; align-items:flex-end; gap:6px; padding:12px 10px 14px;
+    background:linear-gradient(180deg,#c79f5f,#a9814a); box-shadow:inset 0 3px 8px rgba(0,0,0,.25); }
+  .tool{ position:relative; display:flex; flex-direction:column; align-items:center; gap:4px; width:56px;
+    font-family:"IBM Plex Sans"; font-size:.66rem; color:#3a2a12; cursor:pointer; }
+  .tool .ico{ width:44px; height:44px; border-radius:10px; background:#f4ecdd; display:flex; align-items:center; justify-content:center; font-size:1.4rem;
+    box-shadow:0 3px 5px rgba(0,0,0,.28); transition:transform .12s; }
+  .tool.held .ico{ transform:translateY(-12px); box-shadow:0 12px 14px rgba(0,0,0,.35); outline:2px solid #1f8a45; }
+  .tool.held::after{ content:"in hand"; position:absolute; top:-14px; font-size:.6rem; color:#1f8a45; font-weight:600; }
+
+  .finalise{ display:flex; align-items:center; gap:10px; padding:12px 14px; background:#161b1f; }
+  .finalise .stick{ flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; border-radius:12px;
+    background:var(--ink-red); color:#fff; font-family:"IBM Plex Sans"; font-weight:600; font-size:.95rem; box-shadow:0 4px 10px rgba(192,39,28,.4); }
+  .fasteners{ display:flex; gap:8px; }
+  .fast{ width:42px; height:42px; border-radius:10px; background:#232a2e; display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:#dfe4e6; position:relative; }
+  .fast .fl{ position:absolute; bottom:-15px; font-size:.58rem; color:#9fb0b4; white-space:nowrap; }
+  .fast.on{ outline:2px solid var(--ink-red); }
+
+  /* posted-to-cork state */
+  .posted{ width:300px; height:360px; border-radius:14px; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,.4); position:relative;
+    background:radial-gradient(circle at 30% 30%, rgba(0,0,0,.05) 0 2px, transparent 3px) 0 0/16px 16px, linear-gradient(135deg,#c99a5b,#b07f3f); }
+  .posted .p-note{ position:absolute; top:60px; left:50%; transform:translate(-50%) rotate(-3deg); width:150px; min-height:150px; padding:16px;
+    background:var(--n-yellow); color:#1c1c1c; font-family:"Patrick Hand"; box-shadow:3px 8px 16px rgba(0,0,0,.35); border-radius:3px; }
+  .posted .pin2{ position:absolute; top:-8px; left:50%; transform:translateX(-50%); width:18px; height:18px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ff8f8f,#c0271c 70%); box-shadow:0 3px 4px rgba(0,0,0,.4); }
+  .pending{ position:absolute; bottom:14px; left:0; right:0; text-align:center; color:#3a2a12; font-family:"IBM Plex Sans"; font-size:.8rem;
+    background:rgba(255,255,255,.55); padding:8px; }
+
+  /* desktop framing */
+  .desktop{ width:520px; max-width:100%; border-radius:14px; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,.4); display:flex; height:360px; }
+  .desktop .rail{ width:84px; background:linear-gradient(180deg,#c79f5f,#a9814a); display:flex; flex-direction:column; align-items:center; gap:12px; padding:16px 0; }
+  .desktop .rail .ico{ width:46px; height:46px; border-radius:10px; background:#f4ecdd; display:flex; align-items:center; justify-content:center; font-size:1.3rem; box-shadow:0 3px 5px rgba(0,0,0,.28); }
+  .desktop .rail .ico.held{ transform:translateX(6px); outline:2px solid #1f8a45; }
+  .desktop .deskarea{ flex:1; position:relative; background:linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px) 0 0/26px 26px, linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px) 0 0/26px 26px, radial-gradient(120% 90% at 50% 0%, #3d525a, #2b3a41 70%); }
+  .desktop .deskarea .rnote{ top:60px; }
+</style>
+
+<section class="refined">
+  <div class="sec-head"><h2>10 · Refined editor — grounded &amp; mobile-first</h2><span class="hint">tools live in a wooden tray on a cutting-mat desk, not floating in a void</span></div>
+
+  <div class="frames">
+    <!-- MOBILE (primary) -->
+    <div>
+      <div class="phone"><div class="ed">
+        <div class="mat">
+          <div class="topbar"><span class="back">‹ corkboard</span><span class="post-hint">draft</span></div>
+
+          <div class="inhand">✍️ holding: black marker</div>
+
+          <div class="rnote">
+            <span class="rh rot"></span><span class="rh tl"></span><span class="rh tr"></span><span class="rh bl"></span><span class="rh br"></span>
+            <div class="rtb" style="top:16px; left:16px; font-family:'Permanent Marker'; color:var(--ink-red); font-size:1.1rem">HI!</div>
+            <div class="rtb sel" style="top:52px; left:20px; font-family:'Caveat'; color:var(--ink-green); font-size:1.3rem">love this
+              <span class="h a"></span><span class="h b"></span><span class="h c"></span><span class="h d"></span></div>
+            <svg width="150" height="46" viewBox="0 0 150 46" style="position:absolute; top:110px; left:14px"><path d="M6 30 Q30 6 54 30 T120 22" fill="none" stroke="var(--ink-black)" stroke-width="6" stroke-linecap="round"/></svg>
+            <span class="sticker" style="right:14px; bottom:52px; position:absolute; font-size:1.4rem">⭐</span>
+            <span class="who">— your name</span>
+          </div>
+        </div>
+
+        <div class="dock">
+          <div class="ctx"><span class="lab">ink</span>
+            <span class="dot k on"></span><span class="dot g"></span><span class="dot r"></span><span class="dot b"></span>
+          </div>
+          <div class="tray">
+            <div class="tool held"><div class="ico">✍️</div>marker</div>
+            <div class="tool"><div class="ico">🅣</div>text</div>
+            <div class="tool"><div class="ico">⭐</div>sticker</div>
+            <div class="tool"><div class="ico">🩹</div>eraser</div>
+            <div class="tool"><div class="ico">🥢</div>tweezers</div>
+          </div>
+          <div class="finalise">
+            <div class="stick">📌 Stick it up</div>
+          </div>
+        </div>
+      </div></div>
+      <p class="cap"><b>Mobile-first.</b> Note on the cutting mat; wooden tray in the thumb zone. Marker is “in hand” (lifted), so the context strip shows the 4 inks. Eraser removes marks &amp; text; tweezers lift stickers. “Stick it up” is the only way out — no Submit button.</p>
+    </div>
+
+    <!-- FINALISE choice + POSTED -->
+    <div>
+      <div class="phone"><div class="ed">
+        <div class="mat">
+          <div class="topbar"><span class="back">‹ corkboard</span><span class="post-hint">how to stick it?</span></div>
+          <div class="rnote" style="top:70px"><span class="who">— your name</span>ready to go up.</div>
+        </div>
+        <div class="dock">
+          <div class="finalise" style="justify-content:center; gap:26px; padding:22px 14px 34px">
+            <div class="fasteners" style="gap:22px">
+              <div class="fast on">📌<span class="fl">pin</span></div>
+              <div class="fast">🧷<span class="fl">tape</span></div>
+              <div class="fast">📎<span class="fl">staple</span></div>
+              <div class="fast">👍<span class="fl">just stick</span></div>
+            </div>
+          </div>
+          <div class="finalise"><div class="stick">Press to post ▸</div></div>
+        </div>
+      </div></div>
+      <p class="cap"><b>The fastener is the submit.</b> Pick pin / tape / staple / just-stick, press, and the note goes up. The chosen fastener is stored on the note (it shows on the wall).</p>
+    </div>
+
+    <!-- POSTED to cork -->
+    <div>
+      <div class="posted">
+        <div class="p-note"><span class="pin2"></span>thanks!<br>great site<br><span style="font-size:.72rem;color:rgba(0,0,0,.5)">— your name</span></div>
+        <div class="pending">Pinned up — waiting to be approved</div>
+      </div>
+      <p class="cap"><b>Posted → pending.</b> Same note object, now on warm cork with its pin. Diegetic pending state while it waits for the approval CLI to clear it onto the public wall.</p>
+    </div>
+  </div>
+
+  <div class="sec-head" style="margin-top:34px"><span class="hint">scales up: tray becomes a left rail, the desk gets air, the note grows — same tools, same gestures</span></div>
+  <div class="desktop">
+    <div class="rail">
+      <div class="ico held">✍️</div><div class="ico">🅣</div><div class="ico">⭐</div><div class="ico">🩹</div><div class="ico">🥢</div>
+    </div>
+    <div class="deskarea">
+      <div class="rnote" style="width:200px">
+        <span class="rh rot"></span><span class="rh tl"></span><span class="rh tr"></span><span class="rh bl"></span><span class="rh br"></span>
+        <div class="rtb" style="top:16px;left:16px;font-family:'Patrick Hand';color:var(--ink-blue);font-size:1.1rem">wider desk,<br>more room</div>
+        <span class="who">— your name</span>
+      </div>
+      <div class="finalise" style="position:absolute; bottom:0; left:0; right:0;"><div class="stick" style="max-width:180px; margin-left:auto">📌 Stick it up</div></div>
+    </div>
+  </div>
+</section>
+
 <footer>
-  Throwaway probe on <code>prototype/49-sticky-look</code> · not merged · Surface = corkboard, default font = Patrick Hand. Now iterating the editor & text boxes — react and I'll keep going.
+  Throwaway probe on <code>prototype/49-sticky-look</code> · not merged · Corkboard wall + cutting-mat editor, Patrick Hand default. Fastener = submit. React and I'll keep refining.
 </footer>
 </body>
 </html>
