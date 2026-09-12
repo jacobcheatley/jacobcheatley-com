@@ -1,15 +1,21 @@
 import { getStroke } from "perfect-freehand";
+import { useId } from "react";
 import { FONT_FAMILIES } from "./note-fonts";
 import type { Ink, NoteContent, PaperColour } from "./note-schema";
 
 // The one pure, state-free renderer: note `content` JSON → SVG. Every surface
 // (wall tile, zoom view, editor, approval CLI) uses it, so notes render
-// identically everywhere. No hooks, no DOM, no side effects — it must run under
-// `renderToStaticMarkup` in a non-browser context (the CLI, #62).
+// identically everywhere. No state, no effects, no DOM reads — it must run under
+// `renderToStaticMarkup` in a non-browser context (the CLI, #62). `useId` is the
+// one hook used, purely for collision-free SVG ids when many notes share a page.
 //
-// Rotation / curl / fastener are NOT drawn here; consumers render them in CSS
-// around this SVG. The semantic colour keys resolve to shades below, in render
-// code, so stored notes never need migrating when the palette is re-tuned.
+// Rotation and fastener render in CSS *around* this SVG (handled by consumers);
+// the corner curl folds *inside* the SVG so it looks identical everywhere. The
+// semantic colour keys resolve to shades here, in render code, so stored notes
+// never need migrating when the palette is re-tuned.
+
+const CANVAS = 500;
+const MAX_FOLD = 120; // px a corner peels in at curl = 1
 
 // Paper backgrounds — soft, saturated sticky-note stock.
 const PAPER: Record<PaperColour, string> = {
@@ -38,6 +44,7 @@ const STROKE_OPTS = {
 const STICKER_BASE = 48; // px at scale 1
 
 type NoteElement = NoteContent["elements"][number];
+type Point = [number, number];
 
 // perfect-freehand's outline polygon → an SVG path (the median-quadratic helper
 // from its docs). noUncheckedIndexedAccess-safe via destructuring defaults.
@@ -75,6 +82,24 @@ function wrapLines(text: string, width: number, fontSize: number): string[] {
   }
   return lines;
 }
+
+// Paper outline, clockwise from top-left, with each bottom corner clipped back
+// by its fold size so the peeled triangle reveals whatever's behind the note.
+function paperPath(fbl: number, fbr: number): string {
+  const c = CANVAS;
+  return [
+    "M 0 0",
+    `L ${c} 0`,
+    `L ${c} ${c - fbr}`,
+    `L ${c - fbr} ${c}`,
+    `L ${fbl} ${c}`,
+    `L 0 ${c - fbl}`,
+    "Z",
+  ].join(" ");
+}
+
+const tri = (a: Point, b: Point, t: Point) =>
+  `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]} L ${t[0]} ${t[1]} Z`;
 
 // Array order IS z-order and element identity (no stored id) and this render
 // never reorders, so the array index is the correct, stable React key.
@@ -131,6 +156,18 @@ function renderElement(el: NoteElement, index: number) {
 }
 
 export function NoteRender({ content }: { content: NoteContent }) {
+  const uid = useId();
+  const clipId = `${uid}-clip`;
+  const faceBr = `${uid}-face-br`;
+  const faceBl = `${uid}-face-bl`;
+  const shadowId = `${uid}-shadow`;
+
+  const c = CANVAS;
+  const fbl = content.curl.bl * MAX_FOLD;
+  const fbr = content.curl.br * MAX_FOLD;
+  const hasFold = fbl > 0 || fbr > 0;
+  const paper = paperPath(fbl, fbr);
+
   return (
     <svg
       viewBox="0 0 500 500"
@@ -140,8 +177,53 @@ export function NoteRender({ content }: { content: NoteContent }) {
       aria-label="sticky note"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect x={0} y={0} width={500} height={500} fill={PAPER[content.colour]} />
-      {content.elements.map(renderElement)}
+      <defs>
+        <clipPath id={clipId}>
+          <path d={paper} />
+        </clipPath>
+        {hasFold && (
+          <>
+            {/* light paper back, darkening toward the crease, one per corner */}
+            <linearGradient id={faceBr} x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#fbfcfd" />
+              <stop offset="1" stopColor="#cdd1d5" />
+            </linearGradient>
+            <linearGradient id={faceBl} x1="1" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#fbfcfd" />
+              <stop offset="1" stopColor="#cdd1d5" />
+            </linearGradient>
+            <filter id={shadowId} x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow
+                dx="0"
+                dy="2"
+                stdDeviation="4"
+                floodColor="#000000"
+                floodOpacity="0.3"
+              />
+            </filter>
+          </>
+        )}
+      </defs>
+
+      {/* paper, then content clipped to the (corner-cut) paper shape */}
+      <path d={paper} fill={PAPER[content.colour]} />
+      <g clipPath={`url(#${clipId})`}>{content.elements.map(renderElement)}</g>
+
+      {/* folded corners last, on top of the content */}
+      {fbr > 0 && (
+        <path
+          d={tri([c - fbr, c], [c, c - fbr], [c - fbr, c - fbr])}
+          fill={`url(#${faceBr})`}
+          filter={`url(#${shadowId})`}
+        />
+      )}
+      {fbl > 0 && (
+        <path
+          d={tri([fbl, c], [0, c - fbl], [fbl, c - fbl])}
+          fill={`url(#${faceBl})`}
+          filter={`url(#${shadowId})`}
+        />
+      )}
     </svg>
   );
 }

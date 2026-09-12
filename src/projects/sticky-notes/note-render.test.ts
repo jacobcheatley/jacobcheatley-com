@@ -17,7 +17,7 @@ const content: NoteContent = {
   h: 500,
   colour: "yellow",
   rotation: 0,
-  curl: 0,
+  curl: { bl: 0, br: 0 },
   fastener: "pin",
   elements: [
     {
@@ -50,7 +50,8 @@ describe("NoteRender", () => {
     const svg = render(content);
     expect(svg).toContain('viewBox="0 0 500 500"');
 
-    const iStroke = svg.indexOf("<path");
+    // locate the stroke by its red ink fill (the first <path is the paper)
+    const iStroke = svg.indexOf("#dc2626");
     const iText = svg.indexOf("hello");
     const iSticker = svg.indexOf("⭐");
     expect(iStroke).toBeGreaterThanOrEqual(0);
@@ -59,6 +60,14 @@ describe("NoteRender", () => {
     // array order is z-order: stroke, then text, then sticker
     expect(iStroke).toBeLessThan(iText);
     expect(iText).toBeLessThan(iSticker);
+  });
+
+  it("folds a bottom corner only when its curl > 0", () => {
+    const flat = render({ ...content, curl: { bl: 0, br: 0 } });
+    const curled = render({ ...content, curl: { bl: 0, br: 0.6 } });
+    // the fold's lift shadow is only emitted when a corner is curled
+    expect(flat).not.toContain("feDropShadow");
+    expect(curled).toContain("feDropShadow");
   });
 
   it("is deterministic and needs no DOM", () => {
