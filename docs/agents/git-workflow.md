@@ -23,15 +23,17 @@ The full grammar as one regex (shared with the CI check in `.github/workflows/br
 
 ## Stacked PRs
 
-The rule above covers one self-contained change. A feature that graduates into a chain of dependent tickets — a spec's tickets that block one another, say — lands as a **stack** of PRs instead: each ticket's PR branches off the previous ticket's branch, not `main`, so a later PR can build on code that hasn't merged yet.
+The rule above covers one self-contained change. A feature that graduates into a chain of dependent tickets — a spec's tickets that block one another, say — lands as a **stack** of PRs: a first-class GitHub object where each ticket's PR builds on the branch below it, not on `main`, so a later PR can build on code that hasn't merged yet. Each PR is still reviewed independently with its own checks.
 
-This extends the squash-merge rule; it doesn't replace it:
+Stacks are managed with the `gh stack` CLI (`gh extension install github/gh-stack`), which removes the manual base-retargeting and bottom-up rebasing entirely:
 
-- While the stack is open, each PR's base is the branch below it, so its diff shows only that ticket's own changes.
-- Merge bottom-up: squash-merge the lowest PR into `main` first, then rebase the rest of the stack onto the new `main` and retarget the next PR's base to `main`. Repeat up the stack. Every PR still squash-merges into `main`.
-- Each branch still follows the `type/<ticket>-<short-name>` grammar; the stack is only how they're chained.
+- `gh stack init [branches...]` — start a stack on `main` (the trunk), adopting existing branches bottom-to-top.
+- `gh stack add <branch>` — add a branch on top of the stack.
+- `gh stack submit` — push every branch and create/update its PR and the stack on GitHub.
+- `gh stack sync` / `gh stack rebase` — cascade-rebase the stack onto its updated parents, so an edit low in the chain propagates up on its own; no per-branch rebasing by hand.
+- `gh stack merge` — GitHub's **atomic stack merge**: everything up to the chosen PR merges into `main` in one all-or-nothing operation. Pick **squash** as the merge method to keep the squash-merge rule. Branch protection and the `protect-main-merges` ruleset are evaluated when the merge runs (stacks can't bypass them).
 
-Manage the stack with the `gh stack` CLI — building the chain, keeping each PR's base correct, and restacking after a merge or a rebase.
+Each branch still follows the `type/<ticket>-<short-name>` grammar. This extends the squash-merge rule, it doesn't replace it: every PR still lands on `main` as a squash merge — the CLI just sequences the merges and rebases for you.
 
 ## Enforcement
 
