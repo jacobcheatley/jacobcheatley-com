@@ -756,22 +756,23 @@ describe("StickyEditor pointer gestures", () => {
   });
 });
 
+const tab = () => screen.getByRole("button", { name: /the sticker sheet/i });
+const cell = (emoji: string) =>
+  screen.getByRole("button", { name: `Peel the ${emoji} sticker` });
+// peel one off the sheet and let go at a point on the mat
+const dragTo = (emoji: string, x: number, y: number) => {
+  // a placement leaves the sheet up, so only pull it out when it is away
+  if (tab().getAttribute("aria-expanded") === "false") fireEvent.click(tab());
+  const slot = cell(emoji);
+  down(slot, 300, 600);
+  move(slot, x, y);
+  fireEvent.pointerUp(slot, { clientX: x, clientY: y, pointerId: 1 });
+  return slot;
+};
+
 describe("StickyEditor sticker sheet", () => {
-  const tab = () => screen.getByRole("button", { name: /the sticker sheet/i });
-  const cell = (emoji: string) =>
-    screen.getByRole("button", { name: `Peel the ${emoji} sticker` });
   const upAt = (el: HTMLElement, x: number, y: number) =>
     fireEvent.pointerUp(el, { clientX: x, clientY: y, pointerId: 1 });
-  // peel one off the sheet and let go at a point on the mat
-  const dragTo = (emoji: string, x: number, y: number) => {
-    // a placement leaves the sheet up, so only pull it out when it is away
-    if (tab().getAttribute("aria-expanded") === "false") fireEvent.click(tab());
-    const slot = cell(emoji);
-    down(slot, 300, 600);
-    move(slot, x, y);
-    upAt(slot, x, y);
-    return slot;
-  };
 
   it("pulls the sheet up from the tab and puts it away again", () => {
     render(<StickyEditor initialContent={seeded({})} />);
@@ -1321,5 +1322,95 @@ describe("StickyEditor placing", () => {
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
     expect(pinned(onLanding)).toMatchObject([{ type: "text", text: "hi" }]);
+  });
+
+  it("places a dropped sticker: moved, turned by its corner, fixed by a press away that turns nothing", () => {
+    const onLanding = vi.fn();
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat })}
+        onLanding={onLanding}
+      />,
+    );
+    const surface = paperSurface();
+    dragTo("⭐", 250, 250);
+    // not stuck yet: outlined, with a corner handle and no width to set
+    expect(placingOutline()).not.toBeNull();
+    expect(handle("corner")).not.toBeNull();
+    expect(handle("width")).toBeNull();
+
+    drag(surface, [250, 250], [200, 220]); // its body
+    // the corner handle at (224, 244): a quarter turn round its centre
+    drag(surface, [224, 244], [176, 244]);
+    drag(surface, [450, 60], [450, 160]); // away: fixes it, turns nothing
+    expect(surface.style.transform).toContain("rotate(0deg)");
+    expect(placingOutline()).toBeNull();
+    expect(pinned(onLanding)).toEqual([
+      { type: "sticker", x: 200, y: 220, emoji: "⭐", scale: 1, rotation: 90 },
+    ]);
+  });
+
+  it("sends a placing sticker back to the sheet on Escape, and keeps the sheet up", () => {
+    const onLanding = vi.fn();
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat })}
+        onLanding={onLanding}
+      />,
+    );
+    paperSurface();
+    dragTo("⭐", 250, 250);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(placingOutline()).toBeNull();
+    expect(drawn()).toHaveLength(0);
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
+    expect(pinned(onLanding)).toEqual([]);
+  });
+
+  it("sends a placing sticker back to the sheet when it is dragged off the paper", () => {
+    const onLanding = vi.fn();
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat })}
+        onLanding={onLanding}
+      />,
+    );
+    const surface = paperSurface();
+    dragTo("⭐", 250, 250);
+
+    drag(surface, [250, 250], [-40, 250]); // 24 wide a side: wholly off
+    expect(placingOutline()).toBeNull();
+    expect(drawn()).toHaveLength(0);
+    expect(pinned(onLanding)).toEqual([]);
+  });
+
+  it("fixes a placing sticker when the next one is peeled", () => {
+    const onLanding = vi.fn();
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat })}
+        onLanding={onLanding}
+      />,
+    );
+    paperSurface();
+    dragTo("⭐", 100, 100);
+
+    down(cell("🔥"), 300, 600); // the peel alone fixes the star
+    expect(placingOutline()).toBeNull();
+    expect(drawn().map((el) => el.textContent)).toEqual(["⭐"]);
+    move(cell("🔥"), 400, 300);
+    fireEvent.pointerUp(cell("🔥"), {
+      clientX: 400,
+      clientY: 300,
+      pointerId: 1,
+    });
+
+    // the flame is the one being placed now: its box starts 24 left of 400
+    expect(placingOutline()?.getAttribute("x")).toBe("376");
+    expect(pinned(onLanding)).toMatchObject([
+      { emoji: "⭐", x: 100 },
+      { emoji: "🔥", x: 400 },
+    ]);
   });
 });

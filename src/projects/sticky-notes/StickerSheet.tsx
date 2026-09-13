@@ -11,7 +11,7 @@ import { STICKER_EMOJI } from "./note-schema";
 // The sticker sheet (#75): a pull-up sheet of printed stickers that the visitor
 // peels one off and drags onto the note. It owns the peel gesture and nothing
 // else — where a sticker lands is the editor's business (`onDrop`), which keeps
-// the note, the held tool and the open text draft out of this file entirely.
+// the note, the held tool and whatever is being placed out of this file.
 //
 // The sheet is sized to its 24 stickers, never to a fraction of the viewport
 // (the T0 verdict, #70): six 48px cells across, four rows down.

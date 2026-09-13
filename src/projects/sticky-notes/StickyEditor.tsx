@@ -42,6 +42,7 @@ import {
   HANDLE_TOUCH,
   hitsElement,
   hitTest,
+  isOffNote,
   moveElement,
   type Element as NoteElement,
   noteSide,
@@ -578,9 +579,10 @@ export default function StickyEditor({
     return [x, y, e.pressure || 0.5];
   }
 
-  // A sticker released off the sheet: it sticks only where it was dropped, and
-  // only if that is on the paper. Nothing else about the editor moves — the
-  // held tool and the mode are somebody else's gesture.
+  // A sticker released off the sheet: dropped on the paper, it lands there to
+  // be placed (#80) — moved and turned until a press elsewhere sticks it.
+  // Nothing else about the editor moves — the held tool and the mode are
+  // somebody else's gesture.
   function dropSticker(
     emoji: StickerEl["emoji"],
     clientX: number,
@@ -602,9 +604,7 @@ export default function StickyEditor({
     // sticker home instead of swallowing it.
     const live = contentRef.current;
     if (!live || live.elements.length >= MAX_ELEMENTS) return false;
-    apply(
-      addElement(live, { type: "sticker", x, y, emoji, scale: 1, rotation: 0 }),
-    );
+    applyPlacing({ type: "sticker", x, y, emoji, scale: 1, rotation: 0 });
     return true;
   }
 
@@ -844,7 +844,15 @@ export default function StickyEditor({
     if (busy() && activeId.current !== e.pointerId) return;
     activeId.current = null;
     const draft = draftRef.current;
+    const dragged = placingDragRef.current !== null;
     endGesture();
+    // A sticker let go wholly off the paper goes back to its sheet (the sheet
+    // never runs out, so there is nothing to fly home): nothing is added.
+    const placed = placingRef.current;
+    if (dragged && placed?.type === "sticker" && isOffNote(placed)) {
+      applyPlacing(null);
+      return;
+    }
     // iOS Safari raises the keyboard only for a focus() inside the gesture that
     // asked for it — a frame later and the box is live with no keyboard under
     // it. Keep this call synchronous here, and check it on a real phone. It
