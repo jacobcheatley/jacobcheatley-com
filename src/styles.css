@@ -61,6 +61,44 @@ body {
   }
 }
 
+/* The press-on (#77): a fastener chosen for the note just pinned up. The
+   fastener comes down from a little above the board and overshoots as it goes
+   in; the note gives under the thumb and settles. One generic motion for all
+   nine. Unlike the desk's other motion the timing lives here too: the
+   fastener layer is inside the note's SVG, where no inline style reaches. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-press] {
+    animation: note-press 350ms ease-out;
+  }
+  [data-press] [data-fastener] {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: fastener-press 350ms cubic-bezier(0.2, 0.8, 0.25, 1);
+  }
+}
+
+@keyframes note-press {
+  from,
+  to {
+    scale: 1;
+  }
+  40% {
+    scale: 0.975;
+  }
+}
+
+@keyframes fastener-press {
+  from {
+    scale: 1.4;
+  }
+  65% {
+    scale: 0.94;
+  }
+  to {
+    scale: 1;
+  }
+}
+
 /* The text caret while a note is being written (#74): a step blink, so it
    snaps on and off like a cursor instead of fading in and out. The rate is
    inline from a JS constant, like the desk's transitions, and

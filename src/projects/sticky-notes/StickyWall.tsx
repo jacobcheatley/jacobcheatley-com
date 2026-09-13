@@ -74,7 +74,17 @@ function LandingTile({ content }: { content: NoteContent }) {
     // z-45: the note flies in over the mat (z-40) as the mat slides away.
     <li data-landing="" className={`relative z-45 ${STILL}`}>
       <div className="relative w-32 select-none" style={tileStyle(content)}>
-        <NoteRender content={content} />
+        {/* Keyed by the fastener, so each choice mounts afresh and the
+            press-on (styles.css, on `data-press`) plays again. */}
+        <div
+          key={content.fastener}
+          data-press={
+            content.fastener === "none" ? undefined : content.fastener
+          }
+          className="h-full"
+        >
+          <NoteRender content={content} />
+        </div>
         <PendingBadge />
       </div>
       <div

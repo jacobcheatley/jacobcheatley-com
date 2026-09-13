@@ -1,10 +1,145 @@
-import type { ReactNode } from "react";
-import { EASE_OUT, SLIDE_MS, TAPE } from "./desk";
+import { type CSSProperties, type ReactNode, useState } from "react";
+import { createPortal } from "react-dom";
+import { EASE_OUT, SLIDE_MS, STILL, TAPE } from "./desk";
 import { FONT_FAMILIES } from "./note-fonts";
+import { FastenerPreview } from "./note-render";
+import {
+  FASTENERS,
+  type Fastener,
+  type NoteContent,
+  type PaperColour,
+} from "./note-schema";
 
 // Pinning a note up (#77): what happens between the mat and the wall. The
 // editor keeps the note and decides when; this file is the pieces it wears —
-// the tape labels and the note's flight onto the wall.
+// the tape labels, the note's flight onto the wall, and the pinning phase over
+// the wall: the fastener drawer.
+
+// Everything but `none`, which is what you get by not choosing. TS reads the
+// `!== "none"` test as narrowing the list's type, so no cast is needed.
+const CHOICES = FASTENERS.filter((f) => f !== "none");
+
+// What a fastener is called out loud: the drawer's buttons, for a screen reader.
+const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
+  "pin-red": "a red pin",
+  "pin-green": "a green pin",
+  "pin-yellow": "a yellow pin",
+  "pin-blue": "a blue pin",
+  "tape-masking": "masking tape",
+  "tape-clear": "clear tape",
+  staple: "a staple",
+  staples: "two staples",
+  stick: "sticky tack",
+};
+
+// A cardboard box of stationery; each fastener lies in a compartment of its own.
+const TRAY: CSSProperties = {
+  background: "linear-gradient(180deg, #dcc394, #c3a26b)",
+  boxShadow:
+    "0 -12px 30px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.35)",
+};
+const COMPARTMENT: CSSProperties = {
+  background: "#a9864f",
+  boxShadow: "inset 0 3px 6px rgba(0,0,0,.4)",
+};
+
+// The pinning phase, over the wall. Portalled to the body: the editor that
+// renders it lives inside the mat, which is off-screen and inert by now, and
+// whose transform would make `fixed` mean "fixed to the mat".
+export function PinUp({
+  content,
+  onChange,
+}: {
+  content: NoteContent;
+  onChange: (note: NoteContent) => void;
+}) {
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  return createPortal(
+    <FastenerDrawer
+      open={drawerOpen}
+      colour={content.colour}
+      onChoose={(fastener) => {
+        onChange({ ...content, fastener });
+        setDrawerOpen(false);
+      }}
+      onClose={() => setDrawerOpen(false)}
+      onOpen={() => setDrawerOpen(true)}
+    />,
+    document.body,
+  );
+}
+
+// The fastener drawer: rises from the bottom as the note lands, shows the nine
+// fasteners as they will look on this very paper, and folds away to a tab once
+// one is chosen — or when it is put away without one, which leaves `none`.
+function FastenerDrawer({
+  open,
+  colour,
+  onChoose,
+  onClose,
+  onOpen,
+}: {
+  open: boolean;
+  colour: PaperColour;
+  onChoose: (fastener: Fastener) => void;
+  onClose: () => void;
+  onOpen: () => void;
+}) {
+  return (
+    <>
+      <section
+        aria-label="Fastener drawer"
+        // folded away, its compartments are out of reach as well as sight
+        inert={!open}
+        // `starting:` is CSS @starting-style: the drawer's first frame is below
+        // the screen, so it rises into place instead of just being there.
+        className={`fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-3 starting:translate-y-full ${open ? "translate-y-0" : "translate-y-full"} ${STILL}`}
+        style={{ transition: `translate ${SLIDE_MS}ms ${EASE_OUT}` }}
+      >
+        <div
+          className="rounded-t-md px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          style={TRAY}
+        >
+          <div className="flex justify-end">
+            <button
+              type="button"
+              aria-label="Put the drawer away"
+              onClick={onClose}
+              className="h-10 w-10 border-0 bg-transparent p-0 font-sans text-2xl text-[#5c4523] leading-none"
+            >
+              ×
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {CHOICES.map((fastener) => (
+              <button
+                key={fastener}
+                type="button"
+                aria-label={`Fasten it with ${FASTENER_NAMES[fastener]}`}
+                onClick={() => onChoose(fastener)}
+                className="block rounded-sm border-0 px-1 pt-3 pb-1"
+                style={COMPARTMENT}
+              >
+                <FastenerPreview fastener={fastener} colour={colour} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+      {!open && (
+        <button
+          type="button"
+          aria-label="Open the fastener drawer"
+          onClick={onOpen}
+          className="-translate-x-1/2 fixed bottom-0 left-1/2 z-50 min-h-11 rounded-t-md border-0 px-5 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-[#5c4523] text-lg"
+          style={{ ...TRAY, fontFamily: FONT_FAMILIES.casual }}
+        >
+          fasteners
+        </button>
+      )}
+    </>
+  );
+}
 
 // A strip of masking tape with a word on it, in the casual hand: the desk's own
 // buttons ("pin it up", "back to the desk"), stuck on rather than printed.

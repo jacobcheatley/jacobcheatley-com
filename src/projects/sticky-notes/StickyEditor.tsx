@@ -82,7 +82,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
-import { flyToLanding, TapeLabel } from "./pin-up";
+import { flyToLanding, PinUp, TapeLabel } from "./pin-up";
 import { SHEET_H, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
@@ -1303,6 +1303,8 @@ export default function StickyEditor({
         onDrop={dropSticker}
         onClose={() => setSheetOpen(false)}
       />
+
+      {landing && onLanding && <PinUp content={landing} onChange={onLanding} />}
 
       {/* the held tool, riding a mouse with its nib on the hotspot. Parked
           off-screen until the pointer is over the paper. */}

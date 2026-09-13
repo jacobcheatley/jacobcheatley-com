@@ -658,11 +658,13 @@ export function NoteRender({ content }: { content: NoteContent }) {
         {fastenerDefs(content.fastener, fastenerIds)}
       </defs>
 
+      {/* `data-fastener` marks the fastener layer, which a note being pinned
+          up presses on by scaling (#77) */}
       {/* sticky tack sits behind the note, peeking out above the top edge */}
-      {fastenerBehind(content.fastener, fastenerIds)}
+      <g data-fastener="">{fastenerBehind(content.fastener, fastenerIds)}</g>
       {paper.body}
       {/* fastener on top of everything */}
-      {fastenerFront(content.fastener, fastenerIds)}
+      <g data-fastener="">{fastenerFront(content.fastener, fastenerIds)}</g>
     </svg>
   );
 }

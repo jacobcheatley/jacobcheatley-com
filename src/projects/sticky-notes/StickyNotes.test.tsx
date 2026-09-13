@@ -98,3 +98,58 @@ describe("StickyNotes pin it up", () => {
     expect(matPaper()).not.toBeVisible();
   });
 });
+
+const drawer = () => screen.getByRole("region", { name: /fastener drawer/i });
+const drawerTab = () =>
+  screen.queryByRole("button", { name: /open the fastener drawer/i });
+// what the landed note is fastened with, as the wall wears it
+const fastenedWith = () =>
+  landed()?.querySelector("[data-press]")?.getAttribute("data-press") ?? "none";
+
+describe("StickyNotes fastener drawer", () => {
+  async function pinned() {
+    render(<StickyNotes notes={[]} matUp />);
+    await tearOff();
+    pinItUp();
+  }
+
+  it("rises over the wall with the nine fasteners in it", async () => {
+    await pinned();
+    expect(drawer()).not.toHaveAttribute("inert");
+    expect(
+      within(drawer()).getAllByRole("button", { name: /^fasten it with/i }),
+    ).toHaveLength(9);
+    expect(drawerTab()).toBeNull();
+  });
+
+  it("fastens the landed note with the one chosen, and folds away to a tab", async () => {
+    await pinned();
+    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+
+    expect(fastenedWith()).toBe("pin-red");
+    expect(drawer()).toHaveAttribute("inert");
+    expect(drawerTab()).toBeInTheDocument();
+  });
+
+  it("opens again from its tab, and takes another choice", async () => {
+    await pinned();
+    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+    fireEvent.click(drawerTab() as HTMLElement);
+
+    expect(drawer()).not.toHaveAttribute("inert");
+    expect(drawerTab()).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /with two staples/i }));
+    expect(fastenedWith()).toBe("staples");
+  });
+
+  it("leaves the note with no fastener when put away without a choice", async () => {
+    await pinned();
+    fireEvent.click(
+      screen.getByRole("button", { name: /put the drawer away/i }),
+    );
+
+    expect(fastenedWith()).toBe("none");
+    expect(drawer()).toHaveAttribute("inert");
+    expect(drawerTab()).toBeInTheDocument();
+  });
+});
