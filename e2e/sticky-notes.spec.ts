@@ -12,23 +12,15 @@ test("a note drawn on the mat and pinned up shows on the wall as pending", async
   await page.goto("/sticky-notes");
   await page.getByRole("link", { name: "Pin a note" }).click();
 
-  // A tap that lands before the island has hydrated does nothing, so tap the
-  // stack until it says it has fanned out. The pads then only answer once the
-  // fan has settled, so keep tapping the yellow one until a sheet is down.
-  const stack = page.getByRole("button", { name: "Fan out the pads" });
-  await expect(async () => {
-    if ((await stack.getAttribute("aria-expanded")) !== "true")
-      await stack.click();
-    await expect(stack).toHaveAttribute("aria-expanded", "true", {
-      timeout: 500,
-    });
-  }).toPass();
+  // A tap that lands before the island has hydrated does nothing, so keep
+  // tapping the yellow pad on the chooser until a sheet is down. The pads
+  // overlap, so the tap goes on the strip of it that shows.
   const paper = page.locator("[data-colour]");
   await expect(async () => {
     if (!(await paper.isVisible()))
       await page
         .getByRole("button", { name: "Tear off a yellow sheet" })
-        .click({ timeout: 1000 });
+        .click({ position: { x: 40, y: 20 }, timeout: 1000 });
     await expect(paper).toBeVisible({ timeout: 500 });
   }).toPass();
 
