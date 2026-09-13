@@ -40,10 +40,10 @@ describe("StickyMat", () => {
   it("keeps the island mounted once the mat has been up", async () => {
     // The acceptance criterion behind the latch: a half-built note must survive
     // mat-down, so the editor may not unmount when the route goes back to the
-    // wall. The stack trigger is the island's stable marker.
+    // wall. A pad on the bare mat's chooser is the island's stable marker.
     const { rerender } = render(<StickyMat up={true} />);
     const editor = await screen.findByRole("button", {
-      name: /fan out the pads/i,
+      name: /tear off a yellow sheet/i,
     });
 
     rerender(<StickyMat up={false} />);

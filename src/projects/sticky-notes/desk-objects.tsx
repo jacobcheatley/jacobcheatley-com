@@ -10,16 +10,15 @@ import {
   type PaperColour,
 } from "./note-schema";
 
-// The things lying on the cutting mat, drawn: the pad stack's sheets, the
-// markers, the eraser, the draw/write rocker and the bin. Props in, CSS out —
-// no model, no pointer handling, no state of their own. StickyEditor owns all
-// of that and wears these.
+// The things lying on the cutting mat, drawn: the pads on the chooser, the
+// markers, the eraser, the draw/write rocker, the bin and its slip. Props in,
+// CSS out — no model, no pointer handling, no state of their own. StickyEditor
+// owns all of that and wears these.
 
-export const PAD = 48; // a pad's size — a thumb target, per the T0 verdict (#70)
-export const FAN_MS = 250;
-const FAN_STEP = 46; // fanned spacing: each pad keeps a ≥44px-wide target
-const FAN_LIFT = 76; // how far the fan rises off the strip
-const MID = (PAPER_COLOURS.length - 1) / 2;
+// The sheet's side on the mat, and so each pad's on the chooser: a pad is the
+// note's real size (#81).
+export const PAPER_SIDE = "min(88vw, 60vh)";
+const CHOOSER_MS = 400; // the pads left behind sliding away, or back
 
 const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
 
@@ -52,7 +51,7 @@ export const DESK_GAP = "clamp(0px, 1.5vw - 5px, 12px)";
 // Past zero the four markers lean on each other rather than wrap. ponytail: 4px
 // a side is the ceiling — 8px of overlap between neighbours, which is where a
 // 30px marker still reads as a separate pen. If a narrower phone than 320
-// turns up, take the width off the bin and the pad stack, not off this.
+// turns up, take the width off the bin and the sticker tab, not off this.
 const SQUEEZE = "clamp(-4px, (100vw - 420px) / 25, 0px)";
 
 // The fixed boxes the strip's objects lie in.
@@ -104,8 +103,8 @@ export function ToolSlot({
       aria-label={label}
       aria-pressed={held}
       onClick={onClick}
-      // z-10: where a tool's box meets the resting pad stack beside it (the
-      // black marker at 320), the tool is the thing under the finger.
+      // z-10: where a tool's box meets its neighbour's on a narrow strip, the
+      // tool is the thing under the finger.
       className="relative z-10 flex shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
       style={{
         ...slot,
@@ -453,33 +452,78 @@ export function ModeControl({
   );
 }
 
-// Resting, the pads sit as one compact pile; fanned, they lie in a shallow arc
-// with every colour a thumb's width of its own (the T0 slivers were unhittable).
-export function padStyle(
-  i: number,
-  colour: PaperColour,
-  fanned: boolean,
-  active: boolean,
-): CSSProperties {
-  const transform = fanned
-    ? `translate(${i * FAN_STEP}px, ${-FAN_LIFT + Math.abs(i - MID) * 4}px) rotate(${(i - MID) * 4}deg)`
-    : `translate(${i * 2}px, ${i * -1.5}px) rotate(${(i - MID) * 1.2}deg)`;
-  return {
-    width: PAD,
-    height: PAD,
-    transform,
-    // The note's own colour tops the resting pile, the way the pad you are
-    // working from ends up on top of a real desk. Fanned, the arc keeps
-    // PAPER_COLOURS order.
-    zIndex: active && !fanned ? 10 + PAPER_COLOURS.length : 10 + i,
-    transition: `transform ${FAN_MS}ms ${EASE_OUT}, box-shadow ${FAN_MS}ms`,
-    backgroundColor: PAPER[colour],
-    backgroundImage:
-      "linear-gradient(170deg, rgba(255,255,255,.4), rgba(255,255,255,0) 45%)",
-    boxShadow: active
-      ? "0 7px 11px rgba(0,0,0,.5), inset 0 -2px 0 rgba(0,0,0,.08)"
-      : "0 3px 6px rgba(0,0,0,.4), inset 0 -2px 0 rgba(0,0,0,.08)",
-  };
+// How much of each pad in the chooser's stack shows above the next (#81): the
+// height left once the top pad lies whole, shared by the five under it, and
+// never less than a thumb — past that the stack scrolls. `cqh` is a percent of
+// the chooser's own height (it is a size container), so the fit is CSS, with
+// nothing measured.
+const PEEK = `max(${TOUCH}px, (100cqh - ${PAPER_SIDE}) / 5)`;
+
+// The pad chooser (#81): with no note on the mat, the mat is six pads at the
+// note's real size, square to the screen, stacked down it so each shows a
+// strip and the last lies whole on top. Away, the pads slide off and fade —
+// all but the one torn from, which has just become the sheet.
+// No grid: #81 wants one wherever six fit at real size, but at PAPER_SIDE two
+// never fit side by side (176vw) or one above the other (120vh), so the stack
+// is the only layout that rule can pick. Revisit if the paper's size changes.
+export function PadChooser({
+  away,
+  torn,
+  onTear,
+  ref,
+}: {
+  // a note is on the mat: out of sight and out of reach
+  away: boolean;
+  // the colour of that note, whose pad went with the sheet
+  torn: PaperColour | null;
+  onTear: (colour: PaperColour, pad: HTMLElement) => void;
+  // the first pad, for the keyboard to start on
+  ref?: Ref<HTMLButtonElement>;
+}) {
+  return (
+    <div
+      data-slot="chooser"
+      inert={away}
+      className="absolute inset-x-0 top-16 overflow-y-auto overscroll-contain"
+      style={{
+        bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+        containerType: "size",
+      }}
+    >
+      <div className="flex flex-col items-center">
+        {PAPER_COLOURS.map((colour, i) => (
+          <button
+            key={colour}
+            ref={i === 0 ? ref : undefined}
+            type="button"
+            aria-label={`Tear off ${colour === "orange" ? "an" : "a"} ${colour} sheet`}
+            onClick={(e) => onTear(colour, e.currentTarget)}
+            // The focus ring drawn inside the pad: outside, the rest of the
+            // pad's ring pokes out from under the pads stacked over it. `!`
+            // because the site-wide focus ring is unlayered CSS, which beats
+            // any utility that isn't important.
+            className={`focus-visible:-outline-offset-4! shrink-0 rounded-[3px] border-0 p-0 ${STILL}`}
+            style={{
+              width: PAPER_SIDE,
+              height: PAPER_SIDE,
+              marginTop: i ? `calc(${PEEK} - ${PAPER_SIDE})` : 0,
+              backgroundColor: PAPER[colour],
+              backgroundImage:
+                "linear-gradient(170deg, rgba(255,255,255,.4), rgba(255,255,255,0) 45%)",
+              // the block of sheets under the top one shows along its bottom
+              // edge, and each pad throws a shadow up onto the strip behind it
+              boxShadow:
+                "inset 0 -7px 0 rgba(0,0,0,.08), 0 -3px 8px rgba(0,0,0,.25), 0 6px 12px rgba(0,0,0,.4)",
+              visibility: torn === colour ? "hidden" : undefined,
+              opacity: away ? 0 : 1,
+              transform: away ? "translateY(12vh)" : "none",
+              transition: `transform ${CHOOSER_MS}ms ${EASE_OUT}, opacity ${CHOOSER_MS}ms`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // The bin at the right end of the strip: a tapered steel basket. Inert with no
@@ -487,12 +531,16 @@ export function padStyle(
 export function Bin({
   onClick,
   disabled,
+  ref,
 }: {
   onClick: () => void;
   disabled: boolean;
+  // where the keyboard comes back to when the bin's question is answered no
+  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-label="Bin this note"
       data-slot="bin"
@@ -525,6 +573,57 @@ export function Bin({
         />
       </span>
     </button>
+  );
+}
+
+// The bin's question (#81): a slip of paper that pops up over the bin before a
+// note with anything on it goes in. What a press anywhere else means is the
+// editor's business.
+export function BinSlip({
+  onBin,
+  onKeep,
+  ref,
+}: {
+  onBin: () => void;
+  onKeep: () => void;
+  // the tick, which takes the keyboard when the slip appears
+  ref?: Ref<HTMLButtonElement>;
+}) {
+  const answer =
+    "flex h-11 w-11 items-center justify-center border-0 bg-transparent p-0 text-[1.5rem] leading-none";
+  return (
+    <div
+      data-slot="bin-slip"
+      className="absolute right-0 bottom-[calc(100%+10px)] z-50 flex items-center py-0.5 pr-0.5 pl-3"
+      style={{
+        background: "linear-gradient(180deg,#fffdf6,#ece3cf)",
+        boxShadow: "0 4px 9px rgba(0,0,0,.45)",
+        color: "#4a412c",
+        fontFamily: FONT_FAMILIES.casual,
+        fontSize: 19,
+        transform: "rotate(-2deg)",
+      }}
+    >
+      <span className="mr-1 whitespace-nowrap">bin it?</span>
+      <button
+        ref={ref}
+        type="button"
+        aria-label="Bin it"
+        onClick={onBin}
+        className={answer}
+        style={{ color: "#b91c1c" }}
+      >
+        ✓
+      </button>
+      <button
+        type="button"
+        aria-label="Keep it"
+        onClick={onKeep}
+        className={answer}
+      >
+        ✕
+      </button>
+    </div>
   );
 }
 

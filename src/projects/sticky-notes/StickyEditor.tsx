@@ -11,17 +11,17 @@ import { flushSync } from "react-dom";
 import { capturePointer, EASE_OUT, SHEET_MS, STILL, TAB_PERCH } from "./desk";
 import {
   Bin,
+  BinSlip,
   DESK_GAP,
   ERASER_SLOT,
   EraserBody,
-  FAN_MS,
   heldTool,
   MARKER_SLOT,
   MarkerBody,
   type Mode,
   ModeControl,
-  PAD,
-  padStyle,
+  PAPER_SIDE,
+  PadChooser,
   SHAKE_MS,
   StickerTab,
   TapeLabel,
@@ -76,16 +76,16 @@ import {
   MAX_POINTS_PER_STROKE,
   MAX_TEXT_LEN,
   type NoteContent,
-  PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
 import { flyToLanding, PinUp } from "./pin-up";
 import { SHEET_H, StickerSheet } from "./StickerSheet";
 
-// What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
-// the bin, and the stationery — four markers, the draw/write control and the
-// eraser. The mat surface itself is StickyMat; this is the island it lazy-loads,
-// and the file the later tickets grow into: T5 hangs the sticker sheet off the
+// What lies on the cutting mat (#73, #74, #81): the pad chooser while there is
+// no note, the sheet torn off a pad, the bin, and the stationery — four
+// markers, the draw/write control and the eraser. The mat surface itself is
+// StickyMat; this is the island it lazy-loads, and the file the later tickets
+// grow into: T5 hangs the sticker sheet off the
 // reserved tab slot, T6 rotates the note and adds on-note handles, T7 the
 // pinning phase.
 //
@@ -106,11 +106,9 @@ const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
 const TEXT_SIZE = 30;
 const TEXT_W = 240;
 
-// ponytail: the tear-off and crumple fly from fixed viewport-relative points
-// (the pad stack's corner, the bin's corner) rather than the objects' measured
-// boxes. Upgrade to a measured FLIP if the strip ever moves off the bottom edge
-// — T7 needs real measurement anyway for the note's travel onto the wall.
-const TEAR_FROM = "translate(-34vw, 36vh) rotate(-16deg) scale(.12)";
+// ponytail: the crumple flies to a fixed viewport-relative point (the bin's
+// corner) rather than the bin's measured box. Measure it if the bin ever moves
+// off the strip's right end. The tear-off is measured: it starts on its pad.
 const CRUMPLE_TO = "translate(34vw, 38vh) rotate(260deg) scale(.06)";
 
 type StrokeEl = Extract<NoteElement, { type: "stroke" }>;
@@ -154,20 +152,19 @@ export default function StickyEditor({
   // is the only way content changes, so the two can't drift.
   const contentRef = useRef(content);
   contentRef.current = content;
-  const [fanned, setFanned] = useState(false);
-  // The pads are only a target once they have flown: a second tap landing on
-  // the stack mid-flight would otherwise tear off whichever colour is passing.
-  const [fanSettled, setFanSettled] = useState(false);
-  // `tearing` parks the fresh sheet at the pad for one frame; dropping it lets
-  // the transition carry the sheet to the middle of the mat. `crumpling` is the
-  // same trick in reverse, into the bin.
-  const [tearing, setTearing] = useState(false);
+  // `tearing` is where a fresh sheet starts, over the pad it came off: it is
+  // parked there for a frame, and dropping it lets the transition carry the
+  // sheet to the middle of the mat. `crumpling` is the same trick in reverse,
+  // into the bin.
+  const [tearing, setTearing] = useState<string | null>(null);
   const [crumpling, setCrumpling] = useState(false);
+  // The bin is asking whether the note may go (#81).
+  const [asking, setAsking] = useState(false);
 
   const [held, setHeld] = useState<Held>(null);
   const [mode, setMode] = useState<Mode>("draw");
   const [font, setFont] = useState<Font>("casual"); // the editor's default
-  // The font samples pop up over the mat, like the fanned pads: opened by the
+  // The font samples pop up over the mat: opened by the
   // "Aa" side of the rocker, closed by a tap elsewhere, Escape or a choice.
   const [fontsOpen, setFontsOpen] = useState(false);
   // The sticker sheet is independent of what is in your hand: opening it neither
@@ -216,12 +213,15 @@ export default function StickyEditor({
   // and the strip's layout changes with the viewport.
   const [tabLift, setTabLift] = useState(0);
 
-  const trigger = useRef<HTMLButtonElement>(null);
   // "pin it up": where the keyboard comes back to when the note does
   const pinButton = useRef<HTMLButtonElement>(null);
   const stickerTab = useRef<HTMLButtonElement>(null);
   const rocker = useRef<HTMLDivElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
+  const binButton = useRef<HTMLButtonElement>(null);
+  const binYes = useRef<HTMLButtonElement>(null);
+  // the box the sheet is centred in, so where a torn-off sheet lands
+  const stage = useRef<HTMLDivElement>(null);
   const crumpleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const paperRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
@@ -294,7 +294,7 @@ export default function StickyEditor({
     if (!tearing) return;
     let inner = 0;
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setTearing(false));
+      inner = requestAnimationFrame(() => setTearing(null));
     });
     return () => {
       cancelAnimationFrame(outer);
@@ -302,25 +302,40 @@ export default function StickyEditor({
     };
   }, [tearing]);
 
-  // The fan's whole life: settle it, put the keyboard on it, let Escape close it.
+  // No note: the whole mat is the pad chooser, so the keyboard starts on it —
+  // once the mat is up, since nothing on a mat that has gone down takes focus.
+  const choosing = content === null;
   useEffect(() => {
-    if (!fanned) {
-      setFanSettled(false);
+    if (choosing && up) firstPad.current?.focus();
+  }, [choosing, up]);
+
+  // The bin's question: the tick has the keyboard; the cross, Escape or a
+  // press anywhere else keeps the note, and that press still does its own job.
+  // Escape is caught first, like placing's, so it doesn't also put the sticker
+  // sheet away. A mat taken down mid-question just drops it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keepIt reads only a ref and a state setter, so the copy from the render that armed this is as good as the latest.
+  useEffect(() => {
+    if (!asking) return;
+    if (!up) {
+      setAsking(false);
       return;
     }
-    firstPad.current?.focus();
-    const timer = setTimeout(() => setFanSettled(true), FAN_MS);
+    binYes.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      setFanned(false);
-      trigger.current?.focus();
+      e.stopPropagation();
+      keepIt();
     };
-    window.addEventListener("keydown", onKey);
+    const away = (e: PointerEvent) => {
+      if (!(e.target as Element).closest('[data-slot="bin-slip"]')) keepIt();
+    };
+    window.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", away);
     return () => {
-      clearTimeout(timer);
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("pointerdown", away);
     };
-  }, [fanned]);
+  }, [asking, up]);
 
   useEffect(
     () => () => {
@@ -525,31 +540,52 @@ export default function StickyEditor({
     setPlacing(next);
   }
 
-  // A pad with no note on the mat tears a fresh sheet off; with a note already
-  // there it swaps the stock under the content. Both wait for the objects to
-  // stop moving — mid-crumple there is no note to swap the paper under yet.
-  function takeSheet(colour: PaperColour) {
-    if (!fanSettled || crumpling) return;
-    setFanned(false);
-    if (content) {
-      apply({ ...content, colour });
-      return;
-    }
-    apply({ ...emptyNote(), colour });
-    setTearing(true);
+  // A pad on the chooser tears a fresh sheet off (#81), and that colour is the
+  // note's for good. The sheet starts square over the pad it came off — a pad
+  // is the paper's own size, so only the move is measured — and lands with
+  // its tilt.
+  function takeSheet(colour: PaperColour, pad: HTMLElement) {
+    if (content) return;
+    const note = { ...emptyNote(), colour };
+    const from = pad.getBoundingClientRect();
+    const to = stage.current?.getBoundingClientRect();
+    const dx = to ? from.left + from.width / 2 - (to.left + to.width / 2) : 0;
+    const dy = to ? from.top + from.height / 2 - (to.top + to.height / 2) : 0;
+    apply(note);
+    setTearing(`translate(${dx}px, ${dy}px) rotate(${-note.rotation}deg)`);
   }
 
+  // The bin (#81): a note with anything on it asks first, a blank one goes
+  // straight in. What is being placed is fixed first, so it counts.
   function binIt() {
     fixPlacing();
-    if (!content || crumpling) return;
-    const { colour } = content;
+    const live = contentRef.current;
+    if (!live || crumpling) return;
+    if (live.elements.length > 0) setAsking(true);
+    else crumple();
+  }
+
+  function crumple() {
+    setAsking(false);
     setCrumpling(true);
     crumpleTimer.current = setTimeout(() => {
       setCrumpling(false);
-      // the live colour, not the one captured at the tap
-      apply({ ...emptyNote(), colour: contentRef.current?.colour ?? colour });
-      setTearing(true);
+      clearMat();
     }, CRUMPLE_MS);
+  }
+
+  function keepIt() {
+    setAsking(false);
+    binButton.current?.focus();
+  }
+
+  // No note on the mat: back to the pad chooser. Nothing stays in hand or up,
+  // so the next sheet starts in hand mode like the first.
+  function clearMat() {
+    apply(null);
+    setHeld(null);
+    setSheetOpen(false);
+    setFontsOpen(false);
   }
 
   // "pin it up": the note leaves the mat for its slot on the wall. It goes as it
@@ -985,7 +1021,10 @@ export default function StickyEditor({
   return (
     <div className="absolute inset-0 select-none">
       {/* the sheet: bare paper, centred, clear of the strip */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-32">
+      <div
+        ref={stage}
+        className="pointer-events-none absolute inset-x-0 top-0 bottom-32 flex items-center justify-center"
+      >
         {shown && (
           <div
             // The sticker sheet takes the bottom of the mat, so the note moves
@@ -1012,7 +1051,7 @@ export default function StickyEditor({
               onPointerCancel={onPaperUp}
               onPointerLeave={leavePaper}
               style={{
-                width: "min(88vw, 60vh)",
+                width: PAPER_SIDE,
                 aspectRatio: NOTE_PAPER_ASPECT_RATIO,
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
                 // the held tool IS the cursor over the paper
@@ -1092,70 +1131,30 @@ export default function StickyEditor({
         </TapeLabel>
       )}
 
-      {/* a fanned stack closes on a tap anywhere else */}
-      {fanned && (
-        <button
-          type="button"
-          aria-label="Close the pads"
-          className="absolute inset-0 z-20 h-full w-full cursor-default border-0 bg-transparent p-0"
-          onClick={() => setFanned(false)}
-        />
-      )}
+      <PadChooser
+        ref={firstPad}
+        away={!choosing}
+        torn={content?.colour ?? null}
+        onTear={takeSheet}
+      />
 
       {/* the desk strip: the mat's bottom edge, where the objects lie. ONE row
-          at every width (#74) — three groups on the same edge: left, the pads;
-          centre, the markers and the draw/write control; right, the sticker
-          tab, the eraser, then the bin. Nothing wraps and nothing moves up: the
-          corners are where the corner objects live, and the room a narrow
-          screen takes comes out of the space BETWEEN the markers, never out of
-          the four corners. */}
+          at every width (#74) — two groups on the same edge: centre, the
+          markers and the draw/write control; right, the sticker tab, the
+          eraser, then the bin. Nothing wraps and nothing moves up: the room a
+          narrow screen takes comes out of the space BETWEEN the markers, never
+          out of the corner. While a pad is being chosen the strip is away
+          below the mat's edge, and out of reach. */}
       <div
-        className="absolute inset-x-0 bottom-0 flex items-end justify-between pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-        style={{ paddingInline: DESK_GAP }}
+        data-slot="tray"
+        inert={choosing}
+        className={`absolute inset-x-0 bottom-0 flex items-end justify-between pb-[max(0.75rem,env(safe-area-inset-bottom))] ${STILL}`}
+        style={{
+          paddingInline: DESK_GAP,
+          transform: choosing ? "translateY(110%)" : "none",
+          transition: `transform ${TEAR_MS}ms ${EASE_OUT}`,
+        }}
       >
-        <div
-          data-slot="pads"
-          // `isolate` keeps the trigger's z-30 inside this box, so the
-          // resting stack sits UNDER the marker leaning on it; fanned, the
-          // pile has to clear the backdrop that closes it (z-20).
-          className={`relative isolate shrink-0${fanned ? " z-30" : ""}`}
-          // A hair narrower than the resting pile is wide: at 320 those two
-          // pixels are the difference between the strip fitting and the bin
-          // hanging off the mat. The marker beside it leans over the pile's
-          // last couple of pixels, and is the thing under the finger there.
-          style={{ width: PAD + 8, height: PAD + 8 }}
-        >
-          {PAPER_COLOURS.map((colour, i) => (
-            <button
-              key={colour}
-              type="button"
-              ref={i === 0 ? firstPad : undefined}
-              // Closed, the pads are not individually reachable: the stack in
-              // front of them is the only target.
-              disabled={!fanned}
-              aria-label={
-                content
-                  ? `Switch to ${colour} paper`
-                  : `Tear off ${colour === "orange" ? "an" : "a"} ${colour} sheet`
-              }
-              onClick={() => takeSheet(colour)}
-              className={`absolute bottom-0 left-0 rounded-[3px] border-0 p-0 ${STILL}`}
-              style={padStyle(i, colour, fanned, content?.colour === colour)}
-            />
-          ))}
-          <button
-            type="button"
-            ref={trigger}
-            aria-label="Fan out the pads"
-            aria-expanded={fanned}
-            onClick={() => setFanned((open) => !open)}
-            // The hit area grows left, up and down but NOT right: past the
-            // stack's own box it lands on the black marker, which at 320 is
-            // already leaning under it (#74's SQUEEZE).
-            className="-inset-y-1.5 -left-1.5 absolute right-0 z-30 min-h-12 min-w-12 border-0 bg-transparent p-0"
-          />
-        </div>
-
         {/* The markers close up as the screen narrows: the gap is whatever room
             is left over, and at zero the SQUEEZE in MARKER_SLOT leans them on
             each other. The group keeps the middle of the strip either way. */}
@@ -1225,7 +1224,14 @@ export default function StickyEditor({
                 when the eraser is the tool in hand (#74) */}
             <EraserBody held={held === "eraser"} using={using} />
           </ToolSlot>
-          <Bin onClick={binIt} disabled={!content || crumpling} />
+          <div className="relative shrink-0">
+            <Bin
+              ref={binButton}
+              onClick={binIt}
+              disabled={!content || crumpling}
+            />
+            {asking && <BinSlip ref={binYes} onBin={crumple} onKeep={keepIt} />}
+          </div>
         </div>
       </div>
 
@@ -1251,7 +1257,7 @@ export default function StickyEditor({
             pinButton.current?.focus();
           }}
           // sent: the mat is bare again for the next note
-          onPinned={() => apply(null)}
+          onPinned={clearMat}
         />
       )}
 
@@ -1276,7 +1282,8 @@ export default function StickyEditor({
 // paper about its own centre whatever the flight did to it — and the pointer
 // mapping reads that same centre back off the box.
 function noteMotion(
-  tearing: boolean,
+  // the transform a sheet being torn off starts from, for its first frame
+  tearing: string | null,
   crumpling: boolean,
   rotation: number,
   turning: boolean,
@@ -1288,7 +1295,7 @@ function noteMotion(
       opacity: 0,
       transition: `transform ${CRUMPLE_MS}ms cubic-bezier(.5,0,.8,.35), opacity ${CRUMPLE_MS}ms ease-in`,
     };
-  if (tearing) return { transform: `${TEAR_FROM} ${tilt}`, transition: "none" };
+  if (tearing) return { transform: `${tearing} ${tilt}`, transition: "none" };
   return {
     transform: tilt,
     // A sheet being turned must sit under the finger, not ease towards it.

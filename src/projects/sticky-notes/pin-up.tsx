@@ -285,7 +285,7 @@ function FastenerDrawer({
 }) {
   // The keyboard goes where the drawer is: rising, it takes the focus from
   // whatever just went out from under it — "pin it up" on the mat sliding away,
-  // or the tab it replaces. The same move the pad fan makes (StickyEditor).
+  // or the tab it replaces. The same move the pad chooser makes (StickyEditor).
   const firstChoice = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (open) firstChoice.current?.focus();

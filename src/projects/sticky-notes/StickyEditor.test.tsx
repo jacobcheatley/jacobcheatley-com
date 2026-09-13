@@ -4,28 +4,24 @@ import { type Element, emptyNote } from "./note-editor";
 import { MAX_ELEMENTS, type NoteContent, STICKER_EMOJI } from "./note-schema";
 import StickyEditor from "./StickyEditor";
 
-// The desk island (#73). No tools yet — markers, eraser and stickers land in
-// T4/T5 — so on this mat a note can only be born at the pad stack and only die
-// in the bin. Motion is CSS; these tests assert the state a transition carries,
-// never the transition itself.
+// The desk island (#73). A note is born at the pad chooser and dies in the bin,
+// which sends the mat back to the chooser (#81). Motion is CSS; these tests
+// assert the state a transition carries, never the transition itself.
 
-// Both the fan and the crumple only take effect once their timer has run, so
+// The crumple and the rubbed-out fade only finish once their timer has run, so
 // the whole file runs on fake timers and steps past them explicitly.
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-const FAN_SETTLED = 300; // > FAN_MS
 const CRUMPLED = 600; // > CRUMPLE_MS
 const GHOST_MS = 400; // > the rubbed-out fade
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-const stack = () => screen.getByRole("button", { name: /fan out the pads/i });
-// a pad is the only button whose label ends in that colour's paper/sheet —
-// the markers name colours too ("Pick up the blue marker")
+// a pad is the only button whose label ends in that colour's sheet — the
+// markers name colours too ("Pick up the blue marker")
 const pad = (colour: string) =>
-  screen.getByRole("button", {
-    name: new RegExp(`${colour} (paper|sheet)`, "i"),
-  });
+  screen.getByRole("button", { name: new RegExp(`${colour} sheet`, "i") });
+const pads = () => screen.getAllByRole("button", { name: /tear off/i });
 const bin = () => screen.getByRole("button", { name: /bin this note/i });
 // the fixed boxes the strip's objects lie in, by the marker on each
 const slot = (name: string) =>
@@ -40,10 +36,11 @@ const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
   note()?.closest("[data-colour]")?.getAttribute("data-colour");
 
-const fanOut = () => {
-  fireEvent.click(stack());
-  wait(FAN_SETTLED);
-};
+// The chooser and the tray take turns: whichever is away is inert, so nothing
+// on it is reachable by pointer, keyboard or screen reader.
+const chooser = () => slot("chooser");
+const tray = () => slot("tray");
+const held = () => screen.queryAllByRole("button", { name: /put down/i });
 
 const HI: Element = {
   type: "text",
@@ -68,118 +65,123 @@ const seeded = (over: Partial<NoteContent>): NoteContent => ({
 // no curl: a corner fold would take a press meant for the paper
 const flat = { bl: 0, br: 0 };
 
-describe("StickyEditor", () => {
-  it("starts bare: no note on the mat and no reachable pad", () => {
+describe("StickyEditor pad chooser", () => {
+  it("fills a bare mat with the six pads, and nothing else to reach", () => {
     render(<StickyEditor />);
+
     expect(note()).toBeNull();
-    expect(pad("blue")).toBeDisabled();
+    expect(pads()).toHaveLength(6);
+    expect(chooser()).not.toHaveAttribute("inert");
+    expect(tray()).toHaveAttribute("inert");
     expect(bin()).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /pin it up/i })).toBeNull();
   });
 
-  it("fans the stack on the first tap, without tearing a sheet off", () => {
+  it("puts the keyboard on the first pad", () => {
     render(<StickyEditor />);
-    fanOut();
-
-    expect(pad("blue")).toBeEnabled();
-    expect(note()).toBeNull();
-    // the trigger stays put and says which way it points
-    expect(stack()).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("moves focus onto the fan so the keyboard can pick a colour", () => {
-    render(<StickyEditor />);
-    fanOut();
-
     expect(pad("yellow")).toHaveFocus();
   });
 
-  it("tears a sheet off a fanned pad and closes the stack", () => {
+  it("tears a sheet off the pad tapped, and puts the chooser away for the tray", () => {
     render(<StickyEditor />);
-    fanOut();
     fireEvent.click(pad("blue"));
 
     expect(paper()).toBe("blue");
-    expect(pad("blue")).toBeDisabled();
+    expect(chooser()).toHaveAttribute("inert");
+    expect(tray()).not.toHaveAttribute("inert");
+    expect(
+      screen.getByRole("button", { name: /pin it up/i }),
+    ).toBeInTheDocument();
+    expect(held()).toEqual([]); // hand mode
   });
 
-  it("ignores a pad tapped before the fan has settled", () => {
-    render(<StickyEditor />);
-    fireEvent.click(stack());
-    fireEvent.click(pad("blue")); // the pads are still in flight
-    expect(note()).toBeNull();
-
-    wait(FAN_SETTLED);
-    fireEvent.click(pad("blue"));
-    expect(paper()).toBe("blue");
+  it("offers no way to change the paper once it is torn", () => {
+    render(<StickyEditor initialContent={seeded({ colour: "pink" })} />);
+    expect(chooser()).toHaveAttribute("inert");
+    // no pad on the tray to swap the stock with
+    expect(screen.queryByRole("button", { name: /paper/i })).toBeNull();
   });
+});
 
-  it("swaps the paper under the content when another pad is tapped", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ colour: "yellow", elements: [HI] })}
-      />,
-    );
-    fanOut();
-    fireEvent.click(pad("pink"));
+describe("StickyEditor bin", () => {
+  const slip = () => screen.queryByText(/bin it\?/i);
+  const yes = () => screen.getByRole("button", { name: "Bin it" });
 
-    expect(paper()).toBe("pink");
+  it("asks before binning a note with something on it", () => {
+    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    fireEvent.click(bin());
+
+    expect(slip()).not.toBeNull();
+    expect(yes()).toHaveFocus();
+    wait(CRUMPLED); // and nothing happens while it waits for an answer
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
-  it("rests the note's own colour on top of the pile", () => {
-    render(<StickyEditor initialContent={seeded({ colour: "pink" })} />);
+  it.each([
+    [
+      "Keep it",
+      () => fireEvent.click(screen.getByRole("button", { name: "Keep it" })),
+    ],
+    [
+      "Escape",
+      () =>
+        fireEvent.keyDown(document.activeElement as HTMLElement, {
+          key: "Escape",
+        }),
+    ],
+    ["a press anywhere else", () => fireEvent.pointerDown(document.body)],
+  ])("keeps the note on %s", (_, answer) => {
+    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    fireEvent.click(bin());
+    answer();
 
-    expect(Number(pad("pink").style.zIndex)).toBeGreaterThan(
-      Number(pad("white").style.zIndex),
-    );
+    expect(slip()).toBeNull();
+    expect(bin()).toHaveFocus();
+    wait(CRUMPLED);
+    expect(screen.getByText("hi")).toBeInTheDocument();
+    expect(chooser()).toHaveAttribute("inert");
   });
 
-  it("closes the fan on a tap anywhere else", () => {
-    render(<StickyEditor />);
-    fanOut();
-    fireEvent.click(screen.getByRole("button", { name: /close the pads/i }));
+  it("lets the press that keeps the note go on to do its own job", () => {
+    render(
+      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
+    );
+    pickUp(/pick up the black marker/i);
+    fireEvent.click(bin());
 
-    expect(pad("blue")).toBeDisabled();
+    const surface = paperSurface();
+    down(surface, 100, 300);
+    move(surface, 200, 350);
+    up(surface);
+    expect(slip()).toBeNull();
+    expect(drawn()).toHaveLength(2);
+  });
+
+  it("crumples the note once told to, and the chooser comes back", () => {
+    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    fireEvent.click(bin());
+    fireEvent.click(yes());
+
+    expect(slip()).toBeNull();
+    expect(screen.getByText("hi")).toBeInTheDocument(); // on its way in
+    wait(CRUMPLED);
     expect(note()).toBeNull();
+    expect(chooser()).not.toHaveAttribute("inert");
+    expect(tray()).toHaveAttribute("inert");
+    expect(pad("yellow")).toHaveFocus();
   });
 
-  it("closes the fan on Escape", () => {
-    render(<StickyEditor />);
-    fanOut();
-    fireEvent.keyDown(window, { key: "Escape" });
-
-    expect(pad("blue")).toBeDisabled();
-    expect(stack()).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("crumples the note into the bin and tears a fresh sheet of the same colour", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ colour: "pink", elements: [HI] })}
-      />,
-    );
+  it("bins a blank note at once, and the next sheet starts empty-handed", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the red marker/i);
     fireEvent.click(bin());
+
+    expect(slip()).toBeNull();
     wait(CRUMPLED);
-
-    expect(paper()).toBe("pink");
-    expect(screen.queryByText("hi")).toBeNull();
-  });
-
-  it("ignores a colour swap made while the note is crumpling", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ colour: "pink", elements: [HI] })}
-      />,
-    );
-    fireEvent.click(bin());
-    expect(bin()).toBeDisabled();
-
-    fanOut(); // still mid-flight: the fan settles inside the crumple
-    fireEvent.click(pad("blue"));
-    wait(CRUMPLED);
-
-    expect(paper()).toBe("pink");
-    expect(screen.queryByText("hi")).toBeNull();
+    expect(note()).toBeNull();
+    fireEvent.click(pad("green"));
+    expect(paper()).toBe("green");
+    expect(held()).toEqual([]);
   });
 });
 
@@ -544,7 +546,6 @@ describe("StickyEditor thumb targets", () => {
   const slots = () => [
     eraserSlot(),
     tabSlot(),
-    slot("pads"),
     slot("bin"),
     ...screen
       .getAllByRole("button", { name: /(pick up|put down) the .* marker/i })
@@ -602,9 +603,8 @@ describe("StickyEditor thumb targets", () => {
     for (const el of [strip, centre])
       expect(el?.className).not.toMatch(/max-sm:/);
 
-    // left, centre, right — direct children of the one row, in that order
+    // centre, right — direct children of the one row, in that order
     expect([...(strip?.children ?? [])]).toEqual([
-      slot("pads"),
       centre,
       eraserSlot().parentElement,
     ]);

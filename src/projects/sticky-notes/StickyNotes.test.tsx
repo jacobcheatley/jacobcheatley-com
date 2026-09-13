@@ -95,17 +95,15 @@ const tap = (name: RegExp) =>
 const pinItUp = () => tap(/pin it up/i);
 const putTheDrawerAway = () => tap(/put the drawer away/i);
 
-// The island is lazy, so wait for it on the real clock; then take the clock,
-// because the fan only answers a tap once it has settled — and give it back
-// once the sheet is down, since the submit waits on a promise.
+// The island is lazy, so wait for its pad chooser, then tear a sheet off and
+// wait for it to land: a sheet still flying off its pad takes no marks.
 async function tearOff(colour: string) {
-  await screen.findByRole("button", { name: /fan out the pads/i });
-  vi.useFakeTimers();
-  tap(/fan out the pads/i);
-  wait(300);
-  tap(new RegExp(`${colour} sheet`, "i"));
-  wait(300);
-  vi.useRealTimers();
+  const pad = new RegExp(`${colour} sheet`, "i");
+  await screen.findByRole("button", { name: pad });
+  tap(pad);
+  await waitFor(() =>
+    expect(matPaper()?.style.transform).not.toContain("translate"),
+  );
 }
 
 // a mark on the sheet, so there is content to come back with
@@ -158,7 +156,7 @@ afterEach(() => {
 describe("StickyNotes pin it up", () => {
   it("offers nothing to pin until a sheet is on the mat", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await screen.findByRole("button", { name: /fan out the pads/i });
+    await screen.findByRole("button", { name: /tear off a yellow sheet/i });
     expect(screen.queryByRole("button", { name: /pin it up/i })).toBeNull();
   });
 
@@ -490,6 +488,10 @@ describe("StickyNotes submit", () => {
     rerender(<StickyNotes notes={[]} matUp={false} />);
     rerender(<StickyNotes notes={[]} matUp />);
     expect(matPaper()).toBeNull(); // a fresh start, not the note just sent
+    // the pad chooser, with the keyboard on it
+    expect(
+      screen.getByRole("button", { name: /tear off a yellow sheet/i }),
+    ).toHaveFocus();
 
     await fastened();
     await user.type(nameTag() as HTMLElement, "lee{Enter}");
