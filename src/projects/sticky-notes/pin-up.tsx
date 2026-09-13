@@ -187,7 +187,9 @@ function NameTag({
         if (!onSign()) setShake(true);
       }}
       onAnimationEnd={() => setShake(false)}
-      className="relative mt-3 flex max-w-56 flex-wrap items-center gap-x-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
+      // shrink-0: the slot is only as wide as the tile, and a tag squeezed to
+      // it wraps the tick under the field; it hangs out either side instead
+      className="relative mt-3 flex max-w-56 shrink-0 flex-wrap items-center gap-x-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
       style={{
         background: "linear-gradient(180deg, #fffdf6, #efe6d2)",
         boxShadow: "0 3px 6px rgba(0,0,0,.35)",
