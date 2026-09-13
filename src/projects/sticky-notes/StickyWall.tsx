@@ -20,8 +20,6 @@ type WallNote = { id: number; author: string; content: NoteContent };
 // What a tile/zoom needs — approved notes and the local pending note both fit.
 type DisplayNote = { author: string; content: NoteContent; pending?: boolean };
 
-const EDITOR_HREF = "/sticky-notes/new"; // editor route lands with #61
-
 // Warm corkboard: a faint stipple of pits over a wood-brown wash. Lifted from
 // the visual-direction probe (prototype/49-sticky-look, surface A).
 const CORK_BG: CSSProperties = {
@@ -152,8 +150,9 @@ function AddNote({ empty }: { empty: boolean }) {
     ? inviteContent("Nothing pinned yet — pin the first note", 46)
     : inviteContent("+ pin\na note", 62);
   return (
-    <a
-      href={EDITOR_HREF}
+    <Link
+      // A client push, so the mat slides up over the wall instead of reloading it.
+      to="/sticky-notes/new"
       aria-label="Pin a note"
       className={`block select-none no-underline ${empty ? "w-56" : "w-32"}`}
       style={{
@@ -163,7 +162,7 @@ function AddNote({ empty }: { empty: boolean }) {
       }}
     >
       <NoteRender content={content} />
-    </a>
+    </Link>
   );
 }
 
