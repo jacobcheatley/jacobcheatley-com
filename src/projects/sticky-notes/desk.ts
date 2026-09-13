@@ -33,3 +33,8 @@ export const TAPE: CSSProperties = {
   clipPath: "polygon(3% 0, 97% 2%, 100% 96%, 96% 100%, 4% 98%, 0 4%)",
   transform: "rotate(-2.2deg)",
 };
+
+// Tailwind's `!`: the desk's transitions are inline (their timings are JS
+// constants), and only an important rule can switch them off for
+// prefers-reduced-motion.
+export const STILL = "motion-reduce:transition-none!";
