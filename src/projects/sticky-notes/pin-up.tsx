@@ -63,10 +63,13 @@ const COMPARTMENT: CSSProperties = {
 export function PinUp({
   content,
   onChange,
+  onBack,
   onPinned,
 }: {
   content: NoteContent;
   onChange: (note: NoteContent) => void;
+  // abandon the pin: the note goes back to the mat, unfastened
+  onBack: () => void;
   // the note is on the server: clear the mat for the next one
   onPinned: () => void;
 }) {
@@ -124,16 +127,29 @@ export function PinUp({
   return (
     <>
       {createPortal(
-        <FastenerDrawer
-          open={drawerOpen}
-          colour={content.colour}
-          onChoose={(fastener) => {
-            onChange({ ...content, fastener });
-            setDrawerOpen(false);
-          }}
-          onClose={() => setDrawerOpen(false)}
-          onOpen={() => setDrawerOpen(true)}
-        />,
+        <>
+          {/* Stuck where "pin it up" was. Not once the note is on its way:
+              a POST that lands after it went back would clear the mat under
+              it. */}
+          <TapeLabel
+            onClick={() => {
+              if (!sending.current) onBack();
+            }}
+            className="fixed top-3 right-3 z-50"
+          >
+            back to the desk
+          </TapeLabel>
+          <FastenerDrawer
+            open={drawerOpen}
+            colour={content.colour}
+            onChoose={(fastener) => {
+              onChange({ ...content, fastener });
+              setDrawerOpen(false);
+            }}
+            onClose={() => setDrawerOpen(false)}
+            onOpen={() => setDrawerOpen(true)}
+          />
+        </>,
         document.body,
       )}
       {tagSlot &&

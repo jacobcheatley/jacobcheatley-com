@@ -254,6 +254,63 @@ describe("StickyNotes tag", () => {
   });
 });
 
+// a mark on the sheet, so there is content to come back with
+function drawAStroke() {
+  fireEvent.click(
+    screen.getByRole("button", { name: /pick up the black marker/i }),
+  );
+  const paper = matPaper() as HTMLElement;
+  fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });
+  fireEvent.pointerMove(paper, { pointerId: 1, clientX: 30, clientY: 20 });
+  fireEvent.pointerUp(paper, { pointerId: 1, clientX: 30, clientY: 20 });
+}
+const marksOnTheMat = () =>
+  matPaper()?.querySelector("[data-elements]")?.childElementCount ?? 0;
+
+describe("StickyNotes abandoning a pin", () => {
+  it("brings the note back to the desk with the mat, marks and all, unfastened", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await tearOff("pink");
+    drawAStroke();
+    expect(marksOnTheMat()).toBe(1);
+    pinItUp();
+    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /back to the desk/i }));
+
+    expect(mat()).toHaveStyle({ transform: "translateY(0)" });
+    expect(landed()).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: /fastener drawer/i }),
+    ).toBeNull();
+    expect(matPaper()).toBeVisible();
+    expect(matPaper()).toHaveAttribute("data-colour", "pink");
+    expect(marksOnTheMat()).toBe(1);
+    // pinned up again, it lands as it left the mat: no fastener yet
+    pinItUp();
+    expect(fastenedWith()).toBe("none");
+  });
+
+  it("keeps the draft in memory when Back leaves mid-pin, for the next time the mat comes up", async () => {
+    const { rerender } = render(<StickyNotes notes={[]} matUp />);
+    await tearOff("pink");
+    drawAStroke();
+    pinItUp();
+
+    rerender(<StickyNotes notes={[]} matUp={false} />); // Back
+    expect(landed()).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: /fastener drawer/i }),
+    ).toBeNull();
+
+    rerender(<StickyNotes notes={[]} matUp />); // the invite again
+    expect(mat()).toHaveStyle({ transform: "translateY(0)" });
+    expect(matPaper()).toBeVisible();
+    expect(matPaper()).toHaveAttribute("data-colour", "pink");
+    expect(marksOnTheMat()).toBe(1);
+  });
+});
+
 const storedPending = () =>
   JSON.parse(localStorage.getItem("sticky-notes:pending") ?? "[]");
 // the submit's navigation, as the router would be asked for it

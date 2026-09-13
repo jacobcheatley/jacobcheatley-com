@@ -1308,6 +1308,9 @@ export default function StickyEditor({
         <PinUp
           content={landing}
           onChange={onLanding}
+          // The page stops holding a landed note, so the mat slides back up;
+          // the note on it never had the fastener, so it comes back without.
+          onBack={() => onLanding(null)}
           // sent: the mat is bare again for the next note
           onPinned={() => {
             apply(null);
