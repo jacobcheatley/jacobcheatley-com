@@ -281,6 +281,16 @@ const pickUp = (name: RegExp) =>
 // two text boxes that overlap around (60, 80) — B (last) draws on top of A
 const A: Element = { ...HI, x: 40, y: 60, text: "aaa" };
 const B: Element = { ...HI, x: 50, y: 70, text: "bbb" };
+// a line of ink drawn straight through A's first line, at y 80
+const LINE: Element = {
+  type: "stroke",
+  ink: "black",
+  size: 8,
+  points: [
+    [20, 80, 0.5],
+    [300, 80, 0.5],
+  ],
+};
 
 describe("StickyEditor drawing", () => {
   it("draws a stroke in the held ink at the fixed nib", () => {
@@ -501,16 +511,18 @@ describe("StickyEditor eraser and hands", () => {
   });
 
   it("digs one layer down when the same spot is tapped again", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
+    render(<StickyEditor initialContent={seeded({ elements: [A, LINE] })} />);
     const paper = paperSurface();
 
     down(paper, 60, 80);
     up(paper);
-    expect(selectionBox()?.getAttribute("y")).toBe("70"); // the top one
+    expect(selectionBox()?.getAttribute("y")).toBe("76"); // the ink on top
 
     down(paper, 60, 80);
     up(paper);
-    expect(selectionBox()?.getAttribute("y")).toBe("60"); // the one under it
+    // the box under it: selected, not opened, because it was not on top
+    expect(selectionBox()?.getAttribute("y")).toBe("60");
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
   });
 
   it("deselects on a tap on bare paper", () => {
@@ -1051,6 +1063,24 @@ describe("StickyEditor note handles", () => {
     expect(tilt()).toContain("rotate(0deg)"); // and the corner is not the edge
   });
 
+  it("lifts a corner under a hovering mouse, before it is pressed", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+    const hover = (x: number, y: number) =>
+      fireEvent.pointerMove(surface, {
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        pointerType: "mouse",
+      });
+
+    hover(496, 496);
+    expect(document.querySelector('[data-grip="br"]')).not.toBeNull();
+
+    hover(250, 250);
+    expect(document.querySelector("[data-grip]")).toBeNull();
+  });
+
   it("moves an element that lies in the edge band rather than the note", () => {
     // the band is the LAST thing a press can mean: what is drawn wins
     render(
@@ -1072,8 +1102,8 @@ describe("StickyEditor note handles", () => {
   });
 });
 
-describe("StickyEditor object handles", () => {
-  // Scale and rotation live ON the object (#70), so a selected sticker or text
+describe("StickyEditor element handles", () => {
+  // Scale and rotation live ON the element (#70), so a selected sticker or text
   // box wears one handle at the far corner of its outline that does both in a
   // single drag, and a text box a second on its right edge for its width.
   const STAR: Element = {
@@ -1172,6 +1202,47 @@ describe("StickyEditor object handles", () => {
     expect(selectionBox()?.getAttribute("width")).toBe("40");
   });
 
+  it("scales a one-line text box from its corner, not the width handle beside it", () => {
+    render(
+      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
+    );
+    const surface = paperSurface();
+    select(surface, 60, 80);
+    // the box is 40..280 x 60..90: the corner handle (280, 90) is only 15
+    // below the width handle (280, 75), inside a thumb's reach of both
+    down(surface, 280, 90);
+    move(surface, 520, 120); // twice as far out from the anchor (40, 60)
+    up(surface);
+
+    expect(drawn()[0]?.getAttribute("font-size")).toBe("60");
+    expect(selectionBox()?.getAttribute("width")).toBe("240"); // w untouched
+  });
+
+  it("lets go of a handle when a second finger takes the gesture over", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat, elements: [STAR] })}
+      />,
+    );
+    const surface = paperSurface();
+    select(surface, 250, 250);
+
+    down(surface, 274, 274); // the corner handle
+    downAt(surface, 300, 300, 2); // a second finger: a pinch now
+    upAt(surface, 2);
+    up(surface);
+
+    // the next drag on its body moves it, and nothing left over scales or
+    // turns it
+    down(surface, 250, 250);
+    move(surface, 280, 250);
+    up(surface);
+
+    expect(glyph()?.getAttribute("x")).toBe("280");
+    expect(glyph()?.getAttribute("font-size")).toBe("48");
+    expect(glyph()?.getAttribute("transform")).toBe("rotate(0 280 250)");
+  });
+
   it("scales and turns a selected sticker with two fingers", () => {
     render(
       <StickyEditor
@@ -1245,6 +1316,18 @@ describe("StickyEditor text in place", () => {
     expect(drawn()).toHaveLength(1); // replaced, not added beside
     expect(drawn()[0]?.textContent).toBe("hi there");
     expect(drawn()[0]?.getAttribute("x")).toBe("40"); // and still where it was
+  });
+
+  it("re-opens a selected text box lying on top of other ink", () => {
+    render(
+      <StickyEditor initialContent={seededBox({ elements: [LINE, HI] })} />,
+    );
+    const surface = paperSurface();
+
+    tap(surface, 60, 80); // the box, on top
+    expect(box()).toBeNull();
+    tap(surface, 60, 80); // opens it, rather than digging to the ink under it
+    expect(box()).toHaveValue("hi");
   });
 
   it("shows the box being re-edited once, not beside itself", () => {

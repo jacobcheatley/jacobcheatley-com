@@ -341,7 +341,8 @@ export function ModeControl({
   fontsOpen: boolean;
   onMode: (m: Mode) => void;
   onFont: (f: Font) => void;
-  // the editor closes the samples on a press anywhere but in here
+  // the editor closes the samples on a press anywhere but in here. React 19
+  // hands a function component its `ref` as a plain prop: no forwardRef.
   ref?: Ref<HTMLDivElement>;
 }) {
   const tint = ink ? INK[ink] : GREY;

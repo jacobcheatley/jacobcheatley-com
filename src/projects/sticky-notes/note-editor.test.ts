@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addElement,
+  angleOf,
   bounds,
   clampCoord,
   clientToNoteCoords,
@@ -9,7 +10,9 @@ import {
   cycleHit,
   type Element,
   elementHandles,
+  elementScale,
   emptyNote,
+  grabbedHandle,
   handleTransform,
   hitTest,
   hitTestAll,
@@ -382,20 +385,37 @@ describe("the paper's own handles", () => {
     expect(curlCorner({ bl: 1, br: 0 }, 50, 450)).toBe("bl");
   });
 
-  it("peels a corner by how far it is pulled along its diagonal", () => {
-    expect(curlFromPointer("bl", 0, 500)).toBe(0); // the corner itself
-    expect(curlFromPointer("bl", 85, 415)).toBeCloseTo(1, 1);
-    expect(curlFromPointer("br", 415, 415)).toBeCloseTo(1, 1);
-    // half way in, and never past a whole fold or back past flat
-    expect(curlFromPointer("br", 458, 458)).toBeCloseTo(0.5, 1);
-    expect(curlFromPointer("br", 0, 0)).toBe(1);
-    expect(curlFromPointer("br", 600, 600)).toBe(0);
+  it("takes hold of a peeled corner by the flap drawn over the sheet", () => {
+    // a whole fold's flap is the triangle (380,500) (500,380) (380,380): its
+    // tip is far past the cut-away corner, but it is what the visitor sees
+    const peeled = { bl: 0, br: 1 };
+    expect(curlCorner(peeled, 390, 390)).toBe("br");
+    expect(curlCorner(peeled, 370, 450)).toBeNull(); // past the flap's edge
+  });
+
+  it("peels a corner by how far it is pulled along its diagonal since it was taken", () => {
+    const corner: [number, number] = [500, 500];
+    // pulled in from the corner by a whole fold's diagonal, and half of one
+    expect(curlFromPointer("br", 0, corner, [415, 415])).toBeCloseTo(1, 1);
+    expect(curlFromPointer("br", 0, corner, [458, 458])).toBeCloseTo(0.5, 1);
+    // never past a whole fold or back past flat
+    expect(curlFromPointer("br", 0.9, [480, 480], [0, 0])).toBe(1);
+    expect(curlFromPointer("br", 0.1, [400, 400], [600, 600])).toBe(0);
+    // and a curl the stored JSON can afford: two places
+    expect(curlFromPointer("bl", 0, [0, 500], [10, 490])).toBe(0.12);
+  });
+
+  it("keeps the fold a corner had when it is taken hold of", () => {
+    // grabbed near the corner itself: an absolute reading would lay it flat
+    expect(curlFromPointer("br", 1, [496, 496], [496, 496])).toBe(1);
+    // grabbed on the flap: an absolute reading would jump it
+    expect(curlFromPointer("br", 0.4, [390, 390], [390, 390])).toBe(0.4);
   });
 
   it("peels each corner along its own diagonal, not the other's", () => {
     // mirrored across the sheet: the same pull, the same curl
-    expect(curlFromPointer("bl", 60, 440)).toBeCloseTo(
-      curlFromPointer("br", 440, 440),
+    expect(curlFromPointer("bl", 0, [0, 500], [60, 440])).toBeCloseTo(
+      curlFromPointer("br", 0, [500, 500], [440, 440]),
     );
   });
 });
@@ -433,6 +453,8 @@ describe("an element's own handles", () => {
   it("turns the handles with the element they belong to", () => {
     const [x = 0, y = 0] = elementHandles(sticker(250, 250, 1))?.corner ?? [];
     const turned = elementHandles({
+      // `Extract` picks the member of the Element union whose `type` is
+      // "sticker", so the spread is known to have a sticker's fields
       ...(sticker(250, 250) as Extract<Element, { type: "sticker" }>),
       rotation: 90,
     })?.corner;
@@ -444,6 +466,25 @@ describe("an element's own handles", () => {
 
   it("has no handles on a stroke", () => {
     expect(elementHandles(stroke())).toBeNull();
+  });
+
+  it("takes the nearest handle within reach, not the first one listed", () => {
+    // one line of 20pt text: the width handle is only 10 above the corner
+    const h = elementHandles(text());
+    if (!h) throw new Error("text has handles");
+    expect(grabbedHandle(h, 300, 120, 24)).toBe("corner");
+    expect(grabbedHandle(h, 300, 110, 24)).toBe("width");
+    expect(grabbedHandle(h, 250, 250, 24)).toBeNull();
+    // a sticker has no width handle to lose to
+    const s = elementHandles(sticker(250, 250));
+    if (!s) throw new Error("stickers have handles");
+    expect(grabbedHandle(s, 270, 270, 24)).toBe("corner");
+  });
+
+  it("reads the angle from one point out to another, in degrees", () => {
+    expect(angleOf([0, 0], [10, 0])).toBe(0);
+    expect(angleOf([0, 0], [0, 10])).toBe(90); // y runs down the screen
+    expect(angleOf([10, 10], [0, 10])).toBe(180);
   });
 
   it("reads scale off the reach and rotation off the swing", () => {
@@ -482,6 +523,11 @@ describe("an element's own handles", () => {
     expect(scaleElement(text(), 1, 0)).toMatchObject({ fontSize: 8 });
     // a stroke has no handle, so nothing to scale
     expect(scaleElement(stroke(), 4, 90)).toEqual(stroke());
+  });
+
+  it("reads back the scale a drag sets", () => {
+    expect(elementScale(scaleElement(sticker(250, 250), 2, 0))).toBe(2);
+    expect(elementScale(scaleElement(text(), 44, 0))).toBe(44);
   });
 
   it("widens a text box along its own axis", () => {

@@ -39,11 +39,16 @@ export const HIT_SLOP = 6;
 // also rounds to a tenth of a unit — finer than any screen can show, and it
 // keeps the float noise a tilted note's rotation leaves behind (250.00000000003)
 // out of the stored JSON, where a long stroke pays for every digit.
-export const clampCoord = (n: number): number =>
-  Math.round(Math.max(-50, Math.min(550, n)) * 10) / 10;
+export const clamp = (n: number, lo: number, hi: number): number =>
+  Math.max(lo, Math.min(hi, n));
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+export const clampCoord = (n: number): number => round1(clamp(n, -50, 550));
+
+// Degrees, brought back inside the contract's -180..180 after an addition.
+const wrap180 = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 // Blank note with seeded cosmetics — paper colour / rotation / curl are
 // seeded-random per note (spec #49), lightly adjustable in the tray. Fastener
@@ -312,14 +317,15 @@ export function clientToNoteCoords(
   side: number,
   rotationDeg: number,
 ): [number, number] {
-  const a = (-rotationDeg * Math.PI) / 180;
-  const dx = client[0] - centre[0];
-  const dy = client[1] - centre[1];
+  const [x, y] = unrotate(
+    client[0],
+    client[1],
+    centre[0],
+    centre[1],
+    rotationDeg,
+  );
   const k = CANVAS / side;
-  return [
-    CANVAS / 2 + (dx * Math.cos(a) - dy * Math.sin(a)) * k,
-    CANVAS / 2 + (dx * Math.sin(a) + dy * Math.cos(a)) * k,
-  ];
+  return [CANVAS / 2 + (x - centre[0]) * k, CANVAS / 2 + (y - centre[1]) * k];
 }
 
 // The rendered side of the square sheet, from the box a rotated one occupies.
@@ -335,9 +341,6 @@ export function noteSide(bboxWidth: number, rotationDeg: number): number {
 // No sliders anywhere (#69): the note is turned by its edge and peeled by its
 // corners, so the sheet itself is the control. All of it is geometry, so all of
 // it is here — the shell only decides which gesture a pointer started.
-
-export const clamp = (n: number, lo: number, hi: number): number =>
-  Math.max(lo, Math.min(hi, n));
 
 // Must match note-render's fold size, like STICKER_BASE above: one number, kept
 // here rather than pulling the renderer's JSX into the model layer.
@@ -357,36 +360,42 @@ export function isEdgeBand(x: number, y: number): boolean {
   );
 }
 
+// The note's two peelable corners, as `content.curl` names them.
+export type Corner = "bl" | "br";
+
 // How far from a bottom corner still counts as taking hold of the fold.
 export const CURL_GRAB = 40;
 
-// Which bottom corner a pointer took hold of, if either: anywhere inside the
-// folded triangle itself, or within reach of the corner it peels from.
+// Which bottom corner a pointer took hold of, if either: within reach of the
+// corner it peels from, or anywhere on the fold. The flap is drawn folded back
+// over the sheet, so it and the triangle cut away from under it together fill
+// the square of the fold's size in the corner — and the flap is what you see.
 export function curlCorner(
   curl: { bl: number; br: number },
   x: number,
   y: number,
-): "bl" | "br" | null {
+): Corner | null {
   const held = (cx: number, cy: number, fold: number) =>
     Math.hypot(x - cx, y - cy) <= CURL_GRAB ||
-    // the fold triangle: the two legs and the crease between their ends
-    Math.abs(x - cx) + Math.abs(y - cy) <= fold;
+    Math.max(Math.abs(x - cx), Math.abs(y - cy)) <= fold;
   if (held(0, CANVAS, curl.bl * MAX_FOLD)) return "bl";
   if (held(CANVAS, CANVAS, curl.br * MAX_FOLD)) return "br";
   return null;
 }
 
-// How far the pointer has pulled a corner in along its own diagonal, as a curl.
-// Pulling straight up an edge peels nothing: it is the diagonal into the middle
-// of the sheet that lifts paper.
+// The curl a drag leaves a corner at: the curl it had when taken hold of, plus
+// how far the pointer has since pulled in along the corner's own diagonal.
+// Relative, so taking hold of the flap doesn't snap the fold to the pointer.
+// Only the diagonal counts: sliding along the crease peels nothing.
 export function curlFromPointer(
-  corner: "bl" | "br",
-  x: number,
-  y: number,
+  corner: Corner,
+  start: number,
+  from: [number, number],
+  now: [number, number],
 ): number {
-  const dx = corner === "bl" ? x : CANVAS - x;
-  const dy = CANVAS - y;
-  return clamp((dx + dy) / Math.SQRT2 / MAX_FOLD, 0, 1);
+  const inward = ([x, y]: [number, number]) =>
+    ((corner === "bl" ? x : CANVAS - x) + CANVAS - y) / Math.SQRT2;
+  return round2(clamp(start + (inward(now) - inward(from)) / MAX_FOLD, 0, 1));
 }
 
 // ponytail: the wall looks wrong past a light tilt, so a note is held to +-25
@@ -397,18 +406,18 @@ export const ROTATE_LIMIT = 25;
 // The note's tilt after a gesture has swept `by` degrees round its centre.
 // The sweep is normalised first: dragging across the centre flips atan2 by a
 // whole turn, which would otherwise fling the note to the far clamp.
-export function turnNote(from: number, by: number): number {
-  const swept = ((((by + 180) % 360) + 360) % 360) - 180;
-  return Math.round(clamp(from + swept, -ROTATE_LIMIT, ROTATE_LIMIT) * 10) / 10;
-}
+export const turnNote = (from: number, by: number): number =>
+  round1(clamp(from + wrap180(by), -ROTATE_LIMIT, ROTATE_LIMIT));
+
+// Degrees from one point out to another: the sweep an edge drag, a pinch and a
+// corner handle all read their turn from.
+export const angleOf = (from: [number, number], to: [number, number]): number =>
+  (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
 
 // --- an element's own handles (#76) -----------------------------------------
-// Scale and rotation live ON the object (the T0 verdict, #70), not on a panel:
+// Scale and rotation live ON the element (the T0 verdict, #70), not on a panel:
 // one handle at the corner of the selection box does both in a single drag, and
 // a text box gets a second on its right edge for the width it wraps at.
-
-// Degrees, brought back inside the contract's -180..180 after an addition.
-const wrap180 = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 // An element turned by `by` degrees. Unlike the note (turnNote, held to a tilt
 // the wall can wear) an element may face any way at all, so a turn past half a
@@ -419,9 +428,12 @@ export const turnElement = (from: number, by: number): number =>
 // Where an element's handles sit, in note coordinates — already turned by the
 // element's own rotation, like the box they hang off. A stroke has none: it is
 // drawn, not placed, and the eraser is how it goes.
-export function elementHandles(
-  el: Element,
-): { corner: [number, number]; width: [number, number] | null } | null {
+export type Handles = {
+  corner: [number, number];
+  width: [number, number] | null;
+};
+
+export function elementHandles(el: Element): Handles | null {
   if (el.type === "stroke") return null;
   const b = bounds(el);
   const at = (x: number, y: number) =>
@@ -430,6 +442,23 @@ export function elementHandles(
     corner: at(b.x1, b.y1),
     width: el.type === "text" ? at(b.x1, (b.y0 + b.y1) / 2) : null,
   };
+}
+
+// The handle a press took hold of: the nearest one within reach. On a one-line
+// text box the two sit closer together than a thumb is wide, so taking the
+// first in range would leave the corner out of reach behind the width handle.
+export function grabbedHandle(
+  handles: Handles,
+  x: number,
+  y: number,
+  reach: number,
+): "corner" | "width" | null {
+  const dist = (at: [number, number] | null) =>
+    at ? Math.hypot(x - at[0], y - at[1]) : Infinity;
+  const corner = dist(handles.corner);
+  const width = dist(handles.width);
+  if (Math.min(corner, width) > reach) return null;
+  return width < corner ? "width" : "corner";
 }
 
 // One drag of the corner handle: how much further the pointer is from the
@@ -447,11 +476,12 @@ export function handleTransform(
   const held = reach(start);
   // taken hold of right on the anchor: no direction to read, so hold still
   if (held < 1) return { scale: startScale, rotation: startRotation };
-  const ang = (p: [number, number]) =>
-    (Math.atan2(p[1] - anchor[1], p[0] - anchor[0]) * 180) / Math.PI;
   return {
     scale: (startScale * reach(now)) / held,
-    rotation: turnElement(startRotation, ang(now) - ang(start)),
+    rotation: turnElement(
+      startRotation,
+      angleOf(anchor, now) - angleOf(anchor, start),
+    ),
   };
 }
 
@@ -469,6 +499,11 @@ export function scaleElement(
   return el;
 }
 
+// What `scaleElement` sets, read back — where a drag or a pinch starts from.
+// A stroke is never scaled, so 1 leaves it be.
+export const elementScale = (el: Element): number =>
+  el.type === "sticker" ? el.scale : el.type === "text" ? el.fontSize : 1;
+
 // Narrower than this and a text box wraps one letter per line.
 export const MIN_TEXT_W = 40;
 
@@ -480,7 +515,6 @@ export function widthFromPointer(
   x: number,
   y: number,
 ): number {
-  const a = (el.rotation * Math.PI) / 180;
-  const along = (x - el.x) * Math.cos(a) + (y - el.y) * Math.sin(a);
-  return clamp(Math.round(along), MIN_TEXT_W, 600);
+  const [along] = unrotate(x, y, el.x, el.y, el.rotation);
+  return clamp(Math.round(along - el.x), MIN_TEXT_W, 600);
 }
