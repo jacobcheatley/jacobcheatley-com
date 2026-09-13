@@ -231,7 +231,7 @@ function distToSegment(
 // Does the point land on the element's real silhouette? A stroke is its
 // polyline (its bounding box would swallow the hole in a drawn circle); text
 // and stickers are their box, seen through their own rotation.
-export function hitsElement(el: Element, x: number, y: number): boolean {
+function hitsElement(el: Element, x: number, y: number): boolean {
   if (el.type === "stroke") {
     const reach = el.size / 2 + HIT_SLOP;
     const pts = el.points;
@@ -435,6 +435,26 @@ export function grabbedHandle(
   const width = dist(handles.width);
   if (Math.min(corner, width) > reach) return null;
   return width < corner ? "width" : "corner";
+}
+
+// What a press at (x, y) takes hold of on the element being placed (#80): a
+// handle, its body to move it, or nothing — a press away, which fixes it.
+// `reach` is a thumb's reach in note units. Outside the element a handle is
+// caught from all of it; over the body only from half, or a sticker, whose
+// corner is nearer its middle than a thumb is wide on a phone, could never be
+// moved at all.
+export function grabPlacing(
+  el: Element,
+  x: number,
+  y: number,
+  reach: number,
+): "corner" | "width" | "move" | null {
+  const onBody = hitsElement(el, x, y);
+  const handles = elementHandles(el);
+  const handle =
+    handles && grabbedHandle(handles, x, y, onBody ? reach / 2 : reach);
+  if (handle) return handle;
+  return onBody ? "move" : null;
 }
 
 // One drag of the corner handle: the element's rotation when it was taken hold

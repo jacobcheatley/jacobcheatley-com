@@ -11,6 +11,7 @@ import {
   elementHandles,
   emptyNote,
   grabbedHandle,
+  grabPlacing,
   hitTest,
   hitTestAll,
   isOffNote,
@@ -505,6 +506,24 @@ describe("an element's own handles", () => {
     expect(widthFromPointer({ x: 100, y: 100, rotation: 90 }, 340, 100)).toBe(
       MIN_TEXT_W,
     );
+  });
+
+  it("moves a sticker pressed in its middle, though its corner is within a thumb's reach", () => {
+    // a phone draws the note at ~0.5px a unit, so a 24px reach is ~49 units:
+    // more than the 34 from a sticker's middle to its corner
+    const s = sticker(250, 250);
+    expect(grabPlacing(s, 250, 250, 49)).toBe("move");
+    expect(grabPlacing(s, 274, 274, 49)).toBe("corner"); // on the handle
+    expect(grabPlacing(s, 266, 266, 49)).toBe("corner"); // close by, inside
+    expect(grabPlacing(s, 300, 300, 49)).toBe("corner"); // a thumb away, outside
+    expect(grabPlacing(s, 330, 330, 49)).toBeNull();
+  });
+
+  it("takes a text box by its width handle, its body, or not at all", () => {
+    // one line of 20pt text: 100..300 x 100..120, width handle at (300, 110)
+    expect(grabPlacing(text(), 318, 110, 24)).toBe("width");
+    expect(grabPlacing(text(), 150, 110, 24)).toBe("move");
+    expect(grabPlacing(text(), 400, 400, 24)).toBeNull();
   });
 
   it("never lets a box get narrower than a word or wider than the contract", () => {

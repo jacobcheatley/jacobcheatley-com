@@ -36,11 +36,9 @@ import {
   clientToNoteCoords,
   curlCorner,
   curlFromPointer,
-  elementHandles,
   emptyNote,
-  grabbedHandle,
+  grabPlacing,
   HANDLE_TOUCH,
-  hitsElement,
   hitTest,
   isOffNote,
   moveElement,
@@ -883,9 +881,9 @@ export default function StickyEditor({
 
   // --- placing (#80) -------------------------------------------------------
 
-  // Which part of the element being placed a press at (x, y) took hold of: a
-  // handle first, caught from a thumb's width away (HANDLE_TOUCH px, in note
-  // units at whatever size the sheet is drawn right now), then its body.
+  // Which part of the element being placed a press at (x, y) took hold of. A
+  // thumb's reach is HANDLE_TOUCH px wide, so how many note units it covers
+  // depends on the size the sheet is drawn right now.
   function placingGrip(
     el: Placing,
     x: number,
@@ -895,11 +893,7 @@ export default function StickyEditor({
     const side = rect?.width
       ? noteSide(rect.width, contentRef.current?.rotation ?? 0)
       : CANVAS;
-    const handles = elementHandles(el);
-    const reach = (HANDLE_TOUCH / 2 / side) * CANVAS;
-    const handle = handles && grabbedHandle(handles, x, y, reach);
-    if (handle) return handle;
-    return hitsElement(el, x, y) ? "move" : null;
+    return grabPlacing(el, x, y, (HANDLE_TOUCH / 2 / side) * CANVAS);
   }
 
   // One move of a drag on the element being placed, measured from where the
