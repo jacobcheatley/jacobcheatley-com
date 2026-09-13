@@ -1218,3 +1218,140 @@ describe("StickyEditor object handles", () => {
     expect(paperSurface().style.transform).toContain("rotate(-11.8deg)");
   });
 });
+
+describe("StickyEditor text in place", () => {
+  const flat = { bl: 0, br: 0 };
+  const box = () => screen.queryByRole("textbox", { name: /text box/i });
+  const seededBox = (over: Partial<NoteContent> = {}) =>
+    seeded({ curl: flat, elements: [HI], ...over });
+  const tap = (surface: HTMLElement, x: number, y: number) => {
+    down(surface, x, y);
+    up(surface);
+  };
+
+  it("re-opens a selected text box on a second tap and replaces it in place", () => {
+    render(<StickyEditor initialContent={seededBox()} />);
+    const surface = paperSurface();
+
+    tap(surface, 60, 80); // selects
+    expect(box()).toBeNull();
+    tap(surface, 60, 80); // and again opens it, with what it already said
+    expect(box()).toHaveValue("hi");
+    expect(box()).toHaveFocus();
+
+    fireEvent.change(box() as HTMLElement, { target: { value: "hi there" } });
+    fireEvent.blur(box() as HTMLElement);
+
+    expect(drawn()).toHaveLength(1); // replaced, not added beside
+    expect(drawn()[0]?.textContent).toBe("hi there");
+    expect(drawn()[0]?.getAttribute("x")).toBe("40"); // and still where it was
+  });
+
+  it("shows the box being re-edited once, not beside itself", () => {
+    render(<StickyEditor initialContent={seededBox()} />);
+    const surface = paperSurface();
+    tap(surface, 60, 80);
+    tap(surface, 60, 80);
+    fireEvent.change(box() as HTMLElement, { target: { value: "new" } });
+
+    expect(drawn()).toHaveLength(1);
+    expect(drawn()[0]?.textContent).toBe("new");
+  });
+
+  it("throws away a box that is emptied out", () => {
+    render(<StickyEditor initialContent={seededBox()} />);
+    const surface = paperSurface();
+    tap(surface, 60, 80);
+    tap(surface, 60, 80);
+    fireEvent.change(box() as HTMLElement, { target: { value: "  " } });
+    fireEvent.blur(box() as HTMLElement);
+
+    expect(drawn()).toHaveLength(0);
+    expect(selectionBox()).toBeNull();
+  });
+
+  it("leaves the original alone when the edit is cancelled", () => {
+    render(<StickyEditor initialContent={seededBox()} />);
+    const surface = paperSurface();
+    tap(surface, 60, 80);
+    tap(surface, 60, 80);
+    fireEvent.change(box() as HTMLElement, { target: { value: "gone" } });
+    fireEvent.keyDown(box() as HTMLElement, { key: "Escape" });
+
+    expect(box()).toBeNull(); // Escape already put the box away: nothing to blur
+    expect(drawn()).toHaveLength(1);
+    expect(drawn()[0]?.textContent).toBe("hi");
+  });
+
+  it("moves a selected box rather than opening it when the tap is a drag", () => {
+    render(<StickyEditor initialContent={seededBox()} />);
+    const surface = paperSurface();
+    tap(surface, 60, 80);
+
+    down(surface, 60, 80);
+    move(surface, 160, 80);
+    up(surface);
+
+    expect(box()).toBeNull();
+    expect(drawn()[0]?.getAttribute("x")).toBe("140");
+  });
+
+  it("changes a selected box's font from the bar over it", () => {
+    render(<StickyEditor initialContent={seededBox()} />);
+    const surface = paperSurface();
+    expect(
+      screen.queryByRole("button", { name: /write in marker/i }),
+    ).toBeNull();
+
+    tap(surface, 60, 80);
+    expect(drawn()[0]?.getAttribute("font-family")).toContain("Patrick Hand");
+    fireEvent.click(screen.getByRole("button", { name: /write in marker/i }));
+
+    expect(drawn()).toHaveLength(1);
+    expect(drawn()[0]?.getAttribute("font-family")).toContain(
+      "Permanent Marker",
+    );
+  });
+
+  it("offers no font bar on a sticker, and none while the box is open", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({
+          curl: flat,
+          elements: [
+            {
+              type: "sticker",
+              x: 250,
+              y: 250,
+              emoji: "⭐",
+              scale: 1,
+              rotation: 0,
+            },
+          ],
+        })}
+      />,
+    );
+    const surface = paperSurface();
+    tap(surface, 250, 250);
+    expect(
+      screen.queryByRole("button", { name: /write in marker/i }),
+    ).toBeNull();
+  });
+
+  it("closes the font samples on a press anywhere else, without eating it", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const casual = () =>
+      screen.queryByRole("button", { name: /write in casual/i });
+    expect(casual()).not.toBeNull();
+    // no backdrop over the mat: the press that closes them goes on to do its
+    // own job, so picking a font and placing a box is one tap, not two (#74)
+    expect(
+      screen.queryByRole("button", { name: /close the font samples/i }),
+    ).toBeNull();
+
+    fireEvent.pointerDown(document.body);
+    expect(casual()).toBeNull();
+  });
+});

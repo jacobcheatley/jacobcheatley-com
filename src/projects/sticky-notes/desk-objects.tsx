@@ -280,6 +280,48 @@ export function heldTool(held: Ink | "eraser"): {
   };
 }
 
+// One font sample: the name of the face, written in it, on a chip of card.
+// The rocker's pop-up and the bar over a selected text box are the same choice
+// made twice, so they are the same chip.
+export function FontChip({
+  font,
+  active,
+  tint,
+  onPick,
+}: {
+  font: Font;
+  active: boolean;
+  // the ink it would be written in, so the sample shows the real thing
+  tint: string;
+  onPick: (f: Font) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Write in ${font}`}
+      aria-pressed={active}
+      onClick={() => onPick(font)}
+      className={`flex shrink-0 items-center justify-center rounded-[2px] border-0 p-0 ${STILL}`}
+      style={{
+        width: FONT_CHIP,
+        height: FONT_CHIP,
+        fontFamily: FONT_FAMILIES[font],
+        fontSize: 20,
+        lineHeight: 1,
+        color: tint,
+        background: "linear-gradient(180deg,#fffdf6,#ece3cf)",
+        boxShadow: active
+          ? `0 3px 5px rgba(0,0,0,.4), inset 0 0 0 2px ${tint}`
+          : "0 3px 5px rgba(0,0,0,.4)",
+        transform: active ? "translateY(-3px)" : "none",
+        transition: `transform 160ms ${EASE_OUT}`,
+      }}
+    >
+      Aa
+    </button>
+  );
+}
+
 // Draw or write with the marker in your hand: one rocker, tinted with that
 // marker's ink so it reads as part of it, inert and grey with an empty hand.
 // The "Aa" side opens the four font samples, each in its own face.
@@ -290,6 +332,7 @@ export function ModeControl({
   fontsOpen,
   onMode,
   onFont,
+  ref,
 }: {
   ink: Ink | null;
   mode: Mode;
@@ -298,6 +341,8 @@ export function ModeControl({
   fontsOpen: boolean;
   onMode: (m: Mode) => void;
   onFont: (f: Font) => void;
+  // the editor closes the samples on a press anywhere but in here
+  ref?: Ref<HTMLDivElement>;
 }) {
   const tint = ink ? INK[ink] : GREY;
   const half = (m: Mode, label: string, glyph: ReactNode): ReactNode => {
@@ -333,7 +378,7 @@ export function ModeControl({
   };
 
   return (
-    <div className="relative shrink-0">
+    <div ref={ref} className="relative shrink-0">
       <div
         className="flex flex-col items-stretch overflow-hidden rounded-[5px]"
         style={{
@@ -384,31 +429,13 @@ export function ModeControl({
       {ink && fontsOpen && (
         <div className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5">
           {FONTS.map((f) => (
-            <button
+            <FontChip
               key={f}
-              type="button"
-              aria-label={`Write in ${f}`}
-              aria-pressed={f === font}
-              onClick={() => onFont(f)}
-              className={`flex items-center justify-center rounded-[2px] border-0 p-0 ${STILL}`}
-              style={{
-                width: FONT_CHIP,
-                height: FONT_CHIP,
-                fontFamily: FONT_FAMILIES[f],
-                fontSize: 20,
-                lineHeight: 1,
-                color: tint,
-                background: "linear-gradient(180deg,#fffdf6,#ece3cf)",
-                boxShadow:
-                  f === font
-                    ? `0 3px 5px rgba(0,0,0,.4), inset 0 0 0 2px ${tint}`
-                    : "0 3px 5px rgba(0,0,0,.4)",
-                transform: f === font ? "translateY(-3px)" : "none",
-                transition: `transform 160ms ${EASE_OUT}`,
-              }}
-            >
-              Aa
-            </button>
+              font={f}
+              active={f === font}
+              tint={tint}
+              onPick={onFont}
+            />
           ))}
         </div>
       )}
