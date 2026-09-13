@@ -35,9 +35,12 @@ export const STICKER_BOX_OFFSET_Y = 0;
 export const HIT_SLOP = 6;
 
 // Schema allows -50..550 (a little off-paper slack); clamp raw pointer input so
-// a wild drag can't emit an out-of-range coord the contract would reject.
+// a wild drag can't emit an out-of-range coord the contract would reject. It
+// also rounds to a tenth of a unit — finer than any screen can show, and it
+// keeps the float noise a tilted note's rotation leaves behind (250.00000000003)
+// out of the stored JSON, where a long stroke pays for every digit.
 export const clampCoord = (n: number): number =>
-  Math.max(-50, Math.min(550, n));
+  Math.round(Math.max(-50, Math.min(550, n)) * 10) / 10;
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -283,4 +286,36 @@ export function hitTest(content: NoteContent, x: number, y: number): number {
 export function cycleHit(hits: number[], selected: number): number {
   const i = hits.indexOf(selected);
   return (i === -1 ? hits[0] : hits[(i + 1) % hits.length]) ?? -1;
+}
+
+// --- the note's own geometry (#76) ------------------------------------------
+// The paper renders rotated on the mat, so a client point means nothing until
+// it has come back through that rotation. This is the whole mapping, pure: the
+// shell measures the paper and hands it over.
+
+// Client point → note units. `centre` is the paper's centre (the bounding box's
+// centre IS the rotation centre) and `side` its rendered, unrotated side.
+export function clientToNoteCoords(
+  client: [number, number],
+  centre: [number, number],
+  side: number,
+  rotationDeg: number,
+): [number, number] {
+  const a = (-rotationDeg * Math.PI) / 180;
+  const dx = client[0] - centre[0];
+  const dy = client[1] - centre[1];
+  const k = CANVAS / side;
+  return [
+    CANVAS / 2 + (dx * Math.cos(a) - dy * Math.sin(a)) * k,
+    CANVAS / 2 + (dx * Math.sin(a) + dy * Math.cos(a)) * k,
+  ];
+}
+
+// The rendered side of the square sheet, from the box a rotated one occupies.
+// Derived rather than read off `offsetWidth`: that is the LAYOUT size, and the
+// note is scaled down while the sticker sheet is up, which would put every
+// pointer a quarter of a note away from where it really is.
+export function noteSide(bboxWidth: number, rotationDeg: number): number {
+  const a = (rotationDeg * Math.PI) / 180;
+  return bboxWidth / (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a)));
 }

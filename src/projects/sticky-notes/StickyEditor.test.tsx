@@ -57,8 +57,12 @@ const HI: Element = {
   rotation: 0,
 };
 
+// `emptyNote` seeds a random tilt, and a tilted note maps a client point to a
+// different note coordinate (#76) — so every test that presses a coordinate
+// starts square to the screen and the tilt is asked for explicitly.
 const seeded = (over: Partial<NoteContent>): NoteContent => ({
   ...emptyNote(),
+  rotation: 0,
   ...over,
 });
 
@@ -933,5 +937,49 @@ describe("StickyEditor sticker sheet", () => {
     expect(
       screen.getByRole("button", { name: /write with the marker/i }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("StickyEditor on a tilted note", () => {
+  // The sheet lies on the mat at its stored angle (#76), so the paper's box is
+  // no longer the note's frame: a quarter turn puts the note's top edge on the
+  // right of the screen. Everything drawn, typed or dropped has to come back
+  // through that rotation. jsdom measures nothing, so the box a rotated square
+  // occupies is stubbed — for 90 deg it is the same 500x500.
+  it("lays the sheet down at the angle it is stored with", () => {
+    render(<StickyEditor initialContent={seeded({ rotation: -12 })} />);
+
+    expect(paperSurface().style.transform).toContain("rotate(-12deg)");
+  });
+
+  it("puts a typed box where the pointer pressed, not where the box is", () => {
+    render(<StickyEditor initialContent={seeded({ rotation: 90 })} />);
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const surface = paperSurface();
+
+    // the middle of the screen's right edge: the top of a quarter-turned note
+    down(surface, 500, 250);
+    up(surface);
+    fireEvent.change(screen.getByRole("textbox", { name: /text box/i }), {
+      target: { value: "up" },
+    });
+    fireEvent.blur(screen.getByRole("textbox", { name: /text box/i }));
+
+    expect(drawn()[0]?.getAttribute("x")).toBe("250");
+    expect(drawn()[0]?.getAttribute("y")).toBe("0");
+  });
+
+  it("sticks a dropped sticker through the same rotation", () => {
+    render(<StickyEditor initialContent={seeded({ rotation: 90 })} />);
+    paperSurface();
+    fireEvent.click(screen.getByRole("button", { name: /the sticker sheet/i }));
+    const slot = screen.getByRole("button", { name: "Peel the ⭐ sticker" });
+    down(slot, 300, 600);
+    move(slot, 500, 250);
+    fireEvent.pointerUp(slot, { clientX: 500, clientY: 250, pointerId: 1 });
+
+    expect(drawn()[0]?.getAttribute("x")).toBe("250");
+    expect(drawn()[0]?.getAttribute("y")).toBe("0");
   });
 });

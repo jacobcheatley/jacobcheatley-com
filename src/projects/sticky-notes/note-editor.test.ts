@@ -3,6 +3,7 @@ import {
   addElement,
   bounds,
   clampCoord,
+  clientToNoteCoords,
   cycleHit,
   type Element,
   emptyNote,
@@ -10,6 +11,7 @@ import {
   hitTestAll,
   isOffNote,
   moveElement,
+  noteSide,
   removeElement,
   settleElement,
 } from "./note-editor";
@@ -208,6 +210,9 @@ describe("geometry", () => {
     expect(clampCoord(-100)).toBe(-50);
     expect(clampCoord(999)).toBe(550);
     expect(clampCoord(200)).toBe(200);
+    // and rounds off the tilt's float dust, so the stored note stays tidy
+    expect(clampCoord(250.00000000000003)).toBe(250);
+    expect(clampCoord(123.456)).toBe(123.5);
   });
 
   it("isOffNote is true only when fully outside the paper", () => {
@@ -288,5 +293,60 @@ describe("cycleHit", () => {
 
   it("is -1 when nothing was hit", () => {
     expect(cycleHit([], 1)).toBe(-1);
+  });
+});
+
+describe("clientToNoteCoords", () => {
+  // a 500px sheet centred at (300, 300) on screen: one client px = one unit
+  const centre: [number, number] = [300, 300];
+  const map = (
+    client: [number, number],
+    deg: number,
+    side = 500,
+  ): [number, number] => clientToNoteCoords(client, centre, side, deg);
+  const near = ([x, y]: [number, number], ex: number, ey: number) => {
+    expect(x).toBeCloseTo(ex);
+    expect(y).toBeCloseTo(ey);
+  };
+
+  it("is the plain box mapping on an untilted note", () => {
+    near(map([300, 300], 0), 250, 250); // the centre is the centre
+    near(map([50, 50], 0), 0, 0); // top-left corner
+    near(map([550, 550], 0), 500, 500);
+  });
+
+  it("carries the pointer back through the note's rotation", () => {
+    // turned a quarter turn, the note's top edge faces right: a pointer on the
+    // right of the screen is writing at the top of the paper.
+    near(map([550, 300], 90), 250, 0);
+    near(map([300, 550], 90), 500, 250);
+  });
+
+  it("round-trips a point back to where it was pressed", () => {
+    for (const deg of [-25, -4, 0, 7.5, 90]) {
+      const [x, y] = map([420, 180], deg);
+      const a = (deg * Math.PI) / 180;
+      const dx = x - 250;
+      const dy = y - 250;
+      // the same rotation forwards again, at one unit per px
+      expect(300 + dx * Math.cos(a) - dy * Math.sin(a)).toBeCloseTo(420);
+      expect(300 + dx * Math.sin(a) + dy * Math.cos(a)).toBeCloseTo(180);
+    }
+  });
+
+  it("scales a note rendered at any size", () => {
+    near(map([425, 300], 0, 250), 500, 250); // half size: 125px = 250 units
+  });
+});
+
+describe("noteSide", () => {
+  it("is the box itself when the note is square to the screen", () => {
+    expect(noteSide(360, 0)).toBeCloseTo(360);
+    expect(noteSide(360, 90)).toBeCloseTo(360);
+  });
+
+  it("shrinks out the corners a tilted note pokes into its box", () => {
+    expect(noteSide(360, 45)).toBeCloseTo(360 / Math.SQRT2);
+    expect(noteSide(360, -45)).toBeCloseTo(360 / Math.SQRT2);
   });
 });

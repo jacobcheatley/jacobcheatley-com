@@ -29,6 +29,7 @@ import {
   addElement,
   bounds,
   clampCoord,
+  clientToNoteCoords,
   cycleHit,
   emptyNote,
   hitTest,
@@ -36,6 +37,7 @@ import {
   isOffNote,
   moveElement,
   type Element as NoteElement,
+  noteSide,
   removeElement,
   settleElement,
   updateElement,
@@ -404,14 +406,19 @@ export default function StickyEditor({
   // Client → note coordinates. NotePaper has no fastener headroom, so the
   // paper's box IS 0..CANVAS on both axes. The one mapping in the editor: the
   // paper's own gestures come through `toNote`, a peeled sticker lands through
-  // `dropSticker`, and T6 folds the note's rotation in here for both.
+  // `dropSticker`. The note renders tilted (#76), so every pointer comes back
+  // through that rotation here — the maths itself is pure, in note-editor.
   function clientToNote(clientX: number, clientY: number): [number, number] {
     const rect = paperRef.current?.getBoundingClientRect();
     if (!rect?.width || !rect.height) return [0, 0];
-    return [
-      clampCoord(((clientX - rect.left) / rect.width) * CANVAS),
-      clampCoord(((clientY - rect.top) / rect.height) * CANVAS),
-    ];
+    const deg = contentRef.current?.rotation ?? 0;
+    const [x, y] = clientToNoteCoords(
+      [clientX, clientY],
+      [rect.left + rect.width / 2, rect.top + rect.height / 2],
+      noteSide(rect.width, deg),
+      deg,
+    );
+    return [clampCoord(x), clampCoord(y)];
   }
 
   function toNote(e: ReactPointerEvent): [number, number, number] {
@@ -429,13 +436,11 @@ export default function StickyEditor({
   ): boolean {
     const rect = paperRef.current?.getBoundingClientRect();
     if (!rect?.width || !rect.height || tearing || crumpling) return false;
-    if (
-      clientX < rect.left ||
-      clientX > rect.right ||
-      clientY < rect.top ||
-      clientY > rect.bottom
-    )
-      return false;
+    // On the paper is a question in note units, not screen ones: a tilted sheet
+    // does not fill its own bounding box, and the corners it leaves over are
+    // mat, not paper.
+    const [x, y] = clientToNote(clientX, clientY);
+    if (x < 0 || x > CANVAS || y < 0 || y > CANVAS) return false;
     // Same as a tap on the paper: the open box commits first, then this drop
     // does its own job on what that left behind.
     if (textDraft) commitText();
@@ -444,7 +449,6 @@ export default function StickyEditor({
     // sticker home instead of swallowing it.
     const live = contentRef.current;
     if (!live || live.elements.length >= MAX_ELEMENTS) return false;
-    const [x, y] = clientToNote(clientX, clientY);
     apply(
       addElement(live, { type: "sticker", x, y, emoji, scale: 1, rotation: 0 }),
     );
@@ -664,7 +668,7 @@ export default function StickyEditor({
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
                 // the held tool IS the cursor over the paper
                 cursor: fine && held ? "none" : undefined,
-                ...noteMotion(tearing, crumpling),
+                ...noteMotion(tearing, crumpling, shown.rotation),
               }}
             >
               <NotePaper content={shown} />
@@ -888,16 +892,25 @@ export default function StickyEditor({
   );
 }
 
-function noteMotion(tearing: boolean, crumpling: boolean): CSSProperties {
+// The sheet's own transform: the tilt it is stored with (#76), under whatever
+// flight it is on. The tilt is the LAST transform in the list, so it turns the
+// paper about its own centre whatever the flight did to it — and the pointer
+// mapping reads that same centre back off the box.
+function noteMotion(
+  tearing: boolean,
+  crumpling: boolean,
+  rotation: number,
+): CSSProperties {
+  const tilt = `rotate(${rotation}deg)`;
   if (crumpling)
     return {
-      transform: CRUMPLE_TO,
+      transform: `${CRUMPLE_TO} ${tilt}`,
       opacity: 0,
       transition: `transform ${CRUMPLE_MS}ms cubic-bezier(.5,0,.8,.35), opacity ${CRUMPLE_MS}ms ease-in`,
     };
-  if (tearing) return { transform: TEAR_FROM, transition: "none" };
+  if (tearing) return { transform: `${TEAR_FROM} ${tilt}`, transition: "none" };
   return {
-    transform: "none",
+    transform: tilt,
     transition: `transform ${TEAR_MS}ms ${EASE_OUT}`,
   };
 }
