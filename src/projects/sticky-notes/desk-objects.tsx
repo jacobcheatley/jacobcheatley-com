@@ -24,9 +24,11 @@ const MID = (PAPER_COLOURS.length - 1) / 2;
 
 const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
 
-// Tool sizes. The drawn object is one thing, its slot another: every slot is a
-// 48px thumb target (the #70 verdict) and never shrinks, while the stationery
-// inside keeps the size it looks right at. The strip wraps rather than squeezes.
+// Tool sizes. The strip is ONE row at every width (#74), so nothing on it may
+// wrap, grow or shrink: each object lies in a box of a fixed size, and every
+// lift, tilt and cap-off inside that box is a transform, which cannot move its
+// neighbours. A marker's box is only as wide as the marker (they sit shoulder
+// to shoulder on a phone); its 88px height is what keeps it a thumb target.
 const TOUCH = 48;
 const MARKER_W = 30; // drawn width — the T0 verdict (#70) wanted fatter objects, not just fatter targets
 const MARKER_H = 72;
@@ -38,9 +40,30 @@ const ERASER_H = 28;
 const ROCKER_W = TOUCH;
 const ROCKER_H = TOUCH;
 const FONT_CHIP = TOUCH;
-// The sticker tab: drawn as a sheet corner inside its 48px target.
+// The sticker tab: drawn as a sheet corner, and its own target.
 const STICKER_TAB_W = 40;
 const STICKER_TAB_H = 44;
+const BIN_W = TOUCH;
+const BIN_H = 56;
+
+// The space between the objects in a group: whatever room the screen has left,
+// and none at all on a narrow phone. The markers "really don't need spacing"
+// (owner, #74) — closing up is what keeps the strip one row.
+export const DESK_GAP = "clamp(0px, 1.5vw - 5px, 12px)";
+// Past zero the four markers lean on each other rather than wrap. ponytail: 4px
+// a side is the ceiling — 8px of overlap between neighbours, which is where a
+// 30px marker still reads as a separate pen. If a narrower phone than 320
+// turns up, take the width off the bin and the pad stack, not off this.
+const SQUEEZE = "clamp(-4px, (100vw - 420px) / 25, 0px)";
+
+// The fixed boxes the strip's objects lie in.
+export const MARKER_SLOT: CSSProperties = {
+  width: MARKER_W,
+  height: TOOL_H,
+  marginInline: SQUEEZE,
+};
+export const ERASER_SLOT: CSSProperties = { width: ERASER_W, height: TOOL_H };
+export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
 
 // How long the held tool shakes when the note is full and nothing more fits.
 export const SHAKE_MS = 200;
@@ -56,12 +79,14 @@ const ERASER_HOTSPOT: [number, number] = [5, ERASER_H - 3];
 export type Mode = "draw" | "write";
 
 // A tool lying in its slot on the mat: the object plus the shadow that IS the
-// slot. The whole slot is the target, never smaller than a thumb and never
-// shrunk by a narrow strip.
+// slot. The whole slot is the target, and its box is fixed (`slot`) — the tool
+// inside it lifts and tilts by transform only, so picking up or using one tool
+// can never shift the object beside it (#74).
 export function ToolSlot({
   label,
   held,
   shake = false,
+  slot,
   onClick,
   children,
 }: {
@@ -69,6 +94,8 @@ export function ToolSlot({
   held: boolean;
   // the note is full: rock the tool so the dead pointer-down says something
   shake?: boolean;
+  // the fixed box this tool lies in, from the sizes above
+  slot: CSSProperties;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -78,9 +105,9 @@ export function ToolSlot({
       aria-label={label}
       aria-pressed={held}
       onClick={onClick}
-      className="relative flex min-h-12 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
+      className="relative flex shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
       style={{
-        height: TOOL_H,
+        ...slot,
         animation: shake ? `desk-shake ${SHAKE_MS}ms ease-in-out` : undefined,
       }}
     >
@@ -426,9 +453,11 @@ export function Bin({
     <button
       type="button"
       aria-label="Bin this note"
+      data-slot="bin"
       onClick={onClick}
       disabled={disabled}
-      className="relative flex h-14 min-h-12 w-14 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 disabled:opacity-45"
+      className="relative flex shrink-0 items-end justify-center border-0 bg-transparent p-0 disabled:opacity-45"
+      style={{ width: BIN_W, height: BIN_H }}
     >
       <span
         className="absolute right-1.5 bottom-[46px] left-1.5 block h-1.5 rounded-sm"
@@ -479,9 +508,9 @@ export function StickerTab({
       aria-label={`${open ? "Close" : "Open"} the sticker sheet`}
       aria-expanded={open}
       onClick={onClick}
-      className={`relative flex min-h-12 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 ${STILL}`}
+      className={`relative flex shrink-0 items-end justify-center border-0 bg-transparent p-0 ${STILL}`}
       style={{
-        height: TOUCH,
+        ...TAB_SLOT,
         transform: lift ? `translateY(${-lift}px)` : "none",
         transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
       }}

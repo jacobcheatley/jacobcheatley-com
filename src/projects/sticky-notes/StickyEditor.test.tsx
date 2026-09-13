@@ -27,6 +27,9 @@ const pad = (colour: string) =>
     name: new RegExp(`${colour} (paper|sheet)`, "i"),
   });
 const bin = () => screen.getByRole("button", { name: /bin this note/i });
+// the fixed boxes the strip's objects lie in, by the marker on each
+const slot = (name: string) =>
+  document.querySelector<HTMLElement>(`[data-slot="${name}"]`);
 const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
   note()?.closest("[data-colour]")?.getAttribute("data-colour");
@@ -468,27 +471,39 @@ describe("StickyEditor eraser and hands", () => {
 });
 
 describe("StickyEditor thumb targets", () => {
-  // jsdom measures nothing, so what is asserted is the rules that hold the
-  // size: 48px minimums that no narrow strip is allowed to squeeze (#70 —
-  // "objects are too small in general").
-  const objects = () => [
-    ...screen.getAllByRole("button", { name: /(pick up|put down) the/i }),
-    screen.getByRole("button", { name: /draw with the marker/i }),
-    screen.getByRole("button", { name: /write with the marker/i }),
-    screen.getByRole("button", { name: /bin this note/i }),
-    screen.getByRole("button", { name: /fan out the pads/i }),
-    document.querySelector<HTMLElement>('[data-slot="sticker-tab"]'),
+  // jsdom measures nothing, so what is asserted is the rule that holds the
+  // size: every object lies in a box with a fixed width and height that no
+  // flex rule may squeeze, and nothing the tool DOES may resize (#74).
+  const slots = () => [
+    slot("eraser"),
+    slot("sticker-tab"),
+    slot("pads"),
+    slot("bin"),
+    ...screen
+      .getAllByRole("button", { name: /(pick up|put down) the .* marker/i })
+      .map((el) => el as HTMLElement),
   ];
 
-  it("gives every object on the strip a 48px target that cannot shrink", () => {
+  it("lays every object in a box of its own fixed size", () => {
     render(<StickyEditor initialContent={seeded({})} />);
 
-    for (const el of objects()) {
-      const cls = el?.className ?? "";
-      expect(cls).toContain("min-w-12");
-      expect(cls).toContain("min-h-12");
-      expect(cls).not.toMatch(/(^|\s)min-w-0(\s|$)/);
-      expect(cls).not.toMatch(/(^|\s)shrink(\s|$)/);
+    for (const el of slots()) {
+      expect(el?.style.width).toMatch(/^\d+px$/);
+      expect(el?.style.height).toMatch(/^\d+px$/);
+      expect(el?.className).not.toMatch(/(^|\s)shrink(\s|$)/);
+    }
+  });
+
+  it("keeps every object at least a thumb's reach in one direction", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+
+    for (const el of slots()) {
+      const w = Number.parseInt(el?.style.width ?? "0", 10);
+      const h = Number.parseInt(el?.style.height ?? "0", 10);
+      // a marker is only 30 wide (they sit shoulder to shoulder), so its 88px
+      // height is what makes it hittable
+      expect(Math.max(w, h)).toBeGreaterThanOrEqual(48);
+      expect(Math.min(w, h)).toBeGreaterThanOrEqual(30);
     }
   });
 
@@ -508,15 +523,39 @@ describe("StickyEditor thumb targets", () => {
     expect(draw.parentElement?.className).toContain("flex-col");
   });
 
-  it("wraps the markers onto their own row below sm, nearest the thumb", () => {
+  it("keeps the strip one row at every width, corners in the corners", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    const row = screen.getByRole("button", {
+    const centre = screen.getByRole("button", {
+      name: /pick up the red marker/i,
+    }).parentElement;
+    const strip = centre?.parentElement;
+
+    // nothing may wrap, and nothing may be re-ordered onto another line
+    expect(strip?.className).not.toContain("flex-wrap");
+    for (const el of [strip, centre])
+      expect(el?.className).not.toMatch(/max-sm:/);
+
+    // left, centre, right — direct children of the one row, in that order
+    expect([...(strip?.children ?? [])]).toEqual([
+      slot("pads"),
+      centre,
+      slot("eraser")?.parentElement,
+    ]);
+  });
+
+  it("closes the markers up as the strip narrows, and no further", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const centre = screen.getByRole("button", {
       name: /pick up the red marker/i,
     }).parentElement;
 
-    expect(row?.className).toContain("max-sm:order-last");
-    expect(row?.className).toContain("max-sm:basis-full");
-    expect(row?.parentElement?.className).toContain("flex-wrap");
+    // the gap between the objects in the centre is the room there is for it
+    expect(centre?.style.gap).toContain("clamp(0px");
+    // and past zero they lean on each other, by a capped overlap
+    const marker = screen.getByRole("button", {
+      name: /pick up the red marker/i,
+    });
+    expect(marker.style.marginInline).toContain("clamp(-4px");
   });
 
   it("pops the font samples over the mat instead of onto the strip", () => {

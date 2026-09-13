@@ -9,9 +9,12 @@ import {
 import { EASE_OUT, STILL } from "./desk";
 import {
   Bin,
+  DESK_GAP,
+  ERASER_SLOT,
   EraserBody,
   FAN_MS,
   heldTool,
+  MARKER_SLOT,
   MarkerBody,
   type Mode,
   ModeControl,
@@ -19,6 +22,7 @@ import {
   padStyle,
   SHAKE_MS,
   StickerTab,
+  TAB_SLOT,
   ToolSlot,
 } from "./desk-objects";
 import {
@@ -696,13 +700,24 @@ export default function StickyEditor({
         />
       )}
 
-      {/* the desk strip: the mat's bottom edge, where the objects lie. Three
-          groups — left: the pads; centre: the markers and the draw/write
-          control; right: T5's sticker tab, the eraser, then the bin. */}
-      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-1 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      {/* the desk strip: the mat's bottom edge, where the objects lie. ONE row
+          at every width (#74) — three groups on the same edge: left, the pads;
+          centre, the markers and the draw/write control; right, the sticker
+          tab, the eraser, then the bin. Nothing wraps and nothing moves up: the
+          corners are where the corner objects live, and the room a narrow
+          screen takes comes out of the space BETWEEN the markers, never out of
+          the four corners. */}
+      <div
+        className="absolute inset-x-0 bottom-0 flex items-end justify-between pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        style={{ paddingInline: DESK_GAP }}
+      >
         <div
+          data-slot="pads"
           className="relative z-30 shrink-0"
-          style={{ width: PAD + 12, height: PAD + 8 }}
+          // A hair narrower than the resting pile is wide: at 320 those two
+          // pixels are the difference between the strip fitting and the bin
+          // hanging off the mat, and the pile draws over the marker beside it.
+          style={{ width: PAD + 8, height: PAD + 8 }}
         >
           {PAPER_COLOURS.map((colour, i) => (
             <button
@@ -732,15 +747,22 @@ export default function StickyEditor({
           />
         </div>
 
-        {/* Below `sm` the markers wrap onto their own row UNDER the rest, which
-            puts the objects you reach for most nearest the thumb. */}
-        <div className="flex min-h-12 flex-1 items-end justify-center gap-1 max-sm:order-last max-sm:basis-full max-sm:justify-center">
+        {/* The markers close up as the screen narrows: the gap is whatever room
+            is left over, and at zero the SQUEEZE in MARKER_SLOT leans them on
+            each other. The group keeps the middle of the strip either way. */}
+        <div
+          // min-w-0: on a screen narrower than the objects, the markers lean
+          // further over each other rather than push the corners off the mat.
+          className="flex min-w-0 flex-1 items-end justify-center"
+          style={{ gap: DESK_GAP }}
+        >
           {INKS.map((ink) => (
             <ToolSlot
               key={ink}
               label={`${held === ink ? "Put down" : "Pick up"} the ${ink} marker`}
               held={held === ink}
               shake={shaking && held === ink}
+              slot={MARKER_SLOT}
               onClick={() => pickUp(ink)}
             >
               <MarkerBody ink={ink} held={held === ink} using={using} />
@@ -762,12 +784,13 @@ export default function StickyEditor({
           />
         </div>
 
-        <div className="flex shrink-0 items-end gap-1">
+        <div className="flex shrink-0 items-end" style={{ gap: DESK_GAP }}>
           {/* the tab rides above the sheet it pulls up (z), so it is still the
               way to put it away */}
           <div
             data-slot="sticker-tab"
-            className="relative z-50 min-h-12 min-w-12 shrink-0"
+            className="relative z-50 shrink-0"
+            style={TAB_SLOT}
           >
             <StickerTab
               ref={stickerTab}
@@ -776,10 +799,11 @@ export default function StickyEditor({
               onClick={() => setSheetOpen((open) => !open)}
             />
           </div>
-          <div data-slot="eraser" className="shrink-0">
+          <div data-slot="eraser" className="shrink-0" style={ERASER_SLOT}>
             <ToolSlot
               label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
               held={held === "eraser"}
+              slot={ERASER_SLOT}
               onClick={() => pickUp("eraser")}
             >
               <EraserBody held={held === "eraser"} using={using} />
