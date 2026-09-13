@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Element, emptyNote } from "./note-editor";
-import { MAX_ELEMENTS, type NoteContent } from "./note-schema";
+import { MAX_ELEMENTS, type NoteContent, STICKER_EMOJI } from "./note-schema";
 import StickyEditor from "./StickyEditor";
 
 // The desk island (#73). No tools yet — markers, eraser and stickers land in
@@ -608,5 +608,131 @@ describe("StickyEditor pointer gestures", () => {
       screen.getByRole("button", { name: /put down the red marker/i }).style
         .animation,
     ).toContain("desk-shake");
+  });
+});
+
+describe("StickyEditor sticker sheet", () => {
+  const tab = () => screen.getByRole("button", { name: /the sticker sheet/i });
+  const cell = (emoji: string) =>
+    screen.getByRole("button", { name: `Peel the ${emoji} sticker` });
+  const upAt = (el: HTMLElement, x: number, y: number) =>
+    fireEvent.pointerUp(el, { clientX: x, clientY: y, pointerId: 1 });
+  // peel one off the sheet and let go at a point on the mat
+  const dragTo = (emoji: string, x: number, y: number) => {
+    // a placement leaves the sheet up, so only pull it out when it is away
+    if (tab().getAttribute("aria-expanded") === "false") fireEvent.click(tab());
+    const slot = cell(emoji);
+    down(slot, 300, 600);
+    move(slot, x, y);
+    upAt(slot, x, y);
+    return slot;
+  };
+
+  it("pulls the sheet up from the tab and puts it away again", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    expect(tab()).toHaveAttribute("aria-expanded", "false");
+    // parked below the mat's edge: out of the screen reader's way too
+    expect(screen.queryByRole("button", { name: /peel the/i })).toBeNull();
+
+    fireEvent.click(tab());
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("button", { name: /peel the/i })).toHaveLength(
+      STICKER_EMOJI.length,
+    );
+
+    fireEvent.click(tab());
+    expect(tab()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("closes the sheet on Escape", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    fireEvent.click(tab());
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(tab()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("moves the note clear of the sheet while it is up", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const stage = () => paperSurface().parentElement;
+    expect(stage()?.style.transform).toBe("none");
+
+    fireEvent.click(tab());
+    expect(stage()?.style.transform).toContain("translateY(-10%)");
+  });
+
+  it("sticks a peeled sticker where it was dropped on the paper", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    paperSurface(); // 500x500 at the origin: client coords ARE note coords
+    const slot = dragTo("⭐", 250, 250);
+
+    expect(drawn()).toHaveLength(1);
+    expect(drawn()[0]?.textContent).toBe("⭐");
+    expect(drawn()[0]?.getAttribute("x")).toBe("250");
+    expect(drawn()[0]?.getAttribute("y")).toBe("250");
+    // the sheet is infinite: the slot is printed again, and still up
+    expect(slot).not.toHaveAttribute("data-peeled");
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("peels the same sticker as many times as it is asked for", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    paperSurface();
+    dragTo("🔥", 100, 100);
+    dragTo("🔥", 400, 300);
+
+    expect(drawn().map((el) => el.getAttribute("x"))).toEqual(["100", "400"]);
+  });
+
+  it("marks the slot bare while its sticker is in flight", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    paperSurface();
+    fireEvent.click(tab());
+    down(cell("⭐"), 300, 600);
+
+    expect(cell("⭐")).toHaveAttribute("data-peeled");
+    expect(drawn()).toHaveLength(0);
+  });
+
+  it("sticks nothing when the sticker is let go off the paper", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    paperSurface();
+    const slot = dragTo("⭐", 900, 900);
+
+    expect(drawn()).toHaveLength(0);
+    wait(400); // it flies home, then the slot is printed again
+    expect(slot).not.toHaveAttribute("data-peeled");
+  });
+
+  it("lifts nothing off a full note", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({
+          elements: Array.from({ length: MAX_ELEMENTS }, () => HI),
+        })}
+      />,
+    );
+    paperSurface();
+    fireEvent.click(tab());
+    down(cell("⭐"), 300, 600);
+    expect(cell("⭐")).not.toHaveAttribute("data-peeled"); // nothing lifts
+    upAt(cell("⭐"), 250, 250);
+
+    expect(drawn()).toHaveLength(MAX_ELEMENTS);
+  });
+
+  it("keeps the marker in your hand through a peel and a drop", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    paperSurface();
+    pickUp(/pick up the green marker/i);
+    pickUp(/write with the marker/i);
+    dragTo("🎉", 250, 250);
+
+    expect(
+      screen.getByRole("button", { name: /put down the green marker/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /write with the marker/i }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });

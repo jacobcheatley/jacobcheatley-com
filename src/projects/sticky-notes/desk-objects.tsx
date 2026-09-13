@@ -9,6 +9,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
+import { SHEET_MS, TAB_LIFT } from "./StickerSheet";
 
 // The things lying on the cutting mat, drawn: the pad stack's sheets, the
 // markers, the eraser, the draw/write rocker and the bin. Props in, CSS out —
@@ -37,6 +38,9 @@ const ERASER_H = 28;
 const ROCKER_W = TOUCH;
 const ROCKER_H = TOUCH;
 const FONT_CHIP = TOUCH;
+// The sticker tab: drawn as a sheet corner inside its 48px target.
+const STICKER_TAB_W = 40;
+const STICKER_TAB_H = 44;
 
 // How long the held tool shakes when the note is full and nothing more fits.
 export const SHAKE_MS = 200;
@@ -446,6 +450,57 @@ export function Bin({
           style={{
             background:
               "repeating-linear-gradient(96deg, rgba(0,0,0,.3) 0 1px, transparent 1px 8px)",
+          }}
+        />
+      </span>
+    </button>
+  );
+}
+
+// The sticker sheet's tab (#75): the corner of a sheet of stickers peeking over
+// the mat's bottom edge. Open, it rides up with the sheet and perches on its
+// top-right corner, so it is still the thing you tap to put the sheet away.
+export function StickerTab({
+  open,
+  onClick,
+}: {
+  open: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`${open ? "Close" : "Open"} the sticker sheet`}
+      aria-expanded={open}
+      onClick={onClick}
+      className={`relative flex min-h-12 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 ${STILL}`}
+      style={{
+        height: TOUCH,
+        transform: open ? `translateY(${-TAB_LIFT}px)` : "none",
+        transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="relative flex items-start justify-center"
+        style={{
+          width: STICKER_TAB_W,
+          height: STICKER_TAB_H,
+          paddingTop: 7,
+          borderRadius: "4px 4px 1px 1px",
+          fontSize: 17,
+          lineHeight: 1,
+          background: "linear-gradient(180deg,#ffffff,#ece8de)",
+          boxShadow: "0 -2px 8px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.3)",
+        }}
+      >
+        ⭐{/* the dog-eared corner that says "peel me" */}
+        <span
+          className="absolute top-0 right-0 block"
+          style={{
+            borderWidth: "0 9px 9px 0",
+            borderStyle: "solid",
+            borderColor: "transparent #cfcabd transparent transparent",
           }}
         />
       </span>

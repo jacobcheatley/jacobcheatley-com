@@ -18,6 +18,7 @@ import {
   PAD,
   padStyle,
   SHAKE_MS,
+  StickerTab,
   ToolSlot,
 } from "./desk-objects";
 import {
@@ -54,6 +55,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
+import { SHEET_MS, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
 // the bin, and the stationery — four markers, the draw/write control and the
@@ -88,6 +90,7 @@ const CRUMPLE_TO = "translate(34vw, 38vh) rotate(260deg) scale(.06)";
 
 type StrokeEl = Extract<NoteElement, { type: "stroke" }>;
 type TextEl = Extract<NoteElement, { type: "text" }>;
+type StickerEl = Extract<NoteElement, { type: "sticker" }>;
 // Nothing held is hand mode — the absence of a tool, not a tool of its own.
 type Held = Ink | "eraser" | null;
 
@@ -123,6 +126,9 @@ export default function StickyEditor({
   // The font samples pop up over the mat, like the fanned pads: opened by the
   // "Aa" side of the rocker, closed by a tap elsewhere, Escape or a choice.
   const [fontsOpen, setFontsOpen] = useState(false);
+  // The sticker sheet is independent of what is in your hand: opening it neither
+  // puts a marker down nor picks anything up.
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [selected, setSelected] = useState(-1);
   const [textDraft, setTextDraft] = useState<TextEl | null>(null);
   // A finger leaves the tool docked on the mat, so the dock has to show the
@@ -239,6 +245,17 @@ export default function StickyEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [fontsOpen]);
 
+  // The sheet's other way out (the tab and a swipe down its handle are the two
+  // on the mat itself).
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheetOpen]);
+
   // The fade's second half: flip to transparent one PAINTED frame after the
   // ghost mounts. One rAF isn't enough — it can run before the browser has
   // taken a style recalc of the opaque mount, and then nothing transitions.
@@ -314,16 +331,51 @@ export default function StickyEditor({
   }
 
   // --- the paper -----------------------------------------------------------
-  // Pointer → note coordinates. NotePaper has no fastener headroom, so the
-  // paper's box IS 0..CANVAS on both axes. T6 folds the note's rotation in here.
-  function toNote(e: ReactPointerEvent): [number, number, number] {
+  // Client → note coordinates. NotePaper has no fastener headroom, so the
+  // paper's box IS 0..CANVAS on both axes. The one mapping in the editor: the
+  // paper's own gestures come through `toNote`, a peeled sticker lands through
+  // `dropSticker`, and T6 folds the note's rotation in here for both.
+  function clientToNote(clientX: number, clientY: number): [number, number] {
     const rect = paperRef.current?.getBoundingClientRect();
-    if (!rect?.width || !rect.height) return [0, 0, 0.5];
+    if (!rect?.width || !rect.height) return [0, 0];
     return [
-      clampCoord(((e.clientX - rect.left) / rect.width) * CANVAS),
-      clampCoord(((e.clientY - rect.top) / rect.height) * CANVAS),
-      e.pressure || 0.5,
+      clampCoord(((clientX - rect.left) / rect.width) * CANVAS),
+      clampCoord(((clientY - rect.top) / rect.height) * CANVAS),
     ];
+  }
+
+  function toNote(e: ReactPointerEvent): [number, number, number] {
+    const [x, y] = clientToNote(e.clientX, e.clientY);
+    return [x, y, e.pressure || 0.5];
+  }
+
+  // A sticker released off the sheet: it sticks only where it was dropped, and
+  // only if that is on the paper. Nothing else about the editor moves — the
+  // selection, the held tool and the mode are all somebody else's gesture.
+  function dropSticker(
+    emoji: StickerEl["emoji"],
+    clientX: number,
+    clientY: number,
+  ): boolean {
+    const rect = paperRef.current?.getBoundingClientRect();
+    if (!rect?.width || !rect.height || tearing || crumpling) return false;
+    if (
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    )
+      return false;
+    // Same as a tap on the paper: the open box commits first, then this drop
+    // does its own job on what that left behind.
+    if (textDraft) commitText();
+    const live = contentRef.current;
+    if (!live) return false;
+    const [x, y] = clientToNote(clientX, clientY);
+    apply(
+      addElement(live, { type: "sticker", x, y, emoji, scale: 1, rotation: 0 }),
+    );
+    return true;
   }
 
   // Nothing on the paper wants the browser's default pointer-down: no text
@@ -519,74 +571,86 @@ export default function StickyEditor({
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center pb-32">
         {shown && (
           <div
-            ref={paperRef}
-            data-colour={shown.colour}
-            className={`${STILL} pointer-events-auto relative touch-none`}
-            onPointerDown={onPaperDown}
-            onPointerMove={onPaperMove}
-            onPointerUp={onPaperUp}
-            onPointerCancel={onPaperUp}
-            onPointerLeave={hideCursorTool}
+            // The sticker sheet takes the bottom of the mat, so the note moves
+            // up out of its way and stays whole.
+            // ponytail: one fixed shrink, not a measurement — it clears a
+            // 242px sheet from 320x568 up. Measure if the sheet ever grows.
+            className={STILL}
             style={{
-              width: "min(88vw, 60vh)",
-              aspectRatio: NOTE_PAPER_ASPECT_RATIO,
-              filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
-              // the held tool IS the cursor over the paper
-              cursor: fine && held ? "none" : undefined,
-              ...noteMotion(tearing, crumpling),
+              transform: sheetOpen ? "translateY(-10%) scale(.8)" : "none",
+              transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
             }}
           >
-            <NotePaper content={shown} />
+            <div
+              ref={paperRef}
+              data-colour={shown.colour}
+              className={`${STILL} pointer-events-auto relative touch-none`}
+              onPointerDown={onPaperDown}
+              onPointerMove={onPaperMove}
+              onPointerUp={onPaperUp}
+              onPointerCancel={onPaperUp}
+              onPointerLeave={hideCursorTool}
+              style={{
+                width: "min(88vw, 60vh)",
+                aspectRatio: NOTE_PAPER_ASPECT_RATIO,
+                filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
+                // the held tool IS the cursor over the paper
+                cursor: fine && held ? "none" : undefined,
+                ...noteMotion(tearing, crumpling),
+              }}
+            >
+              <NotePaper content={shown} />
 
-            {/* T6 replaces this with the element's rotated box plus handles */}
-            {selectedEl && (
-              <svg
-                viewBox={`0 0 ${CANVAS} ${CANVAS}`}
-                className="pointer-events-none absolute inset-0 h-full w-full"
-                aria-hidden="true"
-              >
-                <title>selection</title>
-                {selectionRect(selectedEl)}
-              </svg>
-            )}
+              {/* T6 replaces this with the element's rotated box plus handles */}
+              {selectedEl && (
+                <svg
+                  viewBox={`0 0 ${CANVAS} ${CANVAS}`}
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                  aria-hidden="true"
+                >
+                  <title>selection</title>
+                  {selectionRect(selectedEl)}
+                </svg>
+              )}
 
-            {ghost && (
-              <svg
-                key={ghost.id}
-                viewBox={`0 0 ${CANVAS} ${CANVAS}`}
-                className={`${STILL} pointer-events-none absolute inset-0 h-full w-full`}
-                aria-hidden="true"
-                style={{
-                  opacity: ghost.out ? 0 : 1,
-                  transition: `opacity ${GHOST_MS}ms linear`,
-                }}
-              >
-                <title>rubbed out</title>
-                {renderElement(ghost.el, 0)}
-              </svg>
-            )}
+              {ghost && (
+                <svg
+                  key={ghost.id}
+                  viewBox={`0 0 ${CANVAS} ${CANVAS}`}
+                  className={`${STILL} pointer-events-none absolute inset-0 h-full w-full`}
+                  aria-hidden="true"
+                  style={{
+                    opacity: ghost.out ? 0 : 1,
+                    transition: `opacity ${GHOST_MS}ms linear`,
+                  }}
+                >
+                  <title>rubbed out</title>
+                  {renderElement(ghost.el, 0)}
+                </svg>
+              )}
 
-            {/* WYSIWYG: the visible text is the SVG above; this only catches
+              {/* WYSIWYG: the visible text is the SVG above; this only catches
                 keystrokes, so it is invisible and never takes the pointer. */}
-            {textDraft && (
-              <textarea
-                ref={textRef}
-                aria-label="Text box"
-                value={textDraft.text}
-                maxLength={MAX_TEXT_LEN}
-                onChange={(e) =>
-                  setTextDraft((d) => d && { ...d, text: e.target.value })
-                }
-                onBlur={commitText}
-                onKeyDown={(e) => {
-                  if (e.key !== "Escape") return;
-                  e.preventDefault();
-                  setTextDraft(null);
-                }}
-                className="pointer-events-none absolute resize-none border-0 bg-transparent p-0 opacity-0 outline-none"
-                style={textBoxStyle(textDraft)}
-              />
-            )}
+              {textDraft && (
+                <textarea
+                  ref={textRef}
+                  aria-label="Text box"
+                  value={textDraft.text}
+                  maxLength={MAX_TEXT_LEN}
+                  onChange={(e) =>
+                    setTextDraft((d) => d && { ...d, text: e.target.value })
+                  }
+                  onBlur={commitText}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Escape") return;
+                    e.preventDefault();
+                    setTextDraft(null);
+                  }}
+                  className="pointer-events-none absolute resize-none border-0 bg-transparent p-0 opacity-0 outline-none"
+                  style={textBoxStyle(textDraft)}
+                />
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -676,8 +740,17 @@ export default function StickyEditor({
         </div>
 
         <div className="flex shrink-0 items-end gap-1">
-          {/* T5 fills this with the sticker sheet's tab */}
-          <div data-slot="sticker-tab" className="min-h-12 min-w-12 shrink-0" />
+          {/* the tab rides above the sheet it pulls up (z), so it is still the
+              way to put it away */}
+          <div
+            data-slot="sticker-tab"
+            className="relative z-50 min-h-12 min-w-12 shrink-0"
+          >
+            <StickerTab
+              open={sheetOpen}
+              onClick={() => setSheetOpen((open) => !open)}
+            />
+          </div>
           <div data-slot="eraser" className="shrink-0">
             <ToolSlot
               label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
@@ -690,6 +763,15 @@ export default function StickyEditor({
           <Bin onClick={binIt} disabled={!content || crumpling} />
         </div>
       </div>
+
+      <StickerSheet
+        open={sheetOpen}
+        // Nothing to stick it to, or no room left: the sticker stays put. The
+        // tool shake belongs to the tool in your hand, and peeling holds none.
+        canPeel={!!content && content.elements.length < MAX_ELEMENTS}
+        onDrop={dropSticker}
+        onClose={() => setSheetOpen(false)}
+      />
 
       {/* the held tool, riding a mouse with its nib on the hotspot. Parked
           off-screen until the pointer is over the paper. */}
