@@ -9,8 +9,8 @@ import { INK } from "./note-render";
 import { CANVAS, type NoteContent } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
-// What the editor draws over the note: the caret and the grip, plus the outline
-// and handles kept for the element being placed (#80). Stateless — handed an
+// What the editor draws over the note: the caret, the grip, and the outline and
+// handles of the element being placed (#80). Stateless — handed an
 // element, it draws it — so it lives apart from StickyEditor's gesture shell,
 // which only decides what shows.
 
@@ -100,9 +100,8 @@ export function gripMark(grip: Corner, curl: NoteContent["curl"]) {
 
 // The dashed box around an element, in note units — inside the element's own
 // rotation, so the outline lies on the thing rather than around it. A stroke
-// has no rotation of its own: its box is the ink's. Unused since #79; T9 (#80)
-// outlines the element being placed.
-export function selectionRect(el: NoteElement) {
+// has no rotation of its own: its box is the ink's.
+export function outlineRect(el: NoteElement) {
   const b = bounds(el);
   const box = (
     <rect
@@ -121,15 +120,15 @@ export function selectionRect(el: NoteElement) {
   return <g transform={`rotate(${el.rotation} ${el.x} ${el.y})`}>{box}</g>;
 }
 
-// An element's handles: one at the box's far corner that turns it, and on a
-// text box a second on its right edge for the width it wraps at. Drawn small —
+// An element's handles: one at the box's far corner that only turns it, and on
+// a text box a second on its right edge for the width it wraps at. Drawn small —
 // they sit on a note, not a toolbar — and caught from HANDLE_TOUCH px away.
-// Unused since #79; T9 (#80) draws them on the element being placed.
 export function handleMarks(el: NoteElement) {
   const handles = elementHandles(el);
   if (!handles) return null;
-  const knob = (at: [number, number], r: number) => (
+  const knob = (at: [number, number], r: number, name: string) => (
     <circle
+      data-handle={name}
       cx={at[0]}
       cy={at[1]}
       r={r}
@@ -141,8 +140,8 @@ export function handleMarks(el: NoteElement) {
   );
   return (
     <>
-      {handles.width && knob(handles.width, HANDLE_R - 2)}
-      {knob(handles.corner, HANDLE_R)}
+      {handles.width && knob(handles.width, HANDLE_R - 2, "width")}
+      {knob(handles.corner, HANDLE_R, "corner")}
     </>
   );
 }

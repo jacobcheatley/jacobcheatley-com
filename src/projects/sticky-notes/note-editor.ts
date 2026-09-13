@@ -13,12 +13,11 @@ import { LINE_HEIGHT, wrapLines } from "./note-text";
 // curl) are unit-tested here, and the shell stays thin: it maps pointers onto
 // these calls and holds no model logic of its own.
 //
-// A placed element never changes again (#79), so the move and handle maths
-// below wait for T9 (#80), which moves an element only while it is being
-// placed. That drag is deliberately unclamped: `moveElement` lets coordinates
-// leave the schema's -50..550 range, so a sticker can be dragged off the paper
-// to go back to its sheet. Out-of-range coords are editor runtime state, never
-// stored — `isOffNote` or `settleElement` decides on release.
+// A placed element never changes again (#79): the move and handle maths below
+// is for the element still being placed (#80). `moveElement` is unclamped, and
+// `settleElement` brings the result back inside the schema's -50..550 range, so
+// out-of-range coords are never stored; `isOffNote` tells the shell a sticker
+// has been dragged off the paper, back to its sheet.
 
 export type Element = NoteContent["elements"][number];
 
@@ -75,17 +74,6 @@ export function addElement(content: NoteContent, el: Element): NoteContent {
   return { ...content, elements: [...content.elements, el] };
 }
 
-export function updateElement(
-  content: NoteContent,
-  index: number,
-  el: Element,
-): NoteContent {
-  if (index < 0 || index >= content.elements.length) return content;
-  const elements = content.elements.slice();
-  elements[index] = el;
-  return { ...content, elements };
-}
-
 export function removeElement(
   content: NoteContent,
   index: number,
@@ -96,29 +84,25 @@ export function removeElement(
   };
 }
 
-function translate(el: Element, dx: number, dy: number): Element {
-  if (el.type === "stroke") {
-    return {
-      ...el,
-      points: el.points.map(([x, y, p]) => [x + dx, y + dy, p]),
-    };
-  }
-  return { ...el, x: el.x + dx, y: el.y + dy };
-}
-
 // Rigid, unclamped translation: every point moves by the same delta, so a
 // stroke keeps its shape instead of squashing flat against an edge, and an
-// element can be dragged fully off the paper. Unused since #79; T9 (#80) moves
-// the element being placed with it.
-export function moveElement(
-  content: NoteContent,
-  index: number,
+// element can be dragged fully off the paper. Rounded to a tenth like
+// clampCoord: a drag's deltas are differences of floats, and their dust would
+// otherwise be stored.
+// `<E extends Element>` hands back the same kind of element it was given, so a
+// moved text box is still known to be a text box. TS can't follow that generic
+// through an object spread, hence the `as E`.
+export function moveElement<E extends Element>(
+  el: E,
   dx: number,
   dy: number,
-): NoteContent {
-  const el = content.elements[index];
-  if (!el) return content;
-  return updateElement(content, index, translate(el, dx, dy));
+): E {
+  if (el.type === "stroke")
+    return {
+      ...el,
+      points: el.points.map(([x, y, p]) => [round1(x + dx), round1(y + dy), p]),
+    } as E;
+  return { ...el, x: round1(el.x + dx), y: round1(el.y + dy) } as E;
 }
 
 // The minimal shift that brings [lo, hi] back inside -50..550. A span wider
@@ -133,8 +117,7 @@ function settleShift(lo: number, hi: number): number {
 // drag: the smallest rigid shift that puts every STORED coordinate inside
 // -50..550 (a stroke's points; a text or sticker anchor — the schema constrains
 // coords, not silhouettes). Returns the element unchanged when it already fits.
-// Unused since #79; T9 (#80) settles the element being placed with it.
-export function settleElement(el: Element): Element {
+export function settleElement<E extends Element>(el: E): E {
   let x0: number;
   let x1: number;
   let y0: number;
@@ -154,7 +137,7 @@ export function settleElement(el: Element): Element {
   }
   const dx = settleShift(x0, x1);
   const dy = settleShift(y0, y1);
-  return dx === 0 && dy === 0 ? el : translate(el, dx, dy);
+  return dx === 0 && dy === 0 ? el : moveElement(el, dx, dy);
 }
 
 export type Bounds = { x0: number; y0: number; x1: number; y1: number };
@@ -248,7 +231,7 @@ function distToSegment(
 // Does the point land on the element's real silhouette? A stroke is its
 // polyline (its bounding box would swallow the hole in a drawn circle); text
 // and stickers are their box, seen through their own rotation.
-function hitsElement(el: Element, x: number, y: number): boolean {
+export function hitsElement(el: Element, x: number, y: number): boolean {
   if (el.type === "stroke") {
     const reach = el.size / 2 + HIT_SLOP;
     const pts = el.points;
@@ -270,8 +253,6 @@ function hitsElement(el: Element, x: number, y: number): boolean {
 }
 
 // True when the element sits entirely off the paper (0..CANVAS both axes).
-// Unused since #79; T9 (#80) sends a placing sticker dragged off back to its
-// sheet with it.
 export function isOffNote(el: Element): boolean {
   const b = bounds(el);
   return b.x1 < 0 || b.x0 > CANVAS || b.y1 < 0 || b.y0 > CANVAS;
@@ -404,10 +385,10 @@ export const turnNote = (from: number, by: number): number =>
 export const angleOf = (from: [number, number], to: [number, number]): number =>
   (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
 
-// --- an element's own handles (#76) -----------------------------------------
-// Nothing on the UI calls these since a placed element stopped changing (#79):
-// T9 (#80) hangs them off the element still being placed — a corner handle that
-// only turns it, and on a text box a right-edge handle for the width it wraps at.
+// --- an element's own handles (#76, #80) ------------------------------------
+// Only the element being placed has handles (a placed one never changes, #79):
+// a corner handle that only turns it, and on a text box a right-edge handle for
+// the width it wraps at.
 
 // The handles are drawn small (they sit on a note, not a toolbar) but caught
 // big: this is the target's width in CSS px, for the shell to size into note

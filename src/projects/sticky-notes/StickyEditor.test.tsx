@@ -254,7 +254,10 @@ function paperSurface(): HTMLElement {
 // The drawn elements, in z-order: NotePaper clips them into one group.
 const drawn = (root: ParentNode = document.body) =>
   Array.from(root.querySelector("g[clip-path]")?.children ?? []);
-const selectionBox = () => document.querySelector("rect[stroke-dasharray]");
+// The element being placed (#80) wears a dashed outline and its handles.
+const placingOutline = () => document.querySelector("rect[stroke-dasharray]");
+const handle = (name: "corner" | "width") =>
+  document.querySelector(`[data-handle="${name}"]`);
 // the overlay a rubbed-out element keeps fading on
 const ghostLayer = () =>
   [...document.querySelectorAll("svg")].find(
@@ -279,6 +282,26 @@ const up = (el: HTMLElement) => fireEvent.pointerUp(el, { pointerId: 1 });
 
 const pickUp = (name: RegExp) =>
   fireEvent.click(screen.getByRole("button", { name }));
+// A real press on something on the mat: the pointer comes down, then the click.
+const press = (name: RegExp) => {
+  const el = screen.getByRole("button", { name });
+  fireEvent.pointerDown(el);
+  fireEvent.click(el);
+};
+// A tap on the paper well clear of the boxes these tests open at (60, 80).
+const tapAway = () => {
+  const surface = paperSurface();
+  down(surface, 400, 420);
+  up(surface);
+};
+// What the note holds, read the way the editor hands it over: pinned up. A
+// click with no pointer-down, so it is "pin it up" itself that fixes what is
+// being placed.
+const pinned = (onLanding: ReturnType<typeof vi.fn>) => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  fireEvent.click(screen.getByRole("button", { name: /pin it up/i }));
+  return onLanding.mock.calls.at(-1)?.[0]?.elements;
+};
 
 // two text boxes that overlap around (60, 80) — B (last) draws on top of A
 const A: Element = { ...HI, x: 40, y: 60, text: "aaa" };
@@ -362,7 +385,7 @@ describe("StickyEditor writing", () => {
 
     const box = screen.getByRole("textbox", { name: /text box/i });
     fireEvent.change(box, { target: { value: "hello" } });
-    fireEvent.blur(box);
+    tapAway();
 
     expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
     expect(drawn()).toHaveLength(1);
@@ -376,14 +399,15 @@ describe("StickyEditor writing", () => {
     // Enter is the textarea's own: nothing intercepts it
     expect(fireEvent.keyDown(box, { key: "Enter" })).toBe(true);
     fireEvent.change(box, { target: { value: "one\ntwo" } });
-    fireEvent.blur(box);
+    tapAway();
 
     expect(drawn()[0]?.querySelectorAll("tspan")).toHaveLength(2);
   });
 
-  it("adds nothing when the box is committed empty", () => {
+  it("adds nothing when the box is fixed empty", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    fireEvent.blur(openBox());
+    openBox();
+    tapAway();
 
     expect(drawn()).toHaveLength(0);
   });
@@ -393,9 +417,19 @@ describe("StickyEditor writing", () => {
     const box = openBox();
     fireEvent.change(box, { target: { value: "no" } });
     fireEvent.keyDown(box, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
+    expect(drawn()).toHaveLength(0);
+  });
+
+  it("keeps the box open when the textarea loses focus: only a press fixes it", () => {
+    // a phone's keyboard going away blurs the box without a press anywhere
+    render(<StickyEditor initialContent={seeded({})} />);
+    const box = openBox();
+    fireEvent.change(box, { target: { value: "hi" } });
     fireEvent.blur(box);
 
-    expect(drawn()).toHaveLength(0);
+    expect(placingOutline()).not.toBeNull();
   });
 });
 
@@ -453,7 +487,7 @@ describe("StickyEditor caret", () => {
   it("takes the caret away with the box, committed or thrown out", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     fireEvent.change(openBox(), { target: { value: "hi" } });
-    fireEvent.blur(screen.getByRole("textbox", { name: /text box/i }));
+    tapAway();
     expect(caret()).toBeNull();
 
     // the marker is still in hand and still writing: open another box
@@ -670,25 +704,25 @@ describe("StickyEditor pointer gestures", () => {
     expect(down(paperSurface(), 60, 80)).toBe(false);
   });
 
-  it("commits the open box on a tap away, and starts the next one", () => {
+  it("fixes the open box on a tap away, and that tap opens no second one", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    fireEvent.change(
-      (() => {
-        pickUp(/pick up the red marker/i);
-        pickUp(/write with the marker/i);
-        const paper = paperSurface();
-        down(paper, 60, 80);
-        up(paper);
-        return screen.getByRole("textbox", { name: /text box/i });
-      })(),
-      { target: { value: "hi" } },
-    );
-
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
     const paper = paperSurface();
+    down(paper, 60, 80);
+    up(paper);
+    fireEvent.change(screen.getByRole("textbox", { name: /text box/i }), {
+      target: { value: "hi" },
+    });
+
     down(paper, 400, 400);
     up(paper);
-
     expect(screen.getByText("hi")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
+
+    // the next tap is the one that opens a box
+    down(paper, 400, 400);
+    up(paper);
     expect(screen.getByRole("textbox", { name: /text box/i })).toHaveFocus();
   });
 
@@ -919,7 +953,6 @@ describe("StickyEditor on a tilted note", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /text box/i }), {
       target: { value: "up" },
     });
-    fireEvent.blur(screen.getByRole("textbox", { name: /text box/i }));
 
     expect(drawn()[0]?.getAttribute("x")).toBe("250");
     expect(drawn()[0]?.getAttribute("y")).toBe("0");
@@ -1038,7 +1071,7 @@ describe("StickyEditor hand mode", () => {
     expect(tilt()).toContain("rotate(-21.6deg)");
     expect(drawn()[0]?.getAttribute("x")).toBe("40");
     expect(drawn()[0]?.getAttribute("y")).toBe("60");
-    expect(selectionBox()).toBeNull();
+    expect(placingOutline()).toBeNull();
   });
 
   it("holds the note still until a drag from near the centre leaves it", () => {
@@ -1070,7 +1103,7 @@ describe("StickyEditor hand mode", () => {
 
     expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
     expect(screen.queryAllByRole("button", { name: /write in/i })).toEqual([]);
-    expect(selectionBox()).toBeNull();
+    expect(placingOutline()).toBeNull();
     expect(drawn()[0]?.textContent).toBe("hi");
   });
 });
@@ -1155,5 +1188,138 @@ describe("StickyEditor font samples", () => {
 
     fireEvent.pointerDown(document.body);
     expect(casual()).toBeNull();
+  });
+});
+
+describe("StickyEditor placing", () => {
+  // A new text box or sticker can be moved, turned and (text) widened until the
+  // next press anywhere else fixes it, and that press does nothing more (#80).
+  // The paper is 500x500 at the origin, so a handle's 48px reach is 24 units.
+  const drag = (
+    surface: HTMLElement,
+    from: [number, number],
+    ...to: [number, number][]
+  ) => {
+    down(surface, ...from);
+    for (const [x, y] of to) move(surface, x, y);
+    up(surface);
+  };
+  const box = () => screen.queryByRole("textbox", { name: /text box/i });
+  const openBox = () => {
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const surface = paperSurface();
+    down(surface, 60, 80);
+    up(surface);
+    return surface;
+  };
+
+  it("moves, turns and widens a new text box, then fixes it with a tap that opens nothing", () => {
+    const onLanding = vi.fn();
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat })}
+        onLanding={onLanding}
+      />,
+    );
+    const surface = openBox();
+    // one empty line: the box is 60..300 x 80..110
+    expect(handle("corner")).not.toBeNull();
+    expect(handle("width")).not.toBeNull();
+
+    drag(surface, [100, 90], [150, 140]); // its body: now at (110, 130)
+    // the width handle, on the right edge at (350, 145): floored, then out
+    down(surface, 352, 145);
+    move(surface, 0, 145);
+    expect(handle("width")?.getAttribute("cx")).toBe(String(110 + 40));
+    move(surface, 460, 145);
+    up(surface);
+    // the corner handle at (460, 160): swung from 4.9 to 85.1 degrees round
+    // the box's anchor (110, 130), and never any bigger for it
+    drag(surface, [460, 160], [140, 480]);
+    expect(box()).toHaveFocus(); // the keyboard stayed up throughout
+    fireEvent.change(box() as HTMLElement, { target: { value: "hello" } });
+
+    down(surface, 400, 60);
+    up(surface);
+    expect(box()).toBeNull();
+    expect(placingOutline()).toBeNull();
+    expect(pinned(onLanding)).toEqual([
+      {
+        type: "text",
+        x: 110,
+        y: 130,
+        w: 350,
+        text: "hello",
+        font: "casual",
+        color: "red",
+        fontSize: 30,
+        rotation: 80.2,
+      },
+    ]);
+  });
+
+  it("changes the open box's font from the rocker's samples, and leaves it open", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    openBox();
+    fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
+
+    press(/write with the marker/i); // the samples, back up
+    const sample = screen.getByRole("button", {
+      name: /write in handwritten/i,
+    });
+    // a press on the rocker takes no focus off the box: a phone keeps its
+    // keyboard up
+    expect(fireEvent.pointerDown(sample)).toBe(false);
+    fireEvent.click(sample);
+
+    expect(box()).toHaveFocus();
+    expect(placingOutline()).not.toBeNull();
+    expect(drawn()[0]?.getAttribute("font-family")).toContain("Caveat");
+  });
+
+  it("leaves a fixed box alone: a press on it in hand mode turns the note", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = openBox();
+    fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
+    tapAway();
+    press(/put down the red marker/i);
+
+    drag(surface, [80, 90], [80, 190]); // on "hi"
+    expect(surface.style.transform).not.toContain("rotate(0deg)");
+    expect(drawn()[0]?.getAttribute("x")).toBe("60");
+    expect(drawn()[0]?.getAttribute("y")).toBe("80");
+    expect(box()).toBeNull();
+    expect(placingOutline()).toBeNull();
+  });
+
+  it.each([
+    ["another tool", /pick up the eraser/i],
+    ["the rocker's draw half", /draw with the marker/i],
+    ["the bin", /bin this note/i],
+    ["the sticker tab", /the sticker sheet/i],
+  ])("fixes the open box on a press on %s", (_, name) => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    openBox();
+    fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
+
+    press(name);
+    expect(box()).toBeNull();
+    expect(placingOutline()).toBeNull();
+    expect(drawn()[0]?.textContent).toBe("hi");
+  });
+
+  it("fixes the open box when the note is pinned up", () => {
+    const onLanding = vi.fn();
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat })}
+        onLanding={onLanding}
+      />,
+    );
+    openBox();
+    fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
+
+    expect(pinned(onLanding)).toMatchObject([{ type: "text", text: "hi" }]);
   });
 });

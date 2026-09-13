@@ -377,7 +377,14 @@ export function ModeControl({
   };
 
   return (
-    <div ref={ref} className="relative shrink-0">
+    <div
+      ref={ref}
+      className="relative shrink-0"
+      // A press here takes no focus: a text box being placed keeps its hidden
+      // textarea focused, so a phone keeps its keyboard up while a font is
+      // picked for it (#80). The click still happens.
+      onPointerDown={(e) => e.preventDefault()}
+    >
       <div
         className="flex flex-col items-stretch overflow-hidden rounded-[5px]"
         style={{

@@ -122,33 +122,36 @@ describe("element ops", () => {
   });
 
   it("moveElement translates without clamping", () => {
-    const note = addElement(emptyNote(seq(0.1)), sticker(10, 10));
-    expect(moveElement(note, 0, 5, -30).elements[0]).toMatchObject({
+    expect(moveElement(sticker(10, 10), 5, -30)).toMatchObject({
+      type: "sticker",
       x: 15,
       y: -20,
     });
     // mid-drag an element may leave the stored range entirely; settleElement
     // puts it back.
-    expect(moveElement(note, 0, 0, -999).elements[0]).toMatchObject({
-      y: -989,
+    expect(moveElement(sticker(10, 10), 0, -999)).toMatchObject({ y: -989 });
+  });
+
+  it("moveElement leaves a drag's float dust out of the note", () => {
+    // 150.1 - 100.3 is 49.79999999999999 in floating point
+    expect(moveElement(sticker(60, 80), 150.1 - 100.3, 0)).toMatchObject({
+      x: 109.8,
     });
   });
 
   it("moveElement is rigid: a stroke dragged past the edge keeps its shape", () => {
-    const note = addElement(
-      emptyNote(seq(0.1)),
-      stroke({
-        size: 8,
-        points: [
-          [10, 10, 0.5],
-          [50, 10, 0.5],
-        ],
-      }),
-    );
     const pts = (
-      moveElement(note, 0, -130, 0).elements[0] as {
-        points: [number, number, number][];
-      }
+      moveElement(
+        stroke({
+          size: 8,
+          points: [
+            [10, 10, 0.5],
+            [50, 10, 0.5],
+          ],
+        }),
+        -130,
+        0,
+      ) as { points: [number, number, number][] }
     ).points;
     expect(pts[0]?.[0]).toBe(-120);
     expect(pts[1]?.[0]).toBe(-80);
@@ -174,19 +177,15 @@ describe("settleElement", () => {
 
   it("shifts a stroke by the minimum that puts every point back in range", () => {
     const dragged = moveElement(
-      addElement(
-        emptyNote(seq(0.1)),
-        stroke({
-          points: [
-            [10, 40, 0.5],
-            [50, 40, 0.5],
-          ],
-        }),
-      ),
-      0,
+      stroke({
+        points: [
+          [10, 40, 0.5],
+          [50, 40, 0.5],
+        ],
+      }),
       -130,
       0,
-    ).elements[0] as Element;
+    );
     const pts = (
       settleElement(dragged) as { points: [number, number, number][] }
     ).points;
