@@ -9,9 +9,10 @@ import { INK } from "./note-render";
 import { CANVAS, type NoteContent } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
-// What the editor draws over the note: the caret, the grip, and an element's
-// outline and handles. Stateless — handed an element, it draws it — so it
-// lives apart from StickyEditor's gesture shell, which only decides what shows.
+// What the editor draws over the note: the caret and the grip, plus the outline
+// and handles kept for the element being placed (#80). Stateless — handed an
+// element, it draws it — so it lives apart from StickyEditor's gesture shell,
+// which only decides what shows.
 
 type TextEl = Extract<NoteElement, { type: "text" }>;
 

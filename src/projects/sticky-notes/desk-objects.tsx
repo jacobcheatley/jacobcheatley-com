@@ -281,8 +281,6 @@ export function heldTool(held: Ink | "eraser"): {
 }
 
 // One font sample: the name of the face, written in it, on a chip of card.
-// The rocker's pop-up and the bar over a selected text box are the same choice
-// made twice, so they are the same chip.
 export function FontChip({
   font,
   active,

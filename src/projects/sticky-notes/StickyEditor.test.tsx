@@ -65,6 +65,8 @@ const seeded = (over: Partial<NoteContent>): NoteContent => ({
   rotation: 0,
   ...over,
 });
+// no curl: a corner fold would take a press meant for the paper
+const flat = { bl: 0, br: 0 };
 
 describe("StickyEditor", () => {
   it("starts bare: no note on the mat and no reachable pad", () => {
@@ -951,7 +953,6 @@ describe("StickyEditor hand mode", () => {
       d.match(/L 500 ([\d.]+) L ([\d.]+) 500 L ([\d.]+) 500/) ?? [];
     return { br: 500 - Number(br), bl: Number(bl) };
   };
-  const flat = { bl: 0, br: 0 };
 
   it("turns the note by the angle a drag sweeps", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
@@ -1064,7 +1065,7 @@ describe("StickyEditor hand mode", () => {
 
     down(surface, 60, 80);
     up(surface);
-    down(surface, 60, 80); // the tap that re-opened a box before #79
+    down(surface, 60, 80);
     up(surface);
 
     expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
@@ -1085,7 +1086,6 @@ describe("StickyEditor two fingers", () => {
     scale: 1,
     rotation: 0,
   };
-  const flat = { bl: 0, br: 0 };
   const glyph = () => drawn()[0];
   const downAt = (el: HTMLElement, x: number, y: number, pointerId: number) =>
     fireEvent.pointerDown(el, { clientX: x, clientY: y, pointerId });
@@ -1140,8 +1140,6 @@ describe("StickyEditor two fingers", () => {
 });
 
 describe("StickyEditor font samples", () => {
-  const flat = { bl: 0, br: 0 };
-
   it("closes the font samples on a press anywhere else, without eating it", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
     pickUp(/pick up the red marker/i);

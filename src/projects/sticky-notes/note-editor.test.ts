@@ -127,9 +127,8 @@ describe("element ops", () => {
       x: 15,
       y: -20,
     });
-    // mid-drag an element may leave the stored range entirely: that's what
-    // lets a placing sticker be dragged off the paper. settleElement puts it
-    // back.
+    // mid-drag an element may leave the stored range entirely; settleElement
+    // puts it back.
     expect(moveElement(note, 0, 0, -999).elements[0]).toMatchObject({
       y: -989,
     });
@@ -210,8 +209,8 @@ describe("settleElement", () => {
   });
 
   it("a sticker dragged fully off the paper is off the note, not settled onto it", () => {
-    // the shell asks isOffNote first, so such a sticker never reaches
-    // settleElement
+    // off the paper is isOffNote's call: settleElement would only bring its
+    // anchor back inside the stored range
     expect(isOffNote(sticker(-100, 250))).toBe(true);
   });
 });
@@ -426,7 +425,7 @@ describe("outsideSpinDead", () => {
 describe("rotationFromHandle", () => {
   const at = (x: number, y: number, rotation: number) => ({ x, y, rotation });
 
-  it("turns a square element by how far round its anchor the pointer swung", () => {
+  it("turns an unturned element by the angle swept round its anchor, whatever the reach", () => {
     // a quarter turn round (100, 100), at any distance: no size in it
     expect(rotationFromHandle(at(100, 100, 0), [150, 100], [100, 300])).toBe(
       90,

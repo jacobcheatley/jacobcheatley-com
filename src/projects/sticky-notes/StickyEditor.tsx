@@ -149,12 +149,12 @@ export default function StickyEditor({
   // A finger leaves the tool docked on the mat, so the dock has to show the
   // stroke happening; a mouse carries the tool itself.
   const [using, setUsing] = useState(false);
-  // What the hand is doing to the paper, if anything: turning it, or peeling a
-  // bottom corner — or the corner a mouse is hovering over. A corner shows its
-  // grip on the sheet; while the note is being turned its tilt has to sit under
-  // the finger, so the tilt's own transition (the tear-off flight) is off for
-  // the gesture.
-  const [grip, setGrip] = useState<null | "turn" | Corner>(null);
+  // While the note is being turned its tilt has to sit under the finger, so
+  // the tilt's own transition (the tear-off flight) is off for the gesture.
+  const [turning, setTurning] = useState(false);
+  // The bottom corner being peeled, or the one a mouse is hovering over: it
+  // shows its grip on the sheet.
+  const [gripCorner, setGripCorner] = useState<Corner | null>(null);
   const [fine, setFine] = useState(false);
   // The note is full: the docked tool rocks so a dead pointer-down says why.
   const [shaking, setShaking] = useState(false);
@@ -227,9 +227,9 @@ export default function StickyEditor({
   const ghostTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const ghostId = useRef(0);
-  // One gesture at a time: while a stroke, rub or drag is live, events from any
-  // other pointer are ignored rather than allowed to steal it. (T6 turns a
-  // second finger into a cancel.)
+  // One gesture at a time: while a stroke, rub, turn or peel is live, moves
+  // from any other pointer are ignored rather than allowed to steal it. A
+  // second finger coming DOWN is the exception: it takes over (startPinch).
   const activeId = useRef<number | null>(null);
   const busy = () =>
     draftRef.current !== null ||
@@ -244,7 +244,8 @@ export default function StickyEditor({
     spinRef.current = null;
     curlRef.current = null;
     setUsing(false);
-    setGrip(null);
+    setTurning(false);
+    setGripCorner(null);
   }
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
 
@@ -605,7 +606,7 @@ export default function StickyEditor({
     const corner = curlCorner(live.curl, x, y);
     if (corner) {
       curlRef.current = { corner, start: live.curl[corner], from: [x, y] };
-      setGrip(corner);
+      setGripCorner(corner);
       return;
     }
     startSpin(e, x, y);
@@ -631,7 +632,7 @@ export default function StickyEditor({
       from: [b[0] - a[0], b[1] - a[1]],
       rotation: live.rotation,
     };
-    setGrip("turn");
+    setTurning(true);
     forceRender();
   }
 
@@ -668,7 +669,7 @@ export default function StickyEditor({
         ? angleOf(centre, [e.clientX, e.clientY])
         : null,
     };
-    setGrip("turn");
+    setTurning(true);
   }
 
   // The swept angle, applied to the note the gesture started from. Moves near
@@ -705,7 +706,7 @@ export default function StickyEditor({
       // pressed (#69). A finger can't: its press shows the same mark.
       if (held === null && e.pointerType === "mouse") {
         const [x, y] = toNote(e);
-        setGrip(curlCorner(live.curl, x, y));
+        setGripCorner(curlCorner(live.curl, x, y));
       }
       return;
     }
@@ -811,7 +812,7 @@ export default function StickyEditor({
   // because a mouse was over it settles back.
   function leavePaper() {
     hideCursorTool();
-    if (!busy() && !pinchRef.current) setGrip(null);
+    if (!busy() && !pinchRef.current) setGripCorner(null);
   }
 
   const draft = draftRef.current;
@@ -826,8 +827,6 @@ export default function StickyEditor({
       : draft
         ? addElement(content, draft)
         : content;
-  // the corner a grip mark is drawn on; a turn has none
-  const corner = grip === "turn" ? null : grip;
 
   return (
     <div className="absolute inset-0 select-none">
@@ -864,12 +863,7 @@ export default function StickyEditor({
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
                 // the held tool IS the cursor over the paper
                 cursor: fine && held ? "none" : undefined,
-                ...noteMotion(
-                  tearing,
-                  crumpling,
-                  shown.rotation,
-                  grip === "turn",
-                ),
+                ...noteMotion(tearing, crumpling, shown.rotation, turning),
               }}
             >
               <NotePaper content={shown} />
@@ -877,14 +871,14 @@ export default function StickyEditor({
               {/* The overlay rides inside the rotated sheet, so everything on
                   it is drawn in plain note units and turns with the paper. It
                   never takes the pointer: the paper under it does. */}
-              {((caret && textDraft) || corner) && (
+              {((caret && textDraft) || gripCorner) && (
                 <svg
                   viewBox={`0 0 ${CANVAS} ${CANVAS}`}
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   aria-hidden="true"
                 >
                   <title>grip and caret</title>
-                  {corner && gripMark(corner, shown.curl)}
+                  {gripCorner && gripMark(gripCorner, shown.curl)}
                   {caret && textDraft && caretRect(caret, textDraft)}
                 </svg>
               )}

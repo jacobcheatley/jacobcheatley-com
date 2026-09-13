@@ -399,8 +399,8 @@ export const ROTATE_LIMIT = 25;
 export const turnNote = (from: number, by: number): number =>
   round1(clamp(from + wrap180(by), -ROTATE_LIMIT, ROTATE_LIMIT));
 
-// Degrees from one point out to another: the sweep an edge drag, a pinch and a
-// corner handle all read their turn from.
+// Degrees from one point out to another: the sweep a turn of the note, two
+// fingers and `rotationFromHandle` all read their angle from.
 export const angleOf = (from: [number, number], to: [number, number]): number =>
   (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
 
