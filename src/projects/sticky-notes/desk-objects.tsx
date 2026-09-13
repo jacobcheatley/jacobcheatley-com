@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { EASE_OUT, STILL } from "./desk";
+import { EASE_OUT, SHEET_MS, STILL } from "./desk";
 import { FONT_FAMILIES } from "./note-fonts";
 import { INK, PAPER } from "./note-render";
 import {
@@ -9,7 +9,6 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
-import { SHEET_MS } from "./StickerSheet";
 
 // The things lying on the cutting mat, drawn: the pad stack's sheets, the
 // markers, the eraser, the draw/write rocker and the bin. Props in, CSS out —
@@ -105,7 +104,9 @@ export function ToolSlot({
       aria-label={label}
       aria-pressed={held}
       onClick={onClick}
-      className="relative flex shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
+      // z-10: where a tool's box meets the resting pad stack beside it (the
+      // black marker at 320), the tool is the thing under the finger.
+      className="relative z-10 flex shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
       style={{
         ...slot,
         animation: shake ? `desk-shake ${SHAKE_MS}ms ease-in-out` : undefined,

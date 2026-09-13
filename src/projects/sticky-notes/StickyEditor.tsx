@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { EASE_OUT, STILL } from "./desk";
+import { capturePointer, EASE_OUT, SHEET_MS, STILL, TAB_PERCH } from "./desk";
 import {
   Bin,
   DESK_GAP,
@@ -23,7 +23,6 @@ import {
   padStyle,
   SHAKE_MS,
   StickerTab,
-  TAB_SLOT,
   ToolSlot,
 } from "./desk-objects";
 import {
@@ -62,7 +61,7 @@ import {
   type PaperColour,
 } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
-import { SHEET_H, SHEET_MS, StickerSheet, TAB_PERCH } from "./StickerSheet";
+import { SHEET_H, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
 // the bin, and the stationery — four markers, the draw/write control and the
@@ -162,6 +161,8 @@ export default function StickyEditor({
   // no telling where you are typing (#74) — and it is measured off the glyphs
   // the renderer drew, so it cannot drift from the text it follows.
   const [caret, setCaret] = useState<{ x: number; y: number } | null>(null);
+  // Bumped when the draft's webfont lands: one more measurement, nothing else.
+  const [caretTick, setCaretTick] = useState(0);
 
   // How far the sticker tab has to rise to perch on the open sheet's corner.
   // Measured rather than assumed: where the tab rests is the strip's business,
@@ -309,8 +310,24 @@ export default function StickyEditor({
     };
   }, [ghost]);
 
+  // The caret is measured off laid-out glyphs, so a webfont that resolves after
+  // the first paint has to be measured again — otherwise the caret sits on the
+  // `wrapLines` estimate until the next keystroke.
+  const draftFont = textDraft?.font;
+  useEffect(() => {
+    if (!draftFont) return;
+    let live = true;
+    loadFont(draftFont).then(() => {
+      if (live) setCaretTick((n) => n + 1);
+    });
+    return () => {
+      live = false; // the draft closed (or went) before the font landed
+    };
+  }, [draftFont]);
+
   // Before the browser paints the glyph, not after: the caret must not trail a
   // frame behind the letter it follows.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: caretTick is the ask for one more measurement, not a value this reads.
   useLayoutEffect(() => {
     if (!textDraft) {
       setCaret(null);
@@ -324,7 +341,7 @@ export default function StickyEditor({
     // do it when editing an existing box (T6) needs it.
     const box = textRef.current;
     box?.setSelectionRange(box.value.length, box.value.length);
-  }, [textDraft]);
+  }, [textDraft, caretTick]);
 
   // Leave the element where it was, fading, after it has gone from the note.
   function showGhost(el: NoteElement) {
@@ -422,8 +439,11 @@ export default function StickyEditor({
     // Same as a tap on the paper: the open box commits first, then this drop
     // does its own job on what that left behind.
     if (textDraft) commitText();
+    // That commit may have taken the last free slot, and `addElement` is a
+    // silent no-op on a full note: refuse the drop so the sheet flies the
+    // sticker home instead of swallowing it.
     const live = contentRef.current;
-    if (!live) return false;
+    if (!live || live.elements.length >= MAX_ELEMENTS) return false;
     const [x, y] = clientToNote(clientX, clientY);
     apply(
       addElement(live, { type: "sticker", x, y, emoji, scale: 1, rotation: 0 }),
@@ -446,14 +466,8 @@ export default function StickyEditor({
     if (textDraft) commitText();
     const live = contentRef.current ?? content; // commitText may have grown it
     const [x, y, p] = toNote(e);
-    // Keep the gesture on the paper even when the pointer wanders off it. The
-    // guard is for jsdom (no pointer capture at all) and for a pointer id that
-    // is no longer live, which throws rather than returning.
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch {
-      // not a live pointer — carry on without capture
-    }
+    // Keep the gesture on the paper even when the pointer wanders off it.
+    capturePointer(e);
 
     if (held === "eraser") {
       rubbingRef.current = true;
@@ -664,7 +678,7 @@ export default function StickyEditor({
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   aria-hidden="true"
                 >
-                  <title>selection</title>
+                  <title>selection and caret</title>
                   {selectedEl && selectionRect(selectedEl)}
                   {caret && textDraft && caretRect(caret, textDraft)}
                 </svg>
@@ -701,6 +715,9 @@ export default function StickyEditor({
                   onKeyDown={(e) => {
                     if (e.key !== "Escape") return;
                     e.preventDefault();
+                    // This Escape threw the box away; it is not also the one
+                    // that puts the open sticker sheet (or the fan) away.
+                    e.stopPropagation();
                     setTextDraft(null);
                   }}
                   className="pointer-events-none absolute resize-none border-0 bg-transparent p-0 opacity-0 outline-none"
@@ -743,10 +760,14 @@ export default function StickyEditor({
       >
         <div
           data-slot="pads"
-          className="relative z-30 shrink-0"
+          // `isolate` keeps the trigger's z-30 inside this box, so the
+          // resting stack sits UNDER the marker leaning on it; fanned, the
+          // pile has to clear the backdrop that closes it (z-20).
+          className={`relative isolate shrink-0${fanned ? " z-30" : ""}`}
           // A hair narrower than the resting pile is wide: at 320 those two
           // pixels are the difference between the strip fitting and the bin
-          // hanging off the mat, and the pile draws over the marker beside it.
+          // hanging off the mat. The marker beside it leans over the pile's
+          // last couple of pixels, and is the thing under the finger there.
           style={{ width: PAD + 8, height: PAD + 8 }}
         >
           {PAPER_COLOURS.map((colour, i) => (
@@ -773,7 +794,10 @@ export default function StickyEditor({
             aria-label="Fan out the pads"
             aria-expanded={fanned}
             onClick={() => setFanned((open) => !open)}
-            className="-inset-1.5 absolute z-30 min-h-12 min-w-12 border-0 bg-transparent p-0"
+            // The hit area grows left, up and down but NOT right: past the
+            // stack's own box it lands on the black marker, which at 320 is
+            // already leaning under it (#74's SQUEEZE).
+            className="-inset-y-1.5 -left-1.5 absolute right-0 z-30 min-h-12 min-w-12 border-0 bg-transparent p-0"
           />
         </div>
 
@@ -817,11 +841,7 @@ export default function StickyEditor({
         <div className="flex shrink-0 items-end" style={{ gap: DESK_GAP }}>
           {/* the tab rides above the sheet it pulls up (z), so it is still the
               way to put it away */}
-          <div
-            data-slot="sticker-tab"
-            className="relative z-50 shrink-0"
-            style={TAB_SLOT}
-          >
+          <div data-slot="sticker-tab" className="relative z-50 shrink-0">
             <StickerTab
               ref={stickerTab}
               open={sheetOpen}
@@ -829,18 +849,16 @@ export default function StickyEditor({
               onClick={() => setSheetOpen((open) => !open)}
             />
           </div>
-          <div data-slot="eraser" className="shrink-0" style={ERASER_SLOT}>
-            <ToolSlot
-              label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
-              held={held === "eraser"}
-              slot={ERASER_SLOT}
-              onClick={() => pickUp("eraser")}
-            >
-              {/* `using` is "some tool is working"; EraserBody lifts for it
-                  only when the eraser is the tool in hand (#74) */}
-              <EraserBody held={held === "eraser"} using={using} />
-            </ToolSlot>
-          </div>
+          <ToolSlot
+            label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
+            held={held === "eraser"}
+            slot={ERASER_SLOT}
+            onClick={() => pickUp("eraser")}
+          >
+            {/* `using` is "some tool is working"; EraserBody lifts for it only
+                when the eraser is the tool in hand (#74) */}
+            <EraserBody held={held === "eraser"} using={using} />
+          </ToolSlot>
           <Bin onClick={binIt} disabled={!content || crumpling} />
         </div>
       </div>
@@ -901,11 +919,15 @@ function caretAt(
   };
   if (!last) return estimate; // an empty line has no glyph to measure from
   // the draft is the last element of the note, so the last text on the paper
-  const texts = paper?.querySelectorAll("g[clip-path] > text");
-  const tspans = texts?.[texts.length - 1]?.querySelectorAll("tspan");
+  const text = paper?.querySelector<SVGTextElement>(
+    "[data-elements] > text:last-of-type",
+  );
+  const tspans = text?.querySelectorAll<SVGTSpanElement>("tspan");
   const tspan = tspans?.[tspans.length - 1];
   if (typeof tspan?.getEndPositionOfChar !== "function") return estimate;
   try {
+    // These are coordinates in the <text>'s OWN space, which T6 will rotate
+    // with the note: map the point through that rotation when it does.
     const end = tspan.getEndPositionOfChar(last.length - 1);
     return { x: end.x, y: end.y };
   } catch {

@@ -609,7 +609,8 @@ function paperLayers(uid: string, content: NoteContent) {
       <>
         {/* paper, then content clipped to the (corner-cut) paper shape */}
         <path d={paper} fill={paperFill} />
-        <g clipPath={`url(#${clipId})`}>
+        {/* the editor's caret measures off the last text in here */}
+        <g data-elements="" clipPath={`url(#${clipId})`}>
           {content.elements.map(renderElement)}
         </g>
 

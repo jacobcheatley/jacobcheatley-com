@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
 // The desk's shared look, kept out of both components that wear it. The mat
 // surface (StickyMat) SSRs with the wall; everything that lies ON it
@@ -9,6 +9,30 @@ import type { CSSProperties } from "react";
 // Motion, all CSS: no animation library anywhere in this spec (#69). The
 // prototype's ease-out (#70): quick off the mark, long settle.
 export const EASE_OUT = "cubic-bezier(.2,.8,.25,1)";
+
+// The sticker sheet's ride up off the mat's bottom edge (#75). Here rather
+// than in StickerSheet because the tab that rides up with it is drawn by
+// desk-objects, which is presentational and may not import a stateful
+// component.
+export const SHEET_MS = 500;
+// The tab perches on the open sheet's top-right corner, clear of the grid —
+// otherwise, on a phone narrow enough for the sheet to reach the mat's right
+// edge, it would cover a sticker. This is how far its bottom edge ends up
+// BELOW the sheet's top edge, so it overlaps like a real tab; how far that is
+// from where the tab rests is the editor's measurement, since the strip
+// decides where it rests.
+export const TAB_PERCH = 10;
+
+// Keep a gesture with the pointer that started it, wherever that pointer
+// wanders. The guard is for jsdom (no pointer capture at all) and for a
+// pointer id that is no longer live, which throws rather than returning.
+export function capturePointer(e: ReactPointerEvent): void {
+  try {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  } catch {
+    // not a live pointer — carry on without capture
+  }
+}
 
 // Cool slate cutting mat (spec #49): grid rules over a dark wash, distinct from
 // the wall's warm cork.

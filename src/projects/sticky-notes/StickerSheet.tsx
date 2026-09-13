@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { EASE_OUT, STILL } from "./desk";
+import { capturePointer, EASE_OUT, SHEET_MS, STILL } from "./desk";
 import { STICKER_EMOJI } from "./note-schema";
 
 // The sticker sheet (#75): a pull-up sheet of printed stickers that the visitor
@@ -17,8 +17,6 @@ import { STICKER_EMOJI } from "./note-schema";
 // (the T0 verdict, #70): six 48px cells across, four rows down.
 
 type StickerEmoji = (typeof STICKER_EMOJI)[number];
-
-export const SHEET_MS = 500;
 
 const CELL = 48; // a thumb target, like every other object on the desk
 const GAP = 4;
@@ -33,13 +31,6 @@ export const SHEET_W = COLS * CELL + (COLS - 1) * GAP + PAD_X * 2;
 // safe-area inset is deeper than PAD_B makes the real sheet a touch taller than
 // this. Measure it (a ref + ResizeObserver) if that gap ever shows.
 export const SHEET_H = HANDLE_H + ROWS * CELL + (ROWS - 1) * GAP + PAD_B;
-// The tab rides up with the sheet and perches on its top-right corner, clear of
-// the grid — otherwise, on a phone narrow enough for the sheet to reach the
-// mat's right edge, it would cover a sticker. This is how far its bottom edge
-// ends up BELOW the sheet's top edge, so it overlaps like a real tab; how far
-// that is from where the tab rests is the editor's measurement, since the strip
-// decides where it rests.
-export const TAB_PERCH = 10;
 
 const SWIPE = 40; // how far down the handle travels before the sheet drops
 const BACK_MS = 250; // a missed sticker's flight home
@@ -100,13 +91,7 @@ export function StickerSheet({
     e.preventDefault();
     if (!canPeel || flight) return; // one peel at a time
     const r = e.currentTarget.getBoundingClientRect();
-    // Keep the sticker with this pointer wherever it wanders. The guard is for
-    // jsdom (no pointer capture) and for a stale pointer id, which throws.
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch {
-      // not a live pointer — carry on without capture
-    }
+    capturePointer(e);
     setFlight({
       pointerId: e.pointerId,
       emoji,
@@ -139,11 +124,7 @@ export function StickerSheet({
   // The handle is a grab strip: drag it down far enough and the sheet drops.
   function grab(e: ReactPointerEvent<HTMLDivElement>) {
     swipeFrom.current = e.clientY;
-    try {
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-    } catch {
-      // not a live pointer — carry on without capture
-    }
+    capturePointer(e);
   }
 
   function swipe(e: ReactPointerEvent<HTMLDivElement>) {
@@ -156,9 +137,11 @@ export function StickerSheet({
   return (
     <>
       <div
-        // Closed, it is parked below the mat's edge: out of the pointer's way
-        // and out of the screen-reader tree.
-        aria-hidden={!open}
+        data-slot="sheet"
+        // Closed, it is parked below the mat's edge: `inert` takes the whole
+        // sheet out of the tab order, the screen-reader tree and the pointer's
+        // way in one go, which is what the mat itself does when it slides off.
+        inert={!open}
         className={`${STILL} absolute inset-x-0 bottom-0 z-40 mx-auto`}
         style={{
           width: `min(${SHEET_W}px, 100vw)`,
@@ -171,7 +154,6 @@ export function StickerSheet({
             "0 -10px 24px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.06)",
           transform: open ? "translateY(0)" : "translateY(100%)",
           transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
-          pointerEvents: open ? undefined : "none",
         }}
       >
         <div
@@ -205,6 +187,11 @@ export function StickerSheet({
             <button
               key={emoji}
               type="button"
+              // Pointer-only, like every other object on the desk: a sticker is
+              // placed by dragging it onto the note, so a focusable cell would
+              // be one that does nothing on Enter. The label stays for touch
+              // exploration and for reading the page.
+              tabIndex={-1}
               aria-label={`Peel the ${emoji} sticker`}
               data-peeled={flight?.index === i ? "" : undefined}
               onPointerDown={(e) => peel(e, emoji, i)}

@@ -30,6 +30,11 @@ const bin = () => screen.getByRole("button", { name: /bin this note/i });
 // the fixed boxes the strip's objects lie in, by the marker on each
 const slot = (name: string) =>
   document.querySelector<HTMLElement>(`[data-slot="${name}"]`);
+// The eraser and the sticker tab ARE their own boxes — no wrapper sets a
+// second one — so they are found the way a visitor finds them.
+const eraserSlot = () => screen.getByRole("button", { name: /the eraser/i });
+const tabSlot = () =>
+  screen.getByRole("button", { name: /the sticker sheet/i });
 const ERASER_BODY = '[data-object="eraser"]';
 const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
@@ -544,8 +549,8 @@ describe("StickyEditor thumb targets", () => {
   // size: every object lies in a box with a fixed width and height that no
   // flex rule may squeeze, and nothing the tool DOES may resize (#74).
   const slots = () => [
-    slot("eraser"),
-    slot("sticker-tab"),
+    eraserSlot(),
+    tabSlot(),
     slot("pads"),
     slot("bin"),
     ...screen
@@ -608,7 +613,7 @@ describe("StickyEditor thumb targets", () => {
     expect([...(strip?.children ?? [])]).toEqual([
       slot("pads"),
       centre,
-      slot("eraser")?.parentElement,
+      eraserSlot().parentElement,
     ]);
   });
 
@@ -633,7 +638,7 @@ describe("StickyEditor thumb targets", () => {
   // only its own hand raises.
   it("leaves the eraser and the bin where they lie while a marker works", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    const eraser = () => slot("eraser");
+    const eraser = () => eraserSlot();
     const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
     const before = [eraser()?.style.cssText, slot("bin")?.style.cssText];
     const still = rubber()?.style.transform;
@@ -657,7 +662,7 @@ describe("StickyEditor thumb targets", () => {
 
   it("lifts the eraser itself, by transform alone, when it is the one held", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    const box = () => slot("eraser")?.style.cssText;
+    const box = () => eraserSlot().style.cssText;
     const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
     const before = box();
 
@@ -778,11 +783,13 @@ describe("StickyEditor sticker sheet", () => {
   it("pulls the sheet up from the tab and puts it away again", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     expect(tab()).toHaveAttribute("aria-expanded", "false");
-    // parked below the mat's edge: out of the screen reader's way too
-    expect(screen.queryByRole("button", { name: /peel the/i })).toBeNull();
+    // parked below the mat's edge: inert, so nothing on it is reachable —
+    // not by the pointer, the tab order or the screen reader
+    expect(slot("sheet")).toHaveAttribute("inert");
 
     fireEvent.click(tab());
     expect(tab()).toHaveAttribute("aria-expanded", "true");
+    expect(slot("sheet")).not.toHaveAttribute("inert");
     expect(screen.getAllByRole("button", { name: /peel the/i })).toHaveLength(
       STICKER_EMOJI.length,
     );
@@ -866,6 +873,51 @@ describe("StickyEditor sticker sheet", () => {
     upAt(cell("⭐"), 250, 250);
 
     expect(drawn()).toHaveLength(MAX_ELEMENTS);
+  });
+
+  it("refuses a drop that the committed box left no room for", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({
+          elements: Array.from({ length: MAX_ELEMENTS - 1 }, () => HI),
+        })}
+      />,
+    );
+    paperSurface();
+    // one free slot, and an open box about to take it
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    down(paperSurface(), 60, 80);
+    up(paperSurface());
+    fireEvent.change(screen.getByRole("textbox", { name: /text box/i }), {
+      target: { value: "last" },
+    });
+    const slot = dragTo("⭐", 250, 250);
+
+    // the text committed; the sticker was refused, not silently dropped
+    expect(drawn()).toHaveLength(MAX_ELEMENTS);
+    expect(drawn().at(-1)?.textContent).toBe("last");
+    expect(slot).toHaveAttribute("data-peeled"); // on its way home
+    wait(400);
+    expect(slot).not.toHaveAttribute("data-peeled");
+  });
+
+  it("keeps the sheet up when Escape throws an open box away", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    paperSurface();
+    fireEvent.click(tab());
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    down(paperSurface(), 60, 80);
+    up(paperSurface());
+    const box = screen.getByRole("textbox", { name: /text box/i });
+    fireEvent.change(box, { target: { value: "no" } });
+
+    fireEvent.keyDown(box, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
+    expect(drawn()).toHaveLength(0);
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
   });
 
   it("keeps the marker in your hand through a peel and a drop", () => {

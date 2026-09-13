@@ -29,16 +29,14 @@ const up = (el: HTMLElement, x: number, y: number, pointerId = 1) =>
 function sheet(over: Partial<Parameters<typeof StickerSheet>[0]> = {}) {
   const onDrop = vi.fn(() => true);
   const onClose = vi.fn();
-  render(
-    <StickerSheet
-      open
-      canPeel
-      onDrop={onDrop}
-      onClose={onClose}
-      {...(over as object)}
-    />,
-  );
-  return { onDrop, onClose };
+  const props = { open: true, canPeel: true, onDrop, onClose, ...over };
+  const view = render(<StickerSheet {...props} />);
+  return {
+    onDrop,
+    onClose,
+    open: (next: boolean) =>
+      view.rerender(<StickerSheet {...props} open={next} />),
+  };
 }
 
 describe("StickerSheet", () => {
@@ -111,6 +109,24 @@ describe("StickerSheet", () => {
 
     up(cell("⭐"), 180, 260);
     expect(onDrop).not.toHaveBeenCalled();
+  });
+
+  it("puts a closed sheet out of reach entirely", () => {
+    const { open } = sheet({ open: false });
+    const parked = () => document.querySelector('[data-slot="sheet"]');
+
+    // parked below the mat's edge: inert keeps it out of the tab order, the
+    // screen-reader tree and the pointer's way at once
+    expect(parked()).toHaveAttribute("inert");
+    open(true);
+    expect(parked()).not.toHaveAttribute("inert");
+  });
+
+  it("keeps the cells out of the tab order: a sticker is dragged, not tabbed to", () => {
+    sheet();
+    expect(cell("\u2b50")).toHaveAttribute("tabindex", "-1");
+    // and still named, for touch exploration and for reading the page
+    expect(cell("\u2b50")).toHaveAccessibleName("Peel the \u2b50 sticker");
   });
 
   it("puts the sheet away on a swipe down its handle", () => {
