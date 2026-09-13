@@ -39,8 +39,49 @@ The marker colour palette — `black`, `green`, `red`, `blue`. The only colours 
 _Avoid_: colour (for strokes/text — "colour" alone is the Note's background)
 
 **Fastener**:
-The decorative attachment that fixes a Note to the wall — a coloured pin (`pin-red`, `pin-green`, `pin-yellow`, `pin-blue`), cream masking tape (`tape-masking`) or clear tape (`tape-clear`), a single `staple` or two corner `staples`, a blob of sticky tack behind the Note (`stick`), or `none` (it holds on its own). Choosing a Fastener *is* the act of submitting the Note.
+The decorative attachment that fixes a Note to the wall — a coloured pin (`pin-red`, `pin-green`, `pin-yellow`, `pin-blue`), cream masking tape (`tape-masking`) or clear tape (`tape-clear`), a single `staple` or two corner `staples`, a blob of sticky tack behind the Note (`stick`), or `none` (it holds on its own). Chosen from the **Fastener drawer** once the Note is pinned up; signing the **Tag**, not choosing a Fastener, is what submits the Note.
 _Avoid_: pin (as the general term — a pin is one kind of Fastener)
 
 **Curl**:
 How much each of a Note's two bottom corners peels off the wall — a per-corner intensity (`bl`, `br`), seeded per Note and lightly adjustable. The renderer folds the corner up visually.
+
+**Mat**:
+The cutting mat a Note is made on: a full-screen desk that slides up over the wall (`/sticky-notes/new`) and back down. Everything a Note is made with lies on it, and the Note on it is bare paper — no Fastener until it is pinned up.
+_Avoid_: editor page, modal, canvas
+
+**Tray**:
+The single row along the Mat's bottom edge where the objects lie, each in a fixed slot of its own — the **Pads** at the left, the **Markers** in the middle, the **Sticker sheet**'s tab, the **Eraser** and the bin at the right.
+_Avoid_: toolbar, palette
+
+**Pad**:
+One of six stacked pads of sticky notes on the Tray, one per paper colour. The first tap fans the stack out; tapping a Pad then tears a fresh sheet off it to start a Note, or, with a Note already on the Mat, swaps the paper under it.
+_Avoid_: swatch, colour picker
+
+**Marker**:
+One of four pens on the Tray, one per **Ink**. The Marker *is* the colour: picking one up is how an Ink is chosen, and there are no swatches. One fixed nib.
+_Avoid_: pen, brush, colour swatch
+
+**Eraser**:
+The rubber on the Tray. Held and rubbed across the Note, it removes each whole **Element** under it. There is no undo; the Eraser and dragging an Element off the paper are the only deletes.
+_Avoid_: delete button
+
+**Hand mode**:
+Holding nothing. A tap selects an **Element** (tapping the same spot again reaches the one beneath), a drag moves it, and its handle scales and turns it; the Note's edge turns the Note and its bottom corners set its **Curl**.
+_Avoid_: tweezers, select tool, pointer
+
+**Draw mode**:
+Using the held Marker to draw: a drag on the Note leaves a **Stroke** in that Marker's Ink.
+
+**Write mode**:
+Using the held Marker to write: a tap on the Note opens a **Text box** in that Marker's Ink and the chosen font. The Text box keeps that Ink for good; its font can change.
+
+**Sticker sheet**:
+A sheet of printed emoji that pulls up from its tab on the Tray. A **Sticker** is peeled off it and dragged onto the Note; the sheet never runs out.
+_Avoid_: emoji picker
+
+**Fastener drawer**:
+The box of the nine **Fasteners** that rises over the wall once a Note is pinned up, each shown as it will look on that Note. Choosing one presses it on, and the drawer folds to a tab that opens it again until the Tag is signed. Put away without a choice, the Note keeps `none`.
+
+**Tag**:
+The paper name tag hanging under a Note pinned up on the wall. Writing a name on it and signing it (Enter, or its tick) submits the Note — its one write — with that name, lowercased, as the **author**.
+_Avoid_: author field, form, submit button
