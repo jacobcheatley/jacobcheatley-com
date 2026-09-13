@@ -658,7 +658,7 @@ describe("StickyEditor sticker sheet", () => {
     expect(stage()?.style.transform).toBe("none");
 
     fireEvent.click(tab());
-    expect(stage()?.style.transform).toContain("translateY(-10%)");
+    expect(stage()?.style.transform).toContain("translateY(-12%)");
   });
 
   it("sticks a peeled sticker where it was dropped on the paper", () => {

@@ -35,8 +35,11 @@ export const SHEET_W = COLS * CELL + (COLS - 1) * GAP + PAD_X * 2;
 export const SHEET_H = HANDLE_H + ROWS * CELL + (ROWS - 1) * GAP + PAD_B;
 // The tab rides up with the sheet and perches on its top-right corner, clear of
 // the grid — otherwise, on a phone narrow enough for the sheet to reach the
-// mat's right edge, it would cover a sticker.
-export const TAB_LIFT = SHEET_H - 18;
+// mat's right edge, it would cover a sticker. This is how far its bottom edge
+// ends up BELOW the sheet's top edge, so it overlaps like a real tab; how far
+// that is from where the tab rests is the editor's measurement, since the strip
+// decides where it rests.
+export const TAB_PERCH = 10;
 
 const SWIPE = 40; // how far down the handle travels before the sheet drops
 const BACK_MS = 250; // a missed sticker's flight home
@@ -44,11 +47,15 @@ const BACK_MS = 250; // a missed sticker's flight home
 // The printed backing: the same glyph in ONE flat grey, a hair down-right, so
 // every sticker reads as die-cut off a sheet. The shadow paints the glyph's
 // alpha in a single value — a greyscale of the emoji was the thing the T0
-// verdict rejected (#70).
+// verdict rejected (#70). It is printed a quarter bigger than the sticker over
+// it: at a 1px offset alone the emoji covers it completely (measured in
+// Chrome), and a rim all the way round is what reads as printing rather than a
+// drop shadow.
 const SILHOUETTE: CSSProperties = {
   color: "transparent",
   WebkitTextFillColor: "transparent",
   textShadow: "1px 1px 0 #cbd5e1",
+  transform: "translate(1px, 1px) scale(1.25)",
 };
 
 // One sticker off the sheet and under the pointer. Client coordinates: the

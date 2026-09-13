@@ -55,7 +55,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
-import { SHEET_MS, StickerSheet } from "./StickerSheet";
+import { SHEET_H, SHEET_MS, StickerSheet, TAB_PERCH } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
 // the bin, and the stationery — four markers, the draw/write control and the
@@ -149,7 +149,13 @@ export default function StickyEditor({
     id: number;
   } | null>(null);
 
+  // How far the sticker tab has to rise to perch on the open sheet's corner.
+  // Measured rather than assumed: where the tab rests is the strip's business,
+  // and the strip's layout changes with the viewport.
+  const [tabLift, setTabLift] = useState(0);
+
   const trigger = useRef<HTMLButtonElement>(null);
+  const stickerTab = useRef<HTMLButtonElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
   const crumpleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const paperRef = useRef<HTMLDivElement>(null);
@@ -246,14 +252,30 @@ export default function StickyEditor({
   }, [fontsOpen]);
 
   // The sheet's other way out (the tab and a swipe down its handle are the two
-  // on the mat itself).
+  // on the mat itself), and the tab's ride up with it.
   useEffect(() => {
-    if (!sheetOpen) return;
+    if (!sheetOpen) {
+      setTabLift(0);
+      return;
+    }
+    // `rect.bottom` is already lifted by whatever is applied, so add it back to
+    // get where the tab rests: re-measuring on a resize then can't compound.
+    const measure = () => {
+      const rect = stickerTab.current?.getBoundingClientRect();
+      if (!rect) return;
+      const perch = window.innerHeight - SHEET_H + TAB_PERCH;
+      setTabLift((lift) => Math.max(0, rect.bottom + lift - perch));
+    };
+    measure();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSheetOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", measure);
+    };
   }, [sheetOpen]);
 
   // The fade's second half: flip to transparent one PAINTED frame after the
@@ -573,11 +595,12 @@ export default function StickyEditor({
           <div
             // The sticker sheet takes the bottom of the mat, so the note moves
             // up out of its way and stays whole.
-            // ponytail: one fixed shrink, not a measurement — it clears a
-            // 242px sheet from 320x568 up. Measure if the sheet ever grows.
+            // ponytail: one fixed shrink, not a measurement — measured in
+            // Chrome to clear the sheet and its tab from 320x568 up, without
+            // reaching the mat's tape label. Measure if the sheet ever grows.
             className={STILL}
             style={{
-              transform: sheetOpen ? "translateY(-10%) scale(.8)" : "none",
+              transform: sheetOpen ? "translateY(-12%) scale(.72)" : "none",
               transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
             }}
           >
@@ -747,7 +770,9 @@ export default function StickyEditor({
             className="relative z-50 min-h-12 min-w-12 shrink-0"
           >
             <StickerTab
+              ref={stickerTab}
               open={sheetOpen}
+              lift={tabLift}
               onClick={() => setSheetOpen((open) => !open)}
             />
           </div>

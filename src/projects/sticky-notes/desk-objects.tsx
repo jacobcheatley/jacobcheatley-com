@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { EASE_OUT, STILL } from "./desk";
 import { FONT_FAMILIES } from "./note-fonts";
 import { INK, PAPER } from "./note-render";
@@ -9,7 +9,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
-import { SHEET_MS, TAB_LIFT } from "./StickerSheet";
+import { SHEET_MS } from "./StickerSheet";
 
 // The things lying on the cutting mat, drawn: the pad stack's sheets, the
 // markers, the eraser, the draw/write rocker and the bin. Props in, CSS out —
@@ -462,13 +462,19 @@ export function Bin({
 // top-right corner, so it is still the thing you tap to put the sheet away.
 export function StickerTab({
   open,
+  lift,
   onClick,
+  ref,
 }: {
   open: boolean;
+  // how far up the sheet's corner is, measured by whoever knows the strip
+  lift: number;
   onClick: () => void;
+  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       aria-label={`${open ? "Close" : "Open"} the sticker sheet`}
       aria-expanded={open}
@@ -476,7 +482,7 @@ export function StickerTab({
       className={`relative flex min-h-12 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 ${STILL}`}
       style={{
         height: TOUCH,
-        transform: open ? `translateY(${-TAB_LIFT}px)` : "none",
+        transform: lift ? `translateY(${-lift}px)` : "none",
         transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
       }}
     >
