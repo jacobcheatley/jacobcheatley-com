@@ -240,6 +240,11 @@ function paperSurface(): HTMLElement {
 const drawn = (root: ParentNode = document.body) =>
   Array.from(root.querySelector("g[clip-path]")?.children ?? []);
 const selectionBox = () => document.querySelector("rect[stroke-dasharray]");
+// the overlay a rubbed-out element keeps fading on
+const ghostLayer = () =>
+  [...document.querySelectorAll("svg")].find(
+    (svg) => svg.querySelector("title")?.textContent === "rubbed out",
+  );
 
 const down = (el: HTMLElement, x: number, y: number) =>
   fireEvent.pointerDown(el, {
@@ -388,6 +393,22 @@ describe("StickyEditor eraser and hands", () => {
     expect(screen.getByText("bbb")).toBeInTheDocument();
     wait(GHOST_MS);
     expect(screen.queryByText("bbb")).toBeNull();
+  });
+
+  it("starts every rubbed-out element's fade opaque, not just the first", () => {
+    render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
+    pickUp(/pick up the eraser/i);
+    const paper = paperSurface();
+
+    down(paper, 60, 80);
+    up(paper);
+    expect(ghostLayer()?.style.opacity).toBe("1");
+    wait(GHOST_MS);
+    expect(ghostLayer()).toBeUndefined();
+
+    down(paper, 60, 80);
+    up(paper);
+    expect(ghostLayer()?.style.opacity).toBe("1");
   });
 
   it("digs one layer down when the same spot is tapped again", () => {

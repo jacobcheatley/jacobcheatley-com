@@ -75,11 +75,15 @@ const TEXT_W = 240;
 
 // Tool sizes. The drawn objects are fixed; only the air around them flexes, so
 // a narrow strip closes the gaps instead of shrinking the stationery.
+// ponytail: nine objects will not fit across a 390px strip at 48px each, so a
+// marker's slot is tall rather than wide — 36x88 with room, closing to the
+// marker's own 22px width on a phone, where they sit shoulder to shoulder like
+// markers in a tray. Widen them if the strip ever loses an object.
 const MARKER_W = 22;
 const MARKER_H = 72;
 const TOOL_H = 88;
-const ERASER_W = 36;
-const ERASER_H = 26;
+const ERASER_W = 40;
+const ERASER_H = 28;
 const ROCKER_W = 32;
 const ROCKER_H = 46;
 const FONT_CHIP = 44;
@@ -147,9 +151,14 @@ export default function StickyEditor({
   const [using, setUsing] = useState(false);
   const [fine, setFine] = useState(false);
   // Elements have no id, so a removed one can't fade in place: its ghost is
-  // re-drawn on an overlay that fades out and unmounts.
-  const [ghost, setGhost] = useState<Element | null>(null);
-  const [ghostOut, setGhostOut] = useState(false);
+  // re-drawn on an overlay that fades out and unmounts. `out` travels with the
+  // ghost rather than beside it, so a second rub always mounts opaque — a
+  // separate flag would still be set from the fade before it.
+  // ponytail: one ghost at a time, the newest wins. Rubbing out a pile fades
+  // only the last of them; give each its own key if that ever reads wrong.
+  const [ghost, setGhost] = useState<{ el: Element; out: boolean } | null>(
+    null,
+  );
 
   const trigger = useRef<HTMLButtonElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
@@ -162,6 +171,7 @@ export default function StickyEditor({
   const draftRef = useRef<StrokeEl | null>(null);
   const dragRef = useRef<{ index: number; x: number; y: number } | null>(null);
   const rubbingRef = useRef(false);
+  const ghostTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
 
   // Two frames, not one: a single rAF can run before the browser has taken a
@@ -199,7 +209,13 @@ export default function StickyEditor({
     };
   }, [fanned]);
 
-  useEffect(() => () => clearTimeout(crumpleTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(crumpleTimer.current);
+      clearTimeout(ghostTimer.current);
+    },
+    [],
+  );
 
   // A mouse can carry the tool and hide its own cursor; a finger cannot, so the
   // tool stays docked. Read in an effect, never during render — SSR has no
@@ -231,26 +247,33 @@ export default function StickyEditor({
     return () => cancelAnimationFrame(id);
   }, [textOpen]);
 
-  // The ghost's fade: mount opaque, flip to transparent a frame later (a
-  // transition needs a painted start), unmount once it has faded.
+  // The fade's second half: flip to transparent one PAINTED frame after the
+  // ghost mounts. One rAF isn't enough — it can run before the browser has
+  // taken a style recalc of the opaque mount, and then nothing transitions.
   useEffect(() => {
-    if (!ghost) return;
-    setGhostOut(false);
+    if (!ghost || ghost.out) return;
     let inner = 0;
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setGhostOut(true));
+      inner = requestAnimationFrame(() =>
+        setGhost((g) => g && { ...g, out: true }),
+      );
     });
-    const timer = setTimeout(() => setGhost(null), GHOST_MS + 80);
     return () => {
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
-      clearTimeout(timer);
     };
   }, [ghost]);
 
   // A pad with no note on the mat tears a fresh sheet off; with a note already
   // there it swaps the stock under the content. Both wait for the objects to
   // stop moving — mid-crumple there is no note to swap the paper under yet.
+  // Leave the element where it was, fading, after it has gone from the note.
+  function showGhost(el: Element) {
+    clearTimeout(ghostTimer.current);
+    setGhost({ el, out: false });
+    ghostTimer.current = setTimeout(() => setGhost(null), GHOST_MS + 80);
+  }
+
   function apply(next: NoteContent) {
     contentRef.current = next;
     setContent(next);
@@ -309,8 +332,14 @@ export default function StickyEditor({
       return;
     }
     const [x, y, p] = toNote(e);
-    // jsdom has no pointer capture; the `?.` is for it, not for browsers.
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    // Keep the gesture on the paper even when the pointer wanders off it. The
+    // guard is for jsdom (no pointer capture at all) and for a pointer id that
+    // is no longer live, which throws rather than returning.
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      // not a live pointer — carry on without capture
+    }
 
     if (held === "eraser") {
       rubbingRef.current = true;
@@ -403,7 +432,7 @@ export default function StickyEditor({
     const el = live?.elements[drag.index];
     if (!live || !el) return;
     if (isOffNote(el)) {
-      setGhost(el);
+      showGhost(el);
       apply(removeElement(live, drag.index));
       setSelected(-1);
       return;
@@ -419,7 +448,7 @@ export default function StickyEditor({
     const hit = hitTest(live, x, y);
     const el = live.elements[hit];
     if (!el) return;
-    setGhost(el);
+    showGhost(el);
     apply(removeElement(live, hit));
   }
 
@@ -500,12 +529,12 @@ export default function StickyEditor({
                 className={`${STILL} pointer-events-none absolute inset-0 h-full w-full`}
                 aria-hidden="true"
                 style={{
-                  opacity: ghostOut ? 0 : 1,
+                  opacity: ghost.out ? 0 : 1,
                   transition: `opacity ${GHOST_MS}ms linear`,
                 }}
               >
                 <title>rubbed out</title>
-                {renderElement(ghost, 0)}
+                {renderElement(ghost.el, 0)}
               </svg>
             )}
 
@@ -580,7 +609,7 @@ export default function StickyEditor({
           />
         </div>
 
-        <div className="flex min-h-12 min-w-0 flex-1 items-end justify-center gap-1">
+        <div className="flex min-h-12 min-w-0 flex-1 items-end justify-center gap-0.5">
           {INKS.map((ink) => (
             <ToolSlot
               key={ink}
@@ -640,7 +669,11 @@ export default function StickyEditor({
                 .join(" "),
             }}
           >
-            {held === "eraser" ? <EraserBody /> : <MarkerBody ink={held} />}
+            {held === "eraser" ? (
+              <EraserBody />
+            ) : (
+              <MarkerBody ink={held} loose />
+            )}
           </div>
         </div>
       )}
@@ -712,7 +745,7 @@ function ToolSlot({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="relative flex min-w-9 shrink items-end justify-center border-0 bg-transparent p-0"
+      className="relative flex w-9 min-w-0 shrink items-end justify-center border-0 bg-transparent p-0"
       style={{ height: TOOL_H }}
     >
       <span
@@ -740,10 +773,13 @@ function MarkerBody({
   ink,
   held = false,
   using = false,
+  loose = false,
 }: {
   ink: Ink;
   held?: boolean;
   using?: boolean;
+  // already in your hand (the image riding the cursor): no cap, no dock lift
+  loose?: boolean;
 }) {
   const c = INK[ink];
   return (
@@ -760,11 +796,12 @@ function MarkerBody({
           backgroundImage:
             "linear-gradient(100deg, rgba(255,255,255,.34) 0 20%, rgba(255,255,255,0) 20% 60%, rgba(0,0,0,.18) 60%)",
           boxShadow: "0 3px 6px rgba(0,0,0,.45)",
-          transform: using
-            ? "translateY(-27px) rotate(-16deg)"
-            : held
-              ? "translateY(-17px) rotate(-7deg)"
-              : "none",
+          transform:
+            loose || !held
+              ? "none"
+              : using
+                ? "translateY(-27px) rotate(-16deg)"
+                : "translateY(-17px) rotate(-7deg)",
           transition: `transform ${LIFT_MS}ms ${EASE_OUT}`,
         }}
       >
@@ -792,25 +829,27 @@ function MarkerBody({
           }}
         />
       </span>
-      <span
-        className={`absolute block ${STILL}`}
-        style={{
-          left: -1,
-          bottom: -10,
-          width: MARKER_W + 2,
-          height: 26,
-          borderRadius: "2px 2px 4px 4px",
-          borderTop: "2px solid rgba(255,255,255,.35)",
-          backgroundColor: c,
-          backgroundImage:
-            "linear-gradient(100deg, rgba(255,255,255,.45) 0 26%, rgba(0,0,0,.18) 72%)",
-          filter: "brightness(1.12) saturate(.9)",
-          boxShadow:
-            "0 2px 4px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.35)",
-          transform: held ? "translate(12px, 16px) rotate(74deg)" : "none",
-          transition: `transform ${LIFT_MS + 60}ms ${EASE_OUT}`,
-        }}
-      />
+      {!loose && (
+        <span
+          className={`absolute block ${STILL}`}
+          style={{
+            left: -1,
+            bottom: -10,
+            width: MARKER_W + 2,
+            height: 26,
+            borderRadius: "2px 2px 4px 4px",
+            borderTop: "2px solid rgba(255,255,255,.35)",
+            backgroundColor: c,
+            backgroundImage:
+              "linear-gradient(100deg, rgba(255,255,255,.45) 0 26%, rgba(0,0,0,.18) 72%)",
+            filter: "brightness(1.12) saturate(.9)",
+            boxShadow:
+              "0 2px 4px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.35)",
+            transform: held ? "translate(12px, 16px) rotate(74deg)" : "none",
+            transition: `transform ${LIFT_MS + 60}ms ${EASE_OUT}`,
+          }}
+        />
+      )}
     </span>
   );
 }
