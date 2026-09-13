@@ -7,13 +7,10 @@ import {
   clientToNoteCoords,
   curlCorner,
   curlFromPointer,
-  cycleHit,
   type Element,
   elementHandles,
-  elementScale,
   emptyNote,
   grabbedHandle,
-  handleTransform,
   hitTest,
   hitTestAll,
   isEdgeBand,
@@ -22,7 +19,7 @@ import {
   moveElement,
   noteSide,
   removeElement,
-  scaleElement,
+  rotationFromHandle,
   settleElement,
   turnNote,
   widthFromPointer,
@@ -130,7 +127,8 @@ describe("element ops", () => {
       y: -20,
     });
     // mid-drag an element may leave the stored range entirely: that's what
-    // makes drag-off-to-delete reachable. settleElement puts it back.
+    // lets a placing sticker be dragged off the paper. settleElement puts it
+    // back.
     expect(moveElement(note, 0, 0, -999).elements[0]).toMatchObject({
       y: -989,
     });
@@ -210,9 +208,9 @@ describe("settleElement", () => {
     expect(settleElement(el)).toMatchObject({ x: 550, y: 100 });
   });
 
-  it("a sticker dragged fully off the paper is deletable, not settled onto it", () => {
-    // the drag-off-to-delete path: the shell sees isOffNote first and removes
-    // the element, so it never reaches settleElement
+  it("a sticker dragged fully off the paper is off the note, not settled onto it", () => {
+    // the shell asks isOffNote first, so such a sticker never reaches
+    // settleElement
     expect(isOffNote(sticker(-100, 250))).toBe(true);
   });
 });
@@ -289,22 +287,6 @@ describe("hit-testing", () => {
     note = addElement(note, sticker(100, 100));
     expect(hitTestAll(note, 100, 100)).toEqual([2, 0]);
     expect(hitTestAll(note, 10, 400)).toEqual([]);
-  });
-});
-
-describe("cycleHit", () => {
-  it("steps to the next hit and wraps", () => {
-    expect(cycleHit([2, 0], 2)).toBe(0);
-    expect(cycleHit([2, 0], 0)).toBe(2);
-  });
-
-  it("starts at the topmost hit when nothing relevant is selected", () => {
-    expect(cycleHit([2, 0], 5)).toBe(2);
-    expect(cycleHit([2, 0], -1)).toBe(2);
-  });
-
-  it("is -1 when nothing was hit", () => {
-    expect(cycleHit([], 1)).toBe(-1);
   });
 });
 
@@ -438,6 +420,29 @@ describe("turnNote", () => {
   });
 });
 
+describe("rotationFromHandle", () => {
+  const at = (x: number, y: number, rotation: number) => ({ x, y, rotation });
+
+  it("turns a square element by how far round its anchor the pointer swung", () => {
+    // a quarter turn round (100, 100), at any distance: no size in it
+    expect(rotationFromHandle(at(100, 100, 0), [150, 100], [100, 300])).toBe(
+      90,
+    );
+  });
+
+  it("adds the swing to a turned element, inside the contract's half circle", () => {
+    expect(rotationFromHandle(at(0, 0, 10), [10, 0], [0, 10])).toBe(100);
+    // 170 + 90 comes back round, it does not reach 260
+    expect(rotationFromHandle(at(0, 0, 170), [10, 0], [0, 10])).toBe(-100);
+  });
+
+  it("holds still for a handle grabbed on the anchor itself", () => {
+    expect(rotationFromHandle(at(100, 100, 45), [100, 100], [300, 300])).toBe(
+      45,
+    );
+  });
+});
+
 describe("an element's own handles", () => {
   it("hangs the handles off the corner and the right edge of the box", () => {
     // a sticker is 48 wide at scale 1, so its box corner is 24 in from centre
@@ -485,49 +490,6 @@ describe("an element's own handles", () => {
     expect(angleOf([0, 0], [10, 0])).toBe(0);
     expect(angleOf([0, 0], [0, 10])).toBe(90); // y runs down the screen
     expect(angleOf([10, 10], [0, 10])).toBe(180);
-  });
-
-  it("reads scale off the reach and rotation off the swing", () => {
-    const anchor: [number, number] = [100, 100];
-    // straight out from the anchor, twice as far: twice the size, same angle
-    expect(handleTransform(anchor, [150, 100], [200, 100], 1, 0)).toEqual({
-      scale: 2,
-      rotation: 0,
-    });
-    // a quarter turn round it, same distance: same size, turned 90
-    const t = handleTransform(anchor, [150, 100], [100, 150], 2, 10);
-    expect(t.scale).toBeCloseTo(2);
-    expect(t.rotation).toBeCloseTo(100);
-  });
-
-  it("keeps a turn inside the contract's half circle either way", () => {
-    expect(
-      handleTransform([0, 0], [10, 0], [0, 10], 1, 170).rotation,
-    ).toBeCloseTo(-100); // 170 + 90 comes back round, it does not reach 260
-  });
-
-  it("holds still for a handle grabbed on the anchor itself", () => {
-    expect(handleTransform([100, 100], [100, 100], [300, 300], 3, 45)).toEqual({
-      scale: 3,
-      rotation: 45,
-    });
-  });
-
-  it("holds a scaled element inside the contract's ranges", () => {
-    const big = scaleElement(sticker(250, 250), 99, 30);
-    expect(big).toMatchObject({ scale: 4, rotation: 30 });
-    expect(scaleElement(sticker(250, 250), 0.01, 0)).toMatchObject({
-      scale: 0.25,
-    });
-    expect(scaleElement(text(), 200, 0)).toMatchObject({ fontSize: 96 });
-    expect(scaleElement(text(), 1, 0)).toMatchObject({ fontSize: 8 });
-    // a stroke has no handle, so nothing to scale
-    expect(scaleElement(stroke(), 4, 90)).toEqual(stroke());
-  });
-
-  it("reads back the scale a drag sets", () => {
-    expect(elementScale(scaleElement(sticker(250, 250), 2, 0))).toBe(2);
-    expect(elementScale(scaleElement(text(), 44, 0))).toBe(44);
   });
 
   it("widens a text box along its own axis", () => {

@@ -281,16 +281,6 @@ const pickUp = (name: RegExp) =>
 // two text boxes that overlap around (60, 80) — B (last) draws on top of A
 const A: Element = { ...HI, x: 40, y: 60, text: "aaa" };
 const B: Element = { ...HI, x: 50, y: 70, text: "bbb" };
-// a line of ink drawn straight through A's first line, at y 80
-const LINE: Element = {
-  type: "stroke",
-  ink: "black",
-  size: 8,
-  points: [
-    [20, 80, 0.5],
-    [300, 80, 0.5],
-  ],
-};
 
 describe("StickyEditor drawing", () => {
   it("draws a stroke in the held ink at the fixed nib", () => {
@@ -475,7 +465,7 @@ describe("StickyEditor caret", () => {
   });
 });
 
-describe("StickyEditor eraser and hands", () => {
+describe("StickyEditor eraser", () => {
   it("rubs out only the element under the nib", () => {
     render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
     pickUp(/pick up the eraser/i);
@@ -508,55 +498,6 @@ describe("StickyEditor eraser and hands", () => {
     // a node of its own, so it mounts opaque instead of reversing the fade
     expect(ghostLayer()).not.toBe(first);
     expect(ghostLayer()?.style.opacity).toBe("1");
-  });
-
-  it("digs one layer down when the same spot is tapped again", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A, LINE] })} />);
-    const paper = paperSurface();
-
-    down(paper, 60, 80);
-    up(paper);
-    expect(selectionBox()?.getAttribute("y")).toBe("76"); // the ink on top
-
-    down(paper, 60, 80);
-    up(paper);
-    // the box under it: selected, not opened, because it was not on top
-    expect(selectionBox()?.getAttribute("y")).toBe("60");
-    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
-  });
-
-  it("deselects on a tap on bare paper", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A] })} />);
-    const paper = paperSurface();
-    down(paper, 60, 80);
-    up(paper);
-    expect(selectionBox()).not.toBeNull();
-
-    down(paper, 400, 400);
-    up(paper);
-    expect(selectionBox()).toBeNull();
-  });
-
-  it("deletes an element dragged fully off the paper", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A] })} />);
-    const paper = paperSurface();
-    down(paper, 60, 80);
-    move(paper, 900, 80); // clamps at 550: the whole box leaves the sheet
-    up(paper);
-
-    expect(drawn()).toHaveLength(0);
-    expect(selectionBox()).toBeNull();
-  });
-
-  it("settles an element dragged half off back into contract range", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A] })} />);
-    const paper = paperSurface();
-    down(paper, 60, 80);
-    move(paper, -200, 80); // x 40 -> -70: hanging off, but still on the sheet
-    up(paper);
-
-    expect(screen.getByText("aaa")).toBeInTheDocument();
-    expect(drawn()[0]?.getAttribute("x")).toBe("-50"); // back inside -50..550
   });
 });
 
@@ -996,10 +937,11 @@ describe("StickyEditor on a tilted note", () => {
   });
 });
 
-describe("StickyEditor note handles", () => {
-  // The sheet is its own control (#69: no sliders anywhere) — the edge turns
-  // it, the bottom corners peel it. The paper is stubbed 500x500 at the origin,
-  // so its centre is (250, 250) and a client point is a note coordinate.
+describe("StickyEditor hand mode", () => {
+  // The sheet is its own control (#69: no sliders anywhere) — a drag anywhere
+  // turns it, the bottom corners peel it, and a placed element is never taken
+  // hold of (#79). The paper is stubbed 500x500 at the origin, so its centre is
+  // (250, 250) and a client point is a note coordinate.
   const tilt = () => paperSurface().style.transform;
   // The two bottom corners as the renderer folded them, off the paper outline:
   // "M 0 0 L 500 0 L 500 <500-br> L <500-br> 500 L <bl> 500 L 0 <500-bl> Z".
@@ -1011,11 +953,11 @@ describe("StickyEditor note handles", () => {
   };
   const flat = { bl: 0, br: 0 };
 
-  it("turns the note by the angle an edge drag sweeps", () => {
+  it("turns the note by the angle a drag sweeps", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
     const surface = paperSurface();
 
-    down(surface, 6, 250); // the band along the left edge
+    down(surface, 6, 250); // out by the left edge
     move(surface, 6, 150);
     expect(tilt()).toContain("rotate(22.3deg)");
     up(surface);
@@ -1081,31 +1023,27 @@ describe("StickyEditor note handles", () => {
     expect(document.querySelector("[data-grip]")).toBeNull();
   });
 
-  it("moves an element that lies in the edge band rather than the note", () => {
-    // the band is the LAST thing a press can mean: what is drawn wins
+  it("opens nothing on a second tap on placed text, and offers no fonts for it", () => {
     render(
-      <StickyEditor
-        initialContent={seeded({
-          curl: flat,
-          elements: [{ ...HI, x: 0, y: 0 }],
-        })}
-      />,
+      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
     );
     const surface = paperSurface();
 
-    down(surface, 6, 6);
-    move(surface, 106, 56);
+    down(surface, 60, 80);
+    up(surface);
+    down(surface, 60, 80); // the tap that re-opened a box before #79
     up(surface);
 
-    expect(tilt()).toContain("rotate(0deg)");
-    expect(drawn()[0]?.getAttribute("x")).toBe("100");
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
+    expect(screen.queryAllByRole("button", { name: /write in/i })).toEqual([]);
+    expect(selectionBox()).toBeNull();
+    expect(drawn()[0]?.textContent).toBe("hi");
   });
 });
 
-describe("StickyEditor element handles", () => {
-  // Scale and rotation live ON the element (#70), so a selected sticker or text
-  // box wears one handle at the far corner of its outline that does both in a
-  // single drag, and a text box a second on its right edge for its width.
+describe("StickyEditor two fingers", () => {
+  // Two fingers turn the note, whatever lies under them (#79), and a second
+  // finger landing on a stroke is never more ink.
   const STAR: Element = {
     type: "sticker",
     x: 250,
@@ -1120,145 +1058,23 @@ describe("StickyEditor element handles", () => {
     fireEvent.pointerDown(el, { clientX: x, clientY: y, pointerId });
   const upAt = (el: HTMLElement, pointerId: number) =>
     fireEvent.pointerUp(el, { pointerId });
-  const select = (surface: HTMLElement, x: number, y: number) => {
-    down(surface, x, y);
-    up(surface);
-  };
 
-  it("scales and turns a sticker from its corner handle in one drag", () => {
+  it("turns the note, not the sticker, with two fingers on a placed sticker", () => {
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat, elements: [STAR] })}
       />,
     );
     const surface = paperSurface();
-    select(surface, 250, 250);
-    // the sticker's box is 48 wide, so its corner handle sits at (274, 274)
-    expect(selectionBox()?.getAttribute("width")).toBe("48");
 
-    down(surface, 274, 274);
-    move(surface, 250, 350); // a quarter turn round, and further out
-    up(surface);
-
-    // 100 out where it took hold 34 out, and swung from 45 deg to 90
-    expect(Number(glyph()?.getAttribute("font-size"))).toBeCloseTo(
-      48 * 2.95,
-      0,
-    );
-    expect(glyph()?.getAttribute("transform")).toBe("rotate(45 250 250)");
-  });
-
-  it("takes the handle before the element under it", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat, elements: [STAR] })}
-      />,
-    );
-    const surface = paperSurface();
-    select(surface, 250, 250);
-
-    // the corner handle sits ON the sticker's own box corner
-    down(surface, 274, 274);
-    move(surface, 300, 300);
-    up(surface);
-
-    expect(glyph()?.getAttribute("x")).toBe("250"); // it scaled, it never moved
-    expect(Number(glyph()?.getAttribute("font-size"))).toBeGreaterThan(48);
-  });
-
-  it("holds a sticker inside the contract's scale range", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat, elements: [STAR] })}
-      />,
-    );
-    const surface = paperSurface();
-    select(surface, 250, 250);
-
-    down(surface, 274, 274);
-    move(surface, 540, 540); // as far out as the pointer can be clamped
-    up(surface);
-
-    expect(glyph()?.getAttribute("font-size")).toBe("192"); // 48 x 4, the cap
-  });
-
-  it("widens a text box from its right-edge handle, and no narrower than a word", () => {
-    render(
-      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
-    );
-    const surface = paperSurface();
-    select(surface, 60, 80);
-    // the box is 40..280 x 60..90, so the width handle sits at (280, 75)
-    expect(selectionBox()?.getAttribute("width")).toBe("240");
-
-    down(surface, 280, 75);
-    move(surface, 400, 75);
-    up(surface);
-    expect(selectionBox()?.getAttribute("width")).toBe("360");
-
-    down(surface, 400, 75);
-    move(surface, 0, 75);
-    up(surface);
-    expect(selectionBox()?.getAttribute("width")).toBe("40");
-  });
-
-  it("scales a one-line text box from its corner, not the width handle beside it", () => {
-    render(
-      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
-    );
-    const surface = paperSurface();
-    select(surface, 60, 80);
-    // the box is 40..280 x 60..90: the corner handle (280, 90) is only 15
-    // below the width handle (280, 75), inside a thumb's reach of both
-    down(surface, 280, 90);
-    move(surface, 520, 120); // twice as far out from the anchor (40, 60)
-    up(surface);
-
-    expect(drawn()[0]?.getAttribute("font-size")).toBe("60");
-    expect(selectionBox()?.getAttribute("width")).toBe("240"); // w untouched
-  });
-
-  it("lets go of a handle when a second finger takes the gesture over", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat, elements: [STAR] })}
-      />,
-    );
-    const surface = paperSurface();
-    select(surface, 250, 250);
-
-    down(surface, 274, 274); // the corner handle
-    downAt(surface, 300, 300, 2); // a second finger: a pinch now
+    down(surface, 250, 250); // the first finger on the sticker
+    downAt(surface, 300, 250, 2);
+    move(surface, 300, 270, 2); // spreads a little and swings round
     upAt(surface, 2);
-    up(surface);
 
-    // the next drag on its body moves it, and nothing left over scales or
-    // turns it
-    down(surface, 250, 250);
-    move(surface, 280, 250);
-    up(surface);
-
-    expect(glyph()?.getAttribute("x")).toBe("280");
+    expect(paperSurface().style.transform).toContain("rotate(21.8deg)");
     expect(glyph()?.getAttribute("font-size")).toBe("48");
-    expect(glyph()?.getAttribute("transform")).toBe("rotate(0 280 250)");
-  });
-
-  it("scales and turns a selected sticker with two fingers", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat, elements: [STAR] })}
-      />,
-    );
-    const surface = paperSurface();
-    select(surface, 250, 250);
-
-    down(surface, 250, 250); // the first finger stays on it
-    downAt(surface, 300, 250, 2); // the second lands 50 away
-    move(surface, 350, 250, 2); // and spreads to 100
-    upAt(surface, 2);
-
-    expect(glyph()?.getAttribute("font-size")).toBe("96"); // 48 x 2
-    expect(glyph()?.getAttribute("x")).toBe("250"); // still where it was
+    expect(glyph()?.getAttribute("transform")).toBe("rotate(0 250 250)");
   });
 
   it("turns the note with two fingers on bare paper", () => {
@@ -1290,136 +1106,8 @@ describe("StickyEditor element handles", () => {
   });
 });
 
-describe("StickyEditor text in place", () => {
+describe("StickyEditor font samples", () => {
   const flat = { bl: 0, br: 0 };
-  const box = () => screen.queryByRole("textbox", { name: /text box/i });
-  const seededBox = (over: Partial<NoteContent> = {}) =>
-    seeded({ curl: flat, elements: [HI], ...over });
-  const tap = (surface: HTMLElement, x: number, y: number) => {
-    down(surface, x, y);
-    up(surface);
-  };
-
-  it("re-opens a selected text box on a second tap and replaces it in place", () => {
-    render(<StickyEditor initialContent={seededBox()} />);
-    const surface = paperSurface();
-
-    tap(surface, 60, 80); // selects
-    expect(box()).toBeNull();
-    tap(surface, 60, 80); // and again opens it, with what it already said
-    expect(box()).toHaveValue("hi");
-    expect(box()).toHaveFocus();
-
-    fireEvent.change(box() as HTMLElement, { target: { value: "hi there" } });
-    fireEvent.blur(box() as HTMLElement);
-
-    expect(drawn()).toHaveLength(1); // replaced, not added beside
-    expect(drawn()[0]?.textContent).toBe("hi there");
-    expect(drawn()[0]?.getAttribute("x")).toBe("40"); // and still where it was
-  });
-
-  it("re-opens a selected text box lying on top of other ink", () => {
-    render(
-      <StickyEditor initialContent={seededBox({ elements: [LINE, HI] })} />,
-    );
-    const surface = paperSurface();
-
-    tap(surface, 60, 80); // the box, on top
-    expect(box()).toBeNull();
-    tap(surface, 60, 80); // opens it, rather than digging to the ink under it
-    expect(box()).toHaveValue("hi");
-  });
-
-  it("shows the box being re-edited once, not beside itself", () => {
-    render(<StickyEditor initialContent={seededBox()} />);
-    const surface = paperSurface();
-    tap(surface, 60, 80);
-    tap(surface, 60, 80);
-    fireEvent.change(box() as HTMLElement, { target: { value: "new" } });
-
-    expect(drawn()).toHaveLength(1);
-    expect(drawn()[0]?.textContent).toBe("new");
-  });
-
-  it("throws away a box that is emptied out", () => {
-    render(<StickyEditor initialContent={seededBox()} />);
-    const surface = paperSurface();
-    tap(surface, 60, 80);
-    tap(surface, 60, 80);
-    fireEvent.change(box() as HTMLElement, { target: { value: "  " } });
-    fireEvent.blur(box() as HTMLElement);
-
-    expect(drawn()).toHaveLength(0);
-    expect(selectionBox()).toBeNull();
-  });
-
-  it("leaves the original alone when the edit is cancelled", () => {
-    render(<StickyEditor initialContent={seededBox()} />);
-    const surface = paperSurface();
-    tap(surface, 60, 80);
-    tap(surface, 60, 80);
-    fireEvent.change(box() as HTMLElement, { target: { value: "gone" } });
-    fireEvent.keyDown(box() as HTMLElement, { key: "Escape" });
-
-    expect(box()).toBeNull(); // Escape already put the box away: nothing to blur
-    expect(drawn()).toHaveLength(1);
-    expect(drawn()[0]?.textContent).toBe("hi");
-  });
-
-  it("moves a selected box rather than opening it when the tap is a drag", () => {
-    render(<StickyEditor initialContent={seededBox()} />);
-    const surface = paperSurface();
-    tap(surface, 60, 80);
-
-    down(surface, 60, 80);
-    move(surface, 160, 80);
-    up(surface);
-
-    expect(box()).toBeNull();
-    expect(drawn()[0]?.getAttribute("x")).toBe("140");
-  });
-
-  it("changes a selected box's font from the bar over it", () => {
-    render(<StickyEditor initialContent={seededBox()} />);
-    const surface = paperSurface();
-    expect(
-      screen.queryByRole("button", { name: /write in marker/i }),
-    ).toBeNull();
-
-    tap(surface, 60, 80);
-    expect(drawn()[0]?.getAttribute("font-family")).toContain("Patrick Hand");
-    fireEvent.click(screen.getByRole("button", { name: /write in marker/i }));
-
-    expect(drawn()).toHaveLength(1);
-    expect(drawn()[0]?.getAttribute("font-family")).toContain(
-      "Permanent Marker",
-    );
-  });
-
-  it("offers no font bar on a sticker, and none while the box is open", () => {
-    render(
-      <StickyEditor
-        initialContent={seeded({
-          curl: flat,
-          elements: [
-            {
-              type: "sticker",
-              x: 250,
-              y: 250,
-              emoji: "⭐",
-              scale: 1,
-              rotation: 0,
-            },
-          ],
-        })}
-      />,
-    );
-    const surface = paperSurface();
-    tap(surface, 250, 250);
-    expect(
-      screen.queryByRole("button", { name: /write in marker/i }),
-    ).toBeNull();
-  });
 
   it("closes the font samples on a press anywhere else, without eating it", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);

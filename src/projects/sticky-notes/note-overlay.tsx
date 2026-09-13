@@ -1,4 +1,3 @@
-import { FontChip } from "./desk-objects";
 import {
   bounds,
   type Corner,
@@ -6,23 +5,21 @@ import {
   elementHandles,
   MAX_FOLD,
   type Element as NoteElement,
-  rotatePoint,
 } from "./note-editor";
 import { INK } from "./note-render";
-import { CANVAS, FONTS, type Font, type NoteContent } from "./note-schema";
+import { CANVAS, type NoteContent } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
-// What the editor draws over the note: the caret, the grip, the selection's
-// outline and handles, and the font bar. Stateless — handed an element, it
-// draws it — so it lives apart from StickyEditor's gesture shell, which only
-// decides what shows.
+// What the editor draws over the note: the caret, the grip, and an element's
+// outline and handles. Stateless — handed an element, it draws it — so it
+// lives apart from StickyEditor's gesture shell, which only decides what shows.
 
 type TextEl = Extract<NoteElement, { type: "text" }>;
 
 const CARET_MS = 1000; // one blink, on a step: a cursor snaps, it doesn't fade
 
 // How big a handle is drawn, in note units: small, since it sits on a note.
-// StickyEditor catches it from much further away (HANDLE_TOUCH).
+// The shell catches it from much further away (HANDLE_TOUCH).
 const HANDLE_R = 7;
 
 // The caret's tip, in the text's OWN space: just past the last glyph of the
@@ -43,8 +40,7 @@ export function caretAt(
   };
   if (!last) return estimate; // an empty line has no glyph to measure from
   // Array order is z-order and the render draws one node per element in that
-  // order, so the draft's index IS its node — which a re-edited box in the
-  // middle of the note needs, and "the last text on the paper" could not give.
+  // order, so the draft's index IS its node.
   const text = paper?.querySelector("[data-elements]")?.children[index];
   const tspans = text?.querySelectorAll<SVGTSpanElement>("tspan");
   const tspan = tspans?.[tspans.length - 1];
@@ -116,9 +112,10 @@ export function gripMark(grip: "edge" | Corner, curl: NoteContent["curl"]) {
   );
 }
 
-// The dashed box around the selection, in note units — inside the element's
-// own rotation, so the outline lies on the thing rather than around it. A
-// stroke has no rotation of its own: its box is the ink's.
+// The dashed box around an element, in note units — inside the element's own
+// rotation, so the outline lies on the thing rather than around it. A stroke
+// has no rotation of its own: its box is the ink's. Unused since #79; T9 (#80)
+// outlines the element being placed.
 export function selectionRect(el: NoteElement) {
   const b = bounds(el);
   const box = (
@@ -138,10 +135,10 @@ export function selectionRect(el: NoteElement) {
   return <g transform={`rotate(${el.rotation} ${el.x} ${el.y})`}>{box}</g>;
 }
 
-// The selection's handles: one at the box's far corner that scales and turns
-// in a single drag, and on a text box a second on its right edge for the width
-// it wraps at. Drawn small — they sit on a note, not a toolbar — and caught
-// from HANDLE_TOUCH px away.
+// An element's handles: one at the box's far corner that turns it, and on a
+// text box a second on its right edge for the width it wraps at. Drawn small —
+// they sit on a note, not a toolbar — and caught from HANDLE_TOUCH px away.
+// Unused since #79; T9 (#80) draws them on the element being placed.
 export function handleMarks(el: NoteElement) {
   const handles = elementHandles(el);
   if (!handles) return null;
@@ -161,46 +158,5 @@ export function handleMarks(el: NoteElement) {
       {handles.width && knob(handles.width, HANDLE_R - 2)}
       {knob(handles.corner, HANDLE_R)}
     </>
-  );
-}
-
-// The font samples for a selected text box, standing on its top edge. It rides
-// inside the rotated sheet — so it is positioned in plain note units, like
-// everything else on the paper — and counter-turns so the samples stay upright
-// and readable whichever way the note is lying.
-export function FontBar({
-  el,
-  tilt,
-  onPick,
-}: {
-  el: TextEl;
-  tilt: number;
-  onPick: (f: Font) => void;
-}) {
-  const b = bounds(el);
-  const [x, y] = rotatePoint((b.x0 + b.x1) / 2, b.y0, el.x, el.y, el.rotation);
-  return (
-    <div
-      className="absolute flex gap-1.5"
-      style={{
-        left: `${(x / CANVAS) * 100}%`,
-        top: `${(y / CANVAS) * 100}%`,
-        transform: `translate(-50%, -100%) translateY(-10px) rotate(${-tilt}deg)`,
-        transformOrigin: "50% 100%",
-      }}
-      // The bar lies on the paper, so its presses would otherwise be presses on
-      // the paper: a tap on a sample is a choice, not a deselect.
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      {FONTS.map((f) => (
-        <FontChip
-          key={f}
-          font={f}
-          active={f === el.font}
-          tint={INK[el.color]}
-          onPick={onPick}
-        />
-      ))}
-    </div>
   );
 }

@@ -9,16 +9,16 @@ import { LINE_HEIGHT, wrapLines } from "./note-text";
 // The editor's pure model layer: seeding a blank note and the immutable
 // element operations (add / update / move / remove) plus the geometry the
 // interaction shell needs (bounds, hit-test, off-note). No React, no DOM — so
-// the tricky bits (drag-off-to-delete, topmost hit-test, coord clamping) are
-// unit-tested here, so the shell that grows on top of this from T4 (pointer
-// input lands then) can stay thin: it maps pointers onto these calls and holds
-// no model logic of its own.
+// the tricky bits (topmost hit-test, coord clamping, the note's own turn and
+// curl) are unit-tested here, and the shell stays thin: it maps pointers onto
+// these calls and holds no model logic of its own.
 //
-// A drag is deliberately unclamped: `moveElement` lets coordinates leave the
-// schema's -50..550 range, because an element that can't leave the paper can
-// never be dragged off it to be deleted. Out-of-range coords are editor runtime
-// state, never stored — on release the shell deletes the element if `isOffNote`,
-// and otherwise calls `settleElement` to shift it back into contract range.
+// A placed element never changes again (#79), so the move and handle maths
+// below wait for T9 (#80), which moves an element only while it is being
+// placed. That drag is deliberately unclamped: `moveElement` lets coordinates
+// leave the schema's -50..550 range, so a sticker can be dragged off the paper
+// to go back to its sheet. Out-of-range coords are editor runtime state, never
+// stored — `isOffNote` or `settleElement` decides on release.
 
 export type Element = NoteContent["elements"][number];
 
@@ -108,8 +108,8 @@ function translate(el: Element, dx: number, dy: number): Element {
 
 // Rigid, unclamped translation: every point moves by the same delta, so a
 // stroke keeps its shape instead of squashing flat against an edge, and an
-// element can be dragged fully off the paper (which is how you delete it).
-// The shell settles or deletes on release — see the module header.
+// element can be dragged fully off the paper. Unused since #79; T9 (#80) moves
+// the element being placed with it.
 export function moveElement(
   content: NoteContent,
   index: number,
@@ -133,6 +133,7 @@ function settleShift(lo: number, hi: number): number {
 // drag: the smallest rigid shift that puts every STORED coordinate inside
 // -50..550 (a stroke's points; a text or sticker anchor — the schema constrains
 // coords, not silhouettes). Returns the element unchanged when it already fits.
+// Unused since #79; T9 (#80) settles the element being placed with it.
 export function settleElement(el: Element): Element {
   let x0: number;
   let x1: number;
@@ -159,9 +160,9 @@ export function settleElement(el: Element): Element {
 export type Bounds = { x0: number; y0: number; x1: number; y1: number };
 
 // Axis-aligned bounds in the element's own (unrotated) frame, used for the
-// selection outline, the box hit-test and off-note detection. ponytail: a
-// stroke is still its bbox here — only hit-testing walks the real polyline —
-// which is all the move clamp and drag-off-to-delete need.
+// outline, the box hit-test and off-note detection. ponytail: a stroke is
+// still its bbox here — only hit-testing walks the real polyline — which is
+// all the outline and off-note tests need.
 export function bounds(el: Element): Bounds {
   if (el.type === "stroke") {
     let x0 = Infinity;
@@ -268,8 +269,9 @@ function hitsElement(el: Element, x: number, y: number): boolean {
   return px >= b.x0 && px <= b.x1 && py >= b.y0 && py <= b.y1;
 }
 
-// True when the element sits entirely off the paper (0..CANVAS both axes) —
-// the drag-off-to-delete test.
+// True when the element sits entirely off the paper (0..CANVAS both axes).
+// Unused since #79; T9 (#80) sends a placing sticker dragged off back to its
+// sheet with it.
 export function isOffNote(el: Element): boolean {
   const b = bounds(el);
   return b.x1 < 0 || b.x0 > CANVAS || b.y1 < 0 || b.y0 > CANVAS;
@@ -294,14 +296,6 @@ export function hitTestAll(
 // Index of the topmost element under (x, y), or -1.
 export function hitTest(content: NoteContent, x: number, y: number): number {
   return hitTestAll(content, x, y)[0] ?? -1;
-}
-
-// The next hit after the current selection, wrapping — tapping the same spot
-// again digs one layer down. Anything else selected (or nothing) starts at the
-// top.
-export function cycleHit(hits: number[], selected: number): number {
-  const i = hits.indexOf(selected);
-  return (i === -1 ? hits[0] : hits[(i + 1) % hits.length]) ?? -1;
 }
 
 // --- the note's own geometry (#76) ------------------------------------------
@@ -415,9 +409,14 @@ export const angleOf = (from: [number, number], to: [number, number]): number =>
   (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
 
 // --- an element's own handles (#76) -----------------------------------------
-// Scale and rotation live ON the element (the T0 verdict, #70), not on a panel:
-// one handle at the corner of the selection box does both in a single drag, and
-// a text box gets a second on its right edge for the width it wraps at.
+// Nothing on the UI calls these since a placed element stopped changing (#79):
+// T9 (#80) hangs them off the element still being placed — a corner handle that
+// only turns it, and on a text box a right-edge handle for the width it wraps at.
+
+// The handles are drawn small (they sit on a note, not a toolbar) but caught
+// big: this is the target's width in CSS px, for the shell to size into note
+// units against however large the sheet is rendered.
+export const HANDLE_TOUCH = 48;
 
 // An element turned by `by` degrees. Unlike the note (turnNote, held to a tilt
 // the wall can wear) an element may face any way at all, so a turn past half a
@@ -461,48 +460,20 @@ export function grabbedHandle(
   return width < corner ? "width" : "corner";
 }
 
-// One drag of the corner handle: how much further the pointer is from the
-// element's anchor than where it took hold, and how far round it has swung.
-// The caller decides what "scale" means for the element it holds.
-export function handleTransform(
-  anchor: [number, number],
-  start: [number, number],
+// One drag of the corner handle: the element's rotation when it was taken hold
+// of, plus how far round its anchor (x, y) — the point the renderer turns it
+// about — the pointer has since swung. Only the angle counts, never the reach:
+// the handle turns, it does not resize.
+export function rotationFromHandle(
+  el: { x: number; y: number; rotation: number },
+  from: [number, number],
   now: [number, number],
-  startScale: number,
-  startRotation: number,
-): { scale: number; rotation: number } {
-  const reach = (p: [number, number]) =>
-    Math.hypot(p[0] - anchor[0], p[1] - anchor[1]);
-  const held = reach(start);
+): number {
+  const anchor: [number, number] = [el.x, el.y];
   // taken hold of right on the anchor: no direction to read, so hold still
-  if (held < 1) return { scale: startScale, rotation: startRotation };
-  return {
-    scale: (startScale * reach(now)) / held,
-    rotation: turnElement(
-      startRotation,
-      angleOf(anchor, now) - angleOf(anchor, start),
-    ),
-  };
+  if (Math.hypot(from[0] - el.x, from[1] - el.y) < 1) return el.rotation;
+  return turnElement(el.rotation, angleOf(anchor, now) - angleOf(anchor, from));
 }
-
-// The element that drag leaves behind, inside the contract's ranges: a sticker
-// scales, a text box grows its font, and both turn.
-export function scaleElement(
-  el: Element,
-  scale: number,
-  rotation: number,
-): Element {
-  if (el.type === "sticker")
-    return { ...el, scale: clamp(round2(scale), 0.25, 4), rotation };
-  if (el.type === "text")
-    return { ...el, fontSize: clamp(Math.round(scale), 8, 96), rotation };
-  return el;
-}
-
-// What `scaleElement` sets, read back — where a drag or a pinch starts from.
-// A stroke is never scaled, so 1 leaves it be.
-export const elementScale = (el: Element): number =>
-  el.type === "sticker" ? el.scale : el.type === "text" ? el.fontSize : 1;
 
 // Narrower than this and a text box wraps one letter per line.
 export const MIN_TEXT_W = 40;

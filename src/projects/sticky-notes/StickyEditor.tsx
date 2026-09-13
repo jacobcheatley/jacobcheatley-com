@@ -36,35 +36,16 @@ import {
   clientToNoteCoords,
   curlCorner,
   curlFromPointer,
-  cycleHit,
-  elementHandles,
-  elementScale,
   emptyNote,
-  grabbedHandle,
-  handleTransform,
   hitTest,
-  hitTestAll,
   isEdgeBand,
-  isOffNote,
-  moveElement,
   type Element as NoteElement,
   noteSide,
   removeElement,
-  scaleElement,
-  settleElement,
   turnNote,
-  updateElement,
-  widthFromPointer,
 } from "./note-editor";
 import { loadFont } from "./note-fonts";
-import {
-  caretAt,
-  caretRect,
-  FontBar,
-  gripMark,
-  handleMarks,
-  selectionRect,
-} from "./note-overlay";
+import { caretAt, caretRect, gripMark } from "./note-overlay";
 import {
   NOTE_PAPER_ASPECT_RATIO,
   NotePaper,
@@ -105,14 +86,6 @@ import { SHEET_H, StickerSheet } from "./StickerSheet";
 const TEAR_MS = 400;
 const CRUMPLE_MS = 400;
 const GHOST_MS = 200; // how long a rubbed-out element lingers as a fade
-
-// The handles are drawn small (they sit on a note, not a toolbar) but caught
-// big: this is the target's width in CSS px, sized into note units against
-// however large the sheet is rendered.
-const HANDLE_TOUCH = 48;
-
-// How far a press may wander and still be a tap rather than a drag.
-const TAP_SLOP = 5;
 
 const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
 const TEXT_SIZE = 30;
@@ -172,12 +145,7 @@ export default function StickyEditor({
   // The sticker sheet is independent of what is in your hand: opening it neither
   // puts a marker down nor picks anything up.
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selected, setSelected] = useState(-1);
   const [textDraft, setTextDraft] = useState<TextEl | null>(null);
-  // Which element the open box is re-editing, or -1 for a box being written for
-  // the first time. Tapping a selected text box again re-opens it (#76), and
-  // committing then replaces it where it lies instead of appending a copy.
-  const [editing, setEditing] = useState(-1);
   // A finger leaves the tool docked on the mat, so the dock has to show the
   // stroke happening; a mouse carries the tool itself.
   const [using, setUsing] = useState(false);
@@ -227,16 +195,6 @@ export default function StickyEditor({
   // Transient pointer state lives in refs (no re-render on read); the live
   // stroke uses forceRender so the note grows as you draw.
   const draftRef = useRef<StrokeEl | null>(null);
-  const dragRef = useRef<{
-    index: number;
-    x: number;
-    y: number;
-    // where it took hold, and whether this press is the second tap on an
-    // already-selected text box (which re-opens it, if it turns out to be a tap
-    // and not a drag)
-    from: [number, number];
-    edit: boolean;
-  } | null>(null);
   const rubbingRef = useRef(false);
   // Turning the note by its edge (#76). The angle is taken in CLIENT space
   // about the paper's centre: taken in note units it would be measured through
@@ -254,26 +212,12 @@ export default function StickyEditor({
     start: number;
     from: [number, number];
   } | null>(null);
-  // A drag of the selected element's own handle: which one, where it took hold
-  // and what the element was then, so the whole gesture reads off one origin
-  // instead of accumulating rounding.
-  const handleRef = useRef<{
-    index: number;
-    kind: "corner" | "width";
-    start: [number, number];
-    scale: number;
-    rotation: number;
-  } | null>(null);
-  // Two fingers: the same scale and turn as the corner handle when something is
-  // selected, and the note's own rotation when nothing is. `from` is where the
-  // second finger landed, seen from the first; `scale` and `rotation` are what
-  // was being turned then.
+  // Two fingers turn the note, whatever lies under them. `from` is where the
+  // second finger landed, seen from the first; `rotation` is the note's then.
   const pinchRef = useRef<{
     a: number;
     b: number;
-    index: number; // -1 is the note itself
     from: [number, number];
-    scale: number;
     rotation: number;
   } | null>(null);
   // Where every pointer that came down on the paper is now, in client
@@ -290,19 +234,15 @@ export default function StickyEditor({
   const busy = () =>
     draftRef.current !== null ||
     rubbingRef.current ||
-    dragRef.current !== null ||
     spinRef.current !== null ||
-    curlRef.current !== null ||
-    handleRef.current !== null;
+    curlRef.current !== null;
   // Every one-pointer gesture ends here, whether it was lifted or a second
   // finger took it over: one place, so no half of a gesture outlives it.
   function endGesture() {
     draftRef.current = null;
-    dragRef.current = null;
     rubbingRef.current = false;
     spinRef.current = null;
     curlRef.current = null;
-    handleRef.current = null;
     setUsing(false);
     setGrip(null);
   }
@@ -464,18 +404,18 @@ export default function StickyEditor({
       caretAt(
         paperRef.current,
         textDraft,
-        editing >= 0 ? editing : (contentRef.current?.elements.length ?? 0),
+        contentRef.current?.elements.length ?? 0,
       ),
     );
     // The caret only ever sits at the end, so the textarea's own cursor goes
     // there too — otherwise Home or a tap inside the box types somewhere the
-    // caret isn't. ponytail: end of text only, so a re-opened box can only be
-    // typed into at its end. Upgrade: draw the caret at `selectionStart` (one
-    // more `getEndPositionOfChar`, on the tspan holding it) and stop pinning
-    // the selection here.
+    // caret isn't. ponytail: end of text only, so a box can only be typed into
+    // at its end. Upgrade: draw the caret at `selectionStart` (one more
+    // `getEndPositionOfChar`, on the tspan holding it) and stop pinning the
+    // selection here.
     const box = textRef.current;
     box?.setSelectionRange(box.value.length, box.value.length);
-  }, [textDraft, caretTick, editing]);
+  }, [textDraft, caretTick]);
 
   // Leave the element where it was, fading, after it has gone from the note.
   function showGhost(el: NoteElement) {
@@ -515,7 +455,6 @@ export default function StickyEditor({
   function binIt() {
     if (!content || crumpling) return;
     const { colour } = content;
-    setSelected(-1);
     setCrumpling(true);
     crumpleTimer.current = setTimeout(() => {
       setCrumpling(false);
@@ -531,7 +470,6 @@ export default function StickyEditor({
     if (textDraft) commitText(); // what is being typed goes up with it
     const live = contentRef.current;
     if (!live || crumpling) return;
-    setSelected(-1);
     const from = paperRef.current?.getBoundingClientRect();
     // The wall has to lay the landed note out before there is anywhere to fly
     // it to, so this render happens now rather than after the handler.
@@ -540,10 +478,9 @@ export default function StickyEditor({
   }
 
   // Tapping a tool picks it up; tapping the one in your hand (or any other
-  // tool) puts it down. Selection is a hand-mode idea, so it goes with the hand.
+  // tool) puts it down.
   function pickUp(tool: Exclude<Held, null>) {
     setHeld((h) => (h === tool ? null : tool));
-    setSelected(-1);
     setFontsOpen(false);
     hideCursorTool();
   }
@@ -574,7 +511,7 @@ export default function StickyEditor({
 
   // A sticker released off the sheet: it sticks only where it was dropped, and
   // only if that is on the paper. Nothing else about the editor moves — the
-  // selection, the held tool and the mode are all somebody else's gesture.
+  // held tool and the mode are somebody else's gesture.
   function dropSticker(
     emoji: StickerEl["emoji"],
     clientX: number,
@@ -662,36 +599,8 @@ export default function StickyEditor({
       return;
     }
 
-    // Hand mode, in the order a pointer can mean things: the selection's own
-    // handles first, then what is drawn on the paper, then the paper itself.
-    // The note's edge and corners are the last thing a press can be, so nothing
-    // on the sheet is ever out of reach.
-    const sel = live.elements[selected];
-    const handles = sel && !textDraft ? elementHandles(sel) : null;
-    const kind = handles ? grabbedHandle(handles, x, y, handleReach()) : null;
-    if (kind && sel && sel.type !== "stroke") {
-      handleRef.current = {
-        index: selected,
-        kind,
-        start: [x, y],
-        scale: elementScale(sel),
-        rotation: sel.rotation,
-      };
-      return;
-    }
-    const hits = hitTestAll(live, x, y);
-    if (hits.length) {
-      // A second press on a selected text box that is on top is that box's:
-      // a tap re-opens it. Anywhere else the press takes the top hit, or digs
-      // one layer deeper when this spot is already the selection's.
-      const edit =
-        hits[0] === selected && live.elements[selected]?.type === "text";
-      const next = edit ? selected : cycleHit(hits, selected);
-      setSelected(next);
-      dragRef.current = { index: next, x, y, from: [x, y], edit };
-      return;
-    }
-    setSelected(-1); // a press on bare paper is a deselect, whatever else it is
+    // Hand mode: a placed element is never taken hold of (#79), so a press is
+    // only ever the paper's own — a bottom corner peels it, the edge turns it.
     const corner = curlCorner(live.curl, x, y);
     if (corner) {
       curlRef.current = { corner, start: live.curl[corner], from: [x, y] };
@@ -701,48 +610,32 @@ export default function StickyEditor({
     if (isEdgeBand(x, y)) startSpin(e);
   }
 
-  // A 48px target for a handle drawn much smaller, in note units — how many
-  // units that is depends on how big the sheet is rendered right now.
-  function handleReach(): number {
-    const rect = paperRef.current?.getBoundingClientRect();
-    const side = rect?.width
-      ? noteSide(rect.width, contentRef.current?.rotation ?? 0)
-      : CANVAS;
-    return (HANDLE_TOUCH / 2 / side) * CANVAS;
-  }
-
   // The second finger. On a live stroke it drops the draft (a second finger is
-  // never more ink); with something selected the two fingers scale and turn it;
-  // otherwise they turn the note, like the edge band.
+  // never more ink); either way the two fingers turn the note, whatever lies
+  // under them.
   function startPinch(e: ReactPointerEvent) {
     const first = activeId.current;
     const live = contentRef.current;
     const a = first === null ? undefined : points.current.get(first);
     if (!live || first === null || !a) return;
-    const drawing = draftRef.current !== null;
     // Nothing to pinch mid-sentence, and the eraser rubs with one finger.
-    if (textDraft || (held !== null && !drawing)) return;
+    if (textDraft || (held !== null && draftRef.current === null)) return;
     endGesture();
     capturePointer(e);
     const b: [number, number] = [e.clientX, e.clientY];
     points.current.set(e.pointerId, b);
-    const el = drawing ? undefined : live.elements[selected];
-    const onElement = el && el.type !== "stroke";
     pinchRef.current = {
       a: first,
       b: e.pointerId,
-      index: onElement ? selected : -1,
       from: [b[0] - a[0], b[1] - a[1]],
-      scale: onElement ? elementScale(el) : 1,
-      rotation: onElement ? el.rotation : live.rotation,
+      rotation: live.rotation,
     };
-    setGrip(onElement ? null : "edge");
+    setGrip("edge");
     forceRender();
   }
 
-  // Both fingers, every move. Seen from the first finger, the second is the
-  // corner handle's pointer seen from its anchor: how far out it has spread is
-  // the scale, and how far round it has swung is the turn.
+  // Both fingers, every move: how far round the second has swung, seen from
+  // the first, is how far the note turns.
   function pinchMove(e: ReactPointerEvent) {
     const pinch = pinchRef.current;
     const live = contentRef.current;
@@ -753,23 +646,8 @@ export default function StickyEditor({
     const b = points.current.get(pinch.b);
     if (!a || !b) return;
     const now: [number, number] = [b[0] - a[0], b[1] - a[1]];
-    if (pinch.index < 0) {
-      const turned = angleOf([0, 0], now) - angleOf([0, 0], pinch.from);
-      apply({ ...live, rotation: turnNote(pinch.rotation, turned) });
-      return;
-    }
-    const el = live.elements[pinch.index];
-    if (!el) return;
-    const t = handleTransform(
-      [0, 0],
-      pinch.from,
-      now,
-      pinch.scale,
-      pinch.rotation,
-    );
-    apply(
-      updateElement(live, pinch.index, scaleElement(el, t.scale, t.rotation)),
-    );
+    const turned = angleOf([0, 0], now) - angleOf([0, 0], pinch.from);
+    apply({ ...live, rotation: turnNote(pinch.rotation, turned) });
   }
 
   // Grab the note by its edge: from here on the rotation follows how far the
@@ -838,61 +716,17 @@ export default function StickyEditor({
       spinTo(e.clientX, e.clientY);
       return;
     }
-    const handle = handleRef.current;
-    if (handle) {
-      const el = live.elements[handle.index];
-      const [x, y] = toNote(e);
-      if (!el || el.type === "stroke") return;
-      if (handle.kind === "width" && el.type === "text") {
-        apply(
-          updateElement(live, handle.index, {
-            ...el,
-            w: widthFromPointer(el, x, y),
-          }),
-        );
-        return;
-      }
-      // The anchor is the element's own (x, y) — the point the renderer turns
-      // it about — so scaling and turning leave it exactly where it is.
-      const t = handleTransform(
-        [el.x, el.y],
-        handle.start,
-        [x, y],
-        handle.scale,
-        handle.rotation,
-      );
-      apply(
-        updateElement(
-          live,
-          handle.index,
-          scaleElement(el, t.scale, t.rotation),
-        ),
-      );
-      return;
-    }
     const curl = curlRef.current;
-    if (curl) {
-      const [x, y] = toNote(e);
-      const { corner, start, from } = curl;
-      apply({
-        ...live,
-        curl: {
-          ...live.curl,
-          [corner]: curlFromPointer(corner, start, from, [x, y]),
-        },
-      });
-      return;
-    }
-    const drag = dragRef.current;
-    if (!drag) return;
+    if (!curl) return;
     const [x, y] = toNote(e);
-    const dx = x - drag.x;
-    const dy = y - drag.y;
-    drag.x = x;
-    drag.y = y;
-    // Deliberately unclamped: an element that can't leave the paper can never
-    // be dragged off it to be deleted. Settled or deleted on release.
-    apply(moveElement(live, drag.index, dx, dy));
+    const { corner, start, from } = curl;
+    apply({
+      ...live,
+      curl: {
+        ...live.curl,
+        [corner]: curlFromPointer(corner, start, from, [x, y]),
+      },
+    });
   }
 
   function onPaperUp(e: ReactPointerEvent<HTMLDivElement>) {
@@ -911,7 +745,6 @@ export default function StickyEditor({
     if (busy() && activeId.current !== e.pointerId) return;
     activeId.current = null;
     const draft = draftRef.current;
-    const drag = dragRef.current;
     endGesture();
     // iOS Safari raises the keyboard only for a focus() inside the gesture that
     // asked for it — a frame later and the box is live with no keyboard under
@@ -920,33 +753,12 @@ export default function StickyEditor({
       textRef.current?.focus();
       return;
     }
-
-    if (draft) {
-      // A dot (single point) draws nothing via perfect-freehand — needs ≥2, so
-      // a tap in draw mode leaves no mark.
-      if (draft.points.length >= 2 && contentRef.current)
-        apply(addElement(contentRef.current, draft));
-      forceRender();
-      return;
-    }
-    if (!drag) return;
-    const live = contentRef.current;
-    const el = live?.elements[drag.index];
-    if (!live || !el) return;
-    const still =
-      Math.hypot(drag.x - drag.from[0], drag.y - drag.from[1]) < TAP_SLOP;
-    if (drag.edit && still && e.type === "pointerup") {
-      editText(drag.index);
-      return;
-    }
-    if (isOffNote(el)) {
-      showGhost(el);
-      apply(removeElement(live, drag.index));
-      setSelected(-1);
-      return;
-    }
-    const settled = settleElement(el);
-    if (settled !== el) apply(updateElement(live, drag.index, settled));
+    if (!draft) return;
+    // A dot (single point) draws nothing via perfect-freehand — needs ≥2, so a
+    // tap in draw mode leaves no mark.
+    if (draft.points.length >= 2 && contentRef.current)
+      apply(addElement(contentRef.current, draft));
+    forceRender();
   }
 
   // One rub of the eraser: whatever is under the nib goes, with a fade.
@@ -962,37 +774,10 @@ export default function StickyEditor({
 
   function commitText() {
     const draft = textDraft;
-    const at = editing;
     setTextDraft(null);
-    setEditing(-1);
     const live = contentRef.current;
-    if (!draft || !live) return;
-    const text = draft.text.trim();
-    if (at < 0) {
-      if (text) apply(addElement(live, { ...draft, text })); // empty adds nothing
-      return;
-    }
-    // A box emptied out is a box thrown away: there is no inline delete (#69),
-    // and the contract has no such thing as an empty text element.
-    if (!text) {
-      apply(removeElement(live, at));
-      setSelected(-1);
-      return;
-    }
-    apply(updateElement(live, at, { ...draft, text }));
-  }
-
-  // Tapping a text box that is already selected opens it again where it lies.
-  function editText(index: number) {
-    const el = contentRef.current?.elements[index];
-    if (el?.type !== "text") return;
-    // The box has to exist before it can be focused, and the focus has to
-    // happen inside this gesture or iOS raises no keyboard: render it now.
-    flushSync(() => {
-      setEditing(index);
-      setTextDraft(el);
-    });
-    textRef.current?.focus();
+    const text = draft?.text.trim();
+    if (draft && live && text) apply(addElement(live, { ...draft, text })); // empty adds nothing
   }
 
   // --- the tool riding the cursor -----------------------------------------
@@ -1021,19 +806,15 @@ export default function StickyEditor({
   const draft = draftRef.current;
   // The image of the tool in your hand, for a fine pointer to carry.
   const tool = held ? heldTool(held) : null;
-  // The live stroke and the open box are elements like any other. A box being
-  // written joins the end of the note; a box being re-edited stands in for the
-  // element it came from, so the note never shows both.
+  // The live stroke and the open box are elements like any other: each joins
+  // the end of the note while it is being made.
   const shown = !content
     ? content
     : textDraft
-      ? editing >= 0
-        ? updateElement(content, editing, textDraft)
-        : addElement(content, textDraft)
+      ? addElement(content, textDraft)
       : draft
         ? addElement(content, draft)
         : content;
-  const selectedEl = selected >= 0 ? content?.elements[selected] : undefined;
 
   return (
     <div className="absolute inset-0 select-none">
@@ -1083,16 +864,14 @@ export default function StickyEditor({
               {/* The overlay rides inside the rotated sheet, so everything on
                   it is drawn in plain note units and turns with the paper. It
                   never takes the pointer: the paper under it does. */}
-              {((selectedEl && !textDraft) || (caret && textDraft) || grip) && (
+              {((caret && textDraft) || grip) && (
                 <svg
                   viewBox={`0 0 ${CANVAS} ${CANVAS}`}
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   aria-hidden="true"
                 >
-                  <title>selection and caret</title>
+                  <title>grip and caret</title>
                   {grip && gripMark(grip, shown.curl)}
-                  {selectedEl && !textDraft && selectionRect(selectedEl)}
-                  {selectedEl && !textDraft && handleMarks(selectedEl)}
                   {caret && textDraft && caretRect(caret, textDraft)}
                 </svg>
               )}
@@ -1111,27 +890,6 @@ export default function StickyEditor({
                   <title>rubbed out</title>
                   {renderElement(ghost.el, 0)}
                 </svg>
-              )}
-
-              {/* The four fonts, in their own faces, over the box they would
-                  change. Fonts only — a text box's ink is fixed at the marker
-                  that wrote it (#69). */}
-              {selectedEl?.type === "text" && !textDraft && (
-                <FontBar
-                  el={selectedEl}
-                  tilt={shown.rotation}
-                  onPick={(f) => {
-                    loadFont(f);
-                    const live = contentRef.current;
-                    if (live)
-                      apply(
-                        updateElement(live, selected, {
-                          ...selectedEl,
-                          font: f,
-                        }),
-                      );
-                  }}
-                />
               )}
 
               {/* WYSIWYG: the visible text is the SVG above; this only catches
@@ -1153,7 +911,6 @@ export default function StickyEditor({
                     // that puts the open sticker sheet (or the fan) away.
                     e.stopPropagation();
                     setTextDraft(null);
-                    setEditing(-1); // a cancelled edit leaves the original be
                   }}
                   className="pointer-events-none absolute resize-none border-0 bg-transparent p-0 opacity-0 outline-none"
                   style={textBoxStyle(textDraft)}
@@ -1324,10 +1081,7 @@ export default function StickyEditor({
             pinButton.current?.focus();
           }}
           // sent: the mat is bare again for the next note
-          onPinned={() => {
-            apply(null);
-            setSelected(-1);
-          }}
+          onPinned={() => apply(null)}
         />
       )}
 
