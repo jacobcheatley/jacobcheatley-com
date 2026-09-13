@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SHAKE_MS } from "./desk-objects";
 import type { NoteContent } from "./note-schema";
 import { StickyNotes } from "./StickyNotes";
 
@@ -252,6 +253,62 @@ describe("StickyNotes tag", () => {
     expect(nameTag()?.closest("form")).toHaveAttribute("data-shake");
     expect(addNote).not.toHaveBeenCalled();
   });
+
+  it("stops shaking on the clock, so a second blank signing shakes again", async () => {
+    await fastened();
+    const tag = nameTag()?.closest("form");
+    // the clock, not animationend: reduced motion has no animation to end
+    vi.useFakeTimers();
+    fireEvent.click(tick());
+    expect(tag).toHaveAttribute("data-shake");
+    wait(SHAKE_MS);
+    expect(tag).not.toHaveAttribute("data-shake");
+
+    fireEvent.click(tick());
+    expect(tag).toHaveAttribute("data-shake");
+  });
+});
+
+describe("StickyNotes focus", () => {
+  const choices = () =>
+    within(drawer()).getAllByRole("button", { name: /^fasten it with/i });
+
+  it("puts the keyboard on the fasteners as the drawer rises, and again when it reopens", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    fireEvent.click(drawerTab() as HTMLElement);
+    expect(choices()[0]).toHaveFocus();
+  });
+
+  it("starts in the drawer, not on the button the mat took away", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await tearOff();
+    pinItUp();
+    expect(choices()[0]).toHaveFocus();
+  });
+
+  it("moves to the name tag once a fastener is chosen", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    expect(nameTag()).toHaveFocus();
+  });
+
+  it("moves to the name tag when the drawer is put away", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await tearOff();
+    pinItUp();
+    fireEvent.click(
+      screen.getByRole("button", { name: /put the drawer away/i }),
+    );
+    expect(nameTag()).toHaveFocus();
+  });
+
+  it("goes back to pin it up when the note goes back to the desk", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    fireEvent.click(screen.getByRole("button", { name: /back to the desk/i }));
+    expect(screen.getByRole("button", { name: /pin it up/i })).toHaveFocus();
+  });
 });
 
 // a mark on the sheet, so there is content to come back with
@@ -353,6 +410,49 @@ describe("StickyNotes submit", () => {
     expect(addNote).toHaveBeenCalledTimes(1);
     await act(async () => arrive());
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps the fasteners shut while the note is on its way", async () => {
+    addNote.mockReturnValue(new Promise(() => {})); // never arrives
+    const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+
+    // what was posted is what lands: no changing the fastener under it now
+    expect(drawerTab()).toBeDisabled();
+    for (const choice of within(drawer()).getAllByRole("button", {
+      name: /^fasten it with/i,
+    }))
+      expect(choice).toBeDisabled();
+  });
+
+  it("leaves the mat alone when a post from a pin that has since ended arrives", async () => {
+    let arrive: () => void = () => {};
+    addNote.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = () => resolve({ status: "pending" });
+      }),
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(<StickyNotes notes={[]} matUp />);
+    await tearOff("pink");
+    drawAStroke();
+    pinItUp();
+    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+    rerender(<StickyNotes notes={[]} matUp={false} />); // Back, mid-post
+    rerender(<StickyNotes notes={[]} matUp />); // the invite again
+
+    await act(async () => arrive());
+
+    // it did reach the server, so it is pending all the same
+    await waitFor(() =>
+      expect(storedPending()).toMatchObject([{ author: "ada" }]),
+    );
+    expect(navigate).not.toHaveBeenCalled();
+    expect(matPaper()).toBeVisible();
+    expect(marksOnTheMat()).toBe(1);
   });
 
   it("says so on the tag when the post fails, leaves the note where it landed, and lets it go again", async () => {

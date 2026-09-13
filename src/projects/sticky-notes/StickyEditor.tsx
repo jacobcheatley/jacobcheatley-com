@@ -214,6 +214,8 @@ export default function StickyEditor({
   const [tabLift, setTabLift] = useState(0);
 
   const trigger = useRef<HTMLButtonElement>(null);
+  // "pin it up": where the keyboard comes back to when the note does
+  const pinButton = useRef<HTMLButtonElement>(null);
   const stickerTab = useRef<HTMLButtonElement>(null);
   const rocker = useRef<HTMLDivElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
@@ -1163,7 +1165,11 @@ export default function StickyEditor({
 
       {/* stuck along the mat's top edge, across from "← the wall" */}
       {content && (
-        <TapeLabel onClick={pinUp} className="absolute top-3 right-3 z-40">
+        <TapeLabel
+          ref={pinButton}
+          onClick={pinUp}
+          className="absolute top-3 right-3 z-40"
+        >
           pin it up
         </TapeLabel>
       )}
@@ -1310,7 +1316,12 @@ export default function StickyEditor({
           onChange={onLanding}
           // The page stops holding a landed note, so the mat slides back up;
           // the note on it never had the fastener, so it comes back without.
-          onBack={() => onLanding(null)}
+          // Rendered now rather than after the handler: the mat is inert until
+          // it is up again, and focus can't land on anything inside it.
+          onBack={() => {
+            flushSync(() => onLanding(null));
+            pinButton.current?.focus();
+          }}
           // sent: the mat is bare again for the next note
           onPinned={() => {
             apply(null);

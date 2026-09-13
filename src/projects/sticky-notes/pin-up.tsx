@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   type CSSProperties,
   type ReactNode,
+  type Ref,
   useEffect,
   useRef,
   useState,
@@ -76,9 +77,23 @@ export function PinUp({
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // A ref, not state: a second Enter can arrive before a re-render would have
-  // told it the first one is already on its way.
+  // A ref for the guard: a second Enter can arrive before a re-render would
+  // have told it the first one is already on its way. `posting` is the same
+  // fact for rendering: the fasteners are shut while it is true.
   const sending = useRef(false);
+  const [posting, setPosting] = useState(false);
+  // Whether this pin is still the one going on. A POST can outlive it — Back,
+  // "back to the desk" or anything else that ends the landing unmounts this —
+  // and what arrives then must leave the mat and the URL to whatever came
+  // next. Set in the effect rather than the ref's first value, so StrictMode's
+  // rehearsal unmount and remount leaves it true.
+  const live = useRef(false);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
   // Held here rather than on the tag, which is put away while the drawer is
   // open again: a name half typed survives choosing another fastener.
   const [name, setName] = useState("");
@@ -106,18 +121,23 @@ export function PinUp({
     }
     if (sending.current) return true;
     sending.current = true;
+    setPosting(true);
     setError(null);
     addNote({ data: note.data }).then(
       () => {
         // Pending first, then the wall: its pending tile is already written
         // when the landed note goes, so it takes the same slot in one frame.
+        // It is on the server whether or not this pin is still going on, so
+        // it is pending either way.
         savePending({ ...note.data, submittedAt: Date.now() });
+        if (!live.current) return;
         onPinned();
         // replace: Back from the wall shouldn't reopen a note that was sent
         navigate({ to: "/sticky-notes", replace: true });
       },
       () => {
         sending.current = false;
+        setPosting(false);
         setError("it didn't stick — try again");
       },
     );
@@ -129,8 +149,8 @@ export function PinUp({
       {createPortal(
         <>
           {/* Stuck where "pin it up" was. Not once the note is on its way:
-              a POST that lands after it went back would clear the mat under
-              it. */}
+              it is as good as sent, and going back would leave it both
+              pending and on the mat to be pinned up twice. */}
           <TapeLabel
             onClick={() => {
               if (!sending.current) onBack();
@@ -141,6 +161,7 @@ export function PinUp({
           </TapeLabel>
           <FastenerDrawer
             open={drawerOpen}
+            locked={posting}
             colour={content.colour}
             onChoose={(fastener) => {
               onChange({ ...content, fastener });
@@ -177,16 +198,28 @@ function NameTag({
   onName: (name: string) => void;
   onSign: () => boolean;
 }) {
-  // A blank tag rocks for a moment instead of going anywhere.
+  // A blank tag rocks for a moment instead of going anywhere. Stopped on the
+  // clock, as the tool's shake is: under reduced motion there is no animation
+  // to end, so waiting for `animationend` left it shaking for good.
   const [shake, setShake] = useState(false);
+  const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // The tag comes out as the drawer folds away, and the keyboard goes onto it.
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+    return () => clearTimeout(shakeTimer.current);
+  }, []);
+
   return (
     <form
       data-shake={shake || undefined}
       onSubmit={(e) => {
         e.preventDefault(); // a real submit would reload the page
-        if (!onSign()) setShake(true);
+        if (onSign()) return;
+        setShake(true);
+        clearTimeout(shakeTimer.current);
+        shakeTimer.current = setTimeout(() => setShake(false), SHAKE_MS);
       }}
-      onAnimationEnd={() => setShake(false)}
       // shrink-0: the slot is only as wide as the tile, and a tag squeezed to
       // it wraps the tick under the field; it hangs out either side instead
       className="relative mt-3 flex max-w-56 shrink-0 flex-wrap items-center gap-x-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
@@ -199,6 +232,7 @@ function NameTag({
       }}
     >
       <input
+        ref={input}
         aria-label="Your name"
         placeholder="your name"
         value={name}
@@ -236,17 +270,28 @@ function NameTag({
 // one is chosen — or when it is put away without one, which leaves `none`.
 function FastenerDrawer({
   open,
+  locked,
   colour,
   onChoose,
   onClose,
   onOpen,
 }: {
   open: boolean;
+  // the note is on its way: what was posted is what stays on it
+  locked: boolean;
   colour: PaperColour;
   onChoose: (fastener: Fastener) => void;
   onClose: () => void;
   onOpen: () => void;
 }) {
+  // The keyboard goes where the drawer is: rising, it takes the focus from
+  // whatever just went out from under it — "pin it up" on the mat sliding away,
+  // or the tab it replaces. The same move the pad fan makes (StickyEditor).
+  const firstChoice = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) firstChoice.current?.focus();
+  }, [open]);
+
   return (
     <>
       <section
@@ -273,10 +318,12 @@ function FastenerDrawer({
             </button>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {CHOICES.map((fastener) => (
+            {CHOICES.map((fastener, i) => (
               <button
                 key={fastener}
+                ref={i === 0 ? firstChoice : undefined}
                 type="button"
+                disabled={locked}
                 aria-label={`Fasten it with ${FASTENER_NAMES[fastener]}`}
                 onClick={() => onChoose(fastener)}
                 className="block rounded-sm border-0 px-1 pt-3 pb-1"
@@ -292,6 +339,7 @@ function FastenerDrawer({
         <button
           type="button"
           aria-label="Open the fastener drawer"
+          disabled={locked}
           onClick={onOpen}
           className="-translate-x-1/2 fixed bottom-0 left-1/2 z-50 min-h-11 rounded-t-md border-0 px-5 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-[#5c4523] text-lg"
           style={{ ...TRAY, fontFamily: FONT_FAMILIES.casual }}
@@ -309,13 +357,17 @@ export function TapeLabel({
   children,
   onClick,
   className = "",
+  ref,
 }: {
   children: ReactNode;
   onClick: () => void;
   className?: string;
+  // for whoever puts the keyboard back on it; a plain prop in React 19
+  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className={`border-0 px-4 py-1.5 text-[1.1875rem] leading-snug ${className}`}

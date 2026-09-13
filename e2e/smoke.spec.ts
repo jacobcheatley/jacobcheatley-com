@@ -18,5 +18,7 @@ test("the Sticky Notes editor loads with the mat over the wall", async ({
   expect(response?.status()).toBe(200);
   // the mat is already up on a direct load, and its island has mounted
   await expect(page.getByRole("link", { name: /the wall/i })).toBeVisible();
-  await expect(page.getByRole("button", { name: "pad stack" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Fan out the pads" }),
+  ).toBeVisible();
 });

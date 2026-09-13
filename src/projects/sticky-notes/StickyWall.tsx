@@ -70,14 +70,21 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
 // it is still being fastened. The pinning UI finds it by `data-landing` (to fly
 // it in) and hangs the name tag in `data-landing-tag`.
 function LandingTile({ content }: { content: NoteContent }) {
+  // Every choice in the drawer hands over a new note, even the same fastener
+  // again: count them, so each choice can mount the press afresh. Setting state
+  // while rendering is how to follow a prop without an effect (StickyNotes
+  // does the same).
+  const [press, setPress] = useState({ content, n: 0 });
+  if (press.content !== content) setPress({ content, n: press.n + 1 });
+
   return (
     // z-45: the note flies in over the mat (z-40) as the mat slides away.
     <li data-landing="" className={`relative z-45 ${STILL}`}>
       <div className="relative w-32 select-none" style={tileStyle(content)}>
-        {/* Keyed by the fastener, so each choice mounts afresh and the
-            press-on (styles.css, on `data-press`) plays again. */}
+        {/* Keyed by the choice, so each one mounts afresh and the press-on
+            (styles.css, on `data-press`) plays again. */}
         <div
-          key={content.fastener}
+          key={press.n}
           data-press={
             content.fastener === "none" ? undefined : content.fastener
           }

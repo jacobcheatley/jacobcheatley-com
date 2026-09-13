@@ -147,6 +147,22 @@ describe("StickyWall", () => {
     );
   });
 
+  it("presses the fastener on again when the same one is chosen again", () => {
+    const { rerender } = render(
+      <StickyWall notes={[]} landing={content({ fastener: "pin-red" })} />,
+    );
+    const first = document.querySelector("[data-press]");
+    // the drawer hands over a new note each choice, even of the same fastener
+    rerender(
+      <StickyWall notes={[]} landing={content({ fastener: "pin-red" })} />,
+    );
+
+    const again = document.querySelector("[data-press]");
+    expect(again).toHaveAttribute("data-press", "pin-red");
+    // a fresh node, so its CSS animation starts over
+    expect(again).not.toBe(first);
+  });
+
   it("keeps the invite tile-sized while a note lands on an empty wall", () => {
     render(<StickyWall notes={[]} landing={content()} />);
     expect(screen.getByRole("link", { name: /pin a note/i })).toHaveClass(
