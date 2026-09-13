@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { StickyMat } from "./StickyMat";
 
 // TanStack's <Link> needs a router context; the wall's own test stubs it the
@@ -15,6 +15,8 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 const mat = (container: HTMLElement) => container.firstElementChild;
+
+afterEach(() => vi.useRealTimers());
 
 describe("StickyMat", () => {
   it("is parked below the wall when the route is the wall", () => {
@@ -33,6 +35,32 @@ describe("StickyMat", () => {
     const html = renderToStaticMarkup(<StickyMat up={true} />);
     expect(html).toContain("translateY(0)");
     expect(html).toContain("transition:none");
+  });
+
+  it("keeps the island mounted once the mat has been up", async () => {
+    // The acceptance criterion behind the latch: a half-built note must survive
+    // mat-down, so the editor may not unmount when the route goes back to the
+    // wall. The stack trigger is the island's stable marker.
+    const { rerender } = render(<StickyMat up={true} />);
+    const editor = await screen.findByRole("button", {
+      name: /fan out the pads/i,
+    });
+
+    rerender(<StickyMat up={false} />);
+    expect(editor).toBeInTheDocument();
+  });
+
+  it("goes inert only once it has finished sliding down", () => {
+    vi.useFakeTimers();
+    const { container, rerender } = render(<StickyMat up={true} />);
+    expect(mat(container)).not.toHaveAttribute("inert");
+
+    rerender(<StickyMat up={false} />);
+    // mid-slide the mat is still on screen, so it stays reachable
+    expect(mat(container)).not.toHaveAttribute("inert");
+
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(mat(container)).toHaveAttribute("inert");
   });
 
   it("links back to the wall", () => {

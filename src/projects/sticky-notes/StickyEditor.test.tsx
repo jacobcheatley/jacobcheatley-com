@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Element, emptyNote } from "./note-editor";
 import type { NoteContent } from "./note-schema";
 import StickyEditor from "./StickyEditor";
@@ -9,14 +9,28 @@ import StickyEditor from "./StickyEditor";
 // in the bin. Motion is CSS; these tests assert the state a transition carries,
 // never the transition itself.
 
-// exact, not a regex: the fan's backdrop is also named "…pad stack"
-const stack = () => screen.getByRole("button", { name: "pad stack" });
+// Both the fan and the crumple only take effect once their timer has run, so
+// the whole file runs on fake timers and steps past them explicitly.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+const FAN_SETTLED = 300; // > FAN_MS
+const CRUMPLED = 600; // > CRUMPLE_MS
+const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+const stack = () => screen.getByRole("button", { name: /fan out the pads/i });
+// the only buttons naming a colour are the pads
 const pad = (colour: string) =>
-  screen.getByRole("button", { name: new RegExp(`${colour} pad`, "i") });
-const bin = () => screen.getByRole("button", { name: /bin the note/i });
+  screen.getByRole("button", { name: new RegExp(colour, "i") });
+const bin = () => screen.getByRole("button", { name: /bin this note/i });
 const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
   note()?.closest("[data-colour]")?.getAttribute("data-colour");
+
+const fanOut = () => {
+  fireEvent.click(stack());
+  wait(FAN_SETTLED);
+};
 
 const HI: Element = {
   type: "text",
@@ -45,21 +59,39 @@ describe("StickyEditor", () => {
 
   it("fans the stack on the first tap, without tearing a sheet off", () => {
     render(<StickyEditor />);
-    fireEvent.click(stack());
+    fanOut();
 
     expect(pad("blue")).toBeEnabled();
     expect(note()).toBeNull();
-    // the stack itself is no longer the target — the six pads are
-    expect(screen.queryByRole("button", { name: "pad stack" })).toBeNull();
+    // the trigger stays put and says which way it points
+    expect(stack()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("moves focus onto the fan so the keyboard can pick a colour", () => {
+    render(<StickyEditor />);
+    fanOut();
+
+    expect(pad("yellow")).toHaveFocus();
   });
 
   it("tears a sheet off a fanned pad and closes the stack", () => {
     render(<StickyEditor />);
-    fireEvent.click(stack());
+    fanOut();
     fireEvent.click(pad("blue"));
 
     expect(paper()).toBe("blue");
     expect(pad("blue")).toBeDisabled();
+  });
+
+  it("ignores a pad tapped before the fan has settled", () => {
+    render(<StickyEditor />);
+    fireEvent.click(stack());
+    fireEvent.click(pad("blue")); // the pads are still in flight
+    expect(note()).toBeNull();
+
+    wait(FAN_SETTLED);
+    fireEvent.click(pad("blue"));
+    expect(paper()).toBe("blue");
   });
 
   it("swaps the paper under the content when another pad is tapped", () => {
@@ -68,39 +100,66 @@ describe("StickyEditor", () => {
         initialContent={seeded({ colour: "yellow", elements: [HI] })}
       />,
     );
-    fireEvent.click(stack());
+    fanOut();
     fireEvent.click(pad("pink"));
 
     expect(paper()).toBe("pink");
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
+  it("rests the note's own colour on top of the pile", () => {
+    render(<StickyEditor initialContent={seeded({ colour: "pink" })} />);
+
+    expect(Number(pad("pink").style.zIndex)).toBeGreaterThan(
+      Number(pad("white").style.zIndex),
+    );
+  });
+
   it("closes the fan on a tap anywhere else", () => {
     render(<StickyEditor />);
-    fireEvent.click(stack());
-    fireEvent.click(
-      screen.getByRole("button", { name: /close the pad stack/i }),
-    );
+    fanOut();
+    fireEvent.click(screen.getByRole("button", { name: /close the pads/i }));
 
     expect(pad("blue")).toBeDisabled();
     expect(note()).toBeNull();
   });
 
-  it("crumples the note into the bin and tears a fresh sheet of the same colour", () => {
-    vi.useFakeTimers();
-    try {
-      render(
-        <StickyEditor
-          initialContent={seeded({ colour: "pink", elements: [HI] })}
-        />,
-      );
-      fireEvent.click(bin());
-      act(() => void vi.advanceTimersByTime(1000));
+  it("closes the fan on Escape", () => {
+    render(<StickyEditor />);
+    fanOut();
+    fireEvent.keyDown(window, { key: "Escape" });
 
-      expect(paper()).toBe("pink");
-      expect(screen.queryByText("hi")).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(pad("blue")).toBeDisabled();
+    expect(stack()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("crumples the note into the bin and tears a fresh sheet of the same colour", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ colour: "pink", elements: [HI] })}
+      />,
+    );
+    fireEvent.click(bin());
+    wait(CRUMPLED);
+
+    expect(paper()).toBe("pink");
+    expect(screen.queryByText("hi")).toBeNull();
+  });
+
+  it("ignores a colour swap made while the note is crumpling", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ colour: "pink", elements: [HI] })}
+      />,
+    );
+    fireEvent.click(bin());
+    expect(bin()).toBeDisabled();
+
+    fanOut(); // still mid-flight: the fan settles inside the crumple
+    fireEvent.click(pad("blue"));
+    wait(CRUMPLED);
+
+    expect(paper()).toBe("pink");
+    expect(screen.queryByText("hi")).toBeNull();
   });
 });

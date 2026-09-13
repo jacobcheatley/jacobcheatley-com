@@ -1,4 +1,5 @@
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { EASE_OUT } from "./desk";
 import { emptyNote } from "./note-editor";
 import { NOTE_PAPER_ASPECT_RATIO, NotePaper, PAPER } from "./note-render";
 import {
@@ -18,11 +19,6 @@ import {
 // the visitor tears a sheet off. That is why the island needs no mounted-gate
 // for SSR: its first render is identical on both sides.
 
-// Motion, all CSS: no animation library anywhere in this spec (#69). The mat's
-// own ease-out from the T0 prototype — quick off the mark, long settle. Spelled
-// out here rather than imported from StickyMat: that module lazy-imports this
-// one, and a static import back would close the loop.
-const EASE_OUT = "cubic-bezier(.2,.8,.25,1)";
 const FAN_MS = 250;
 const TEAR_MS = 400;
 const CRUMPLE_MS = 400;
@@ -40,6 +36,10 @@ const MID = (PAPER_COLOURS.length - 1) / 2;
 const TEAR_FROM = "translate(-34vw, 36vh) rotate(-16deg) scale(.12)";
 const CRUMPLE_TO = "translate(34vw, 38vh) rotate(260deg) scale(.06)";
 
+// Tailwind's `!`: these transitions are inline (their timings are JS constants),
+// and only an important rule can switch them off for prefers-reduced-motion.
+const STILL = "motion-reduce:transition-none!";
+
 export default function StickyEditor({
   initialContent = null,
 }: {
@@ -49,21 +49,61 @@ export default function StickyEditor({
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
   const [fanned, setFanned] = useState(false);
+  // The pads are only a target once they have flown: a second tap landing on
+  // the stack mid-flight would otherwise tear off whichever colour is passing.
+  const [fanSettled, setFanSettled] = useState(false);
   // `tearing` parks the fresh sheet at the pad for one frame; dropping it lets
   // the transition carry the sheet to the middle of the mat. `crumpling` is the
   // same trick in reverse, into the bin.
   const [tearing, setTearing] = useState(false);
   const [crumpling, setCrumpling] = useState(false);
 
+  const trigger = useRef<HTMLButtonElement>(null);
+  const firstPad = useRef<HTMLButtonElement>(null);
+  const crumpleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Two frames, not one: a single rAF can run before the browser has taken a
+  // style recalc of the just-parked sheet, and the sheet then appears in the
+  // middle of the mat without ever having travelled.
   useEffect(() => {
     if (!tearing) return;
-    const frame = requestAnimationFrame(() => setTearing(false));
-    return () => cancelAnimationFrame(frame);
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setTearing(false));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
   }, [tearing]);
 
+  // The fan's whole life: settle it, put the keyboard on it, let Escape close it.
+  useEffect(() => {
+    if (!fanned) {
+      setFanSettled(false);
+      return;
+    }
+    firstPad.current?.focus();
+    const timer = setTimeout(() => setFanSettled(true), FAN_MS);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setFanned(false);
+      trigger.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [fanned]);
+
+  useEffect(() => () => clearTimeout(crumpleTimer.current), []);
+
   // A pad with no note on the mat tears a fresh sheet off; with a note already
-  // there it swaps the stock under the content.
+  // there it swaps the stock under the content. Both wait for the objects to
+  // stop moving — mid-crumple there is no note to swap the paper under yet.
   function takeSheet(colour: PaperColour) {
+    if (!fanSettled || crumpling) return;
     setFanned(false);
     if (content) {
       setContent({ ...content, colour });
@@ -77,9 +117,10 @@ export default function StickyEditor({
     if (!content || crumpling) return;
     const { colour } = content;
     setCrumpling(true);
-    setTimeout(() => {
+    crumpleTimer.current = setTimeout(() => {
       setCrumpling(false);
-      setContent({ ...emptyNote(), colour });
+      // the live colour, not the one captured at the tap
+      setContent((c) => ({ ...emptyNote(), colour: c?.colour ?? colour }));
       setTearing(true);
     }, CRUMPLE_MS);
   }
@@ -102,6 +143,7 @@ export default function StickyEditor({
         {content && (
           <div
             data-colour={content.colour}
+            className={STILL}
             style={{
               width: "min(88vw, 60vh)",
               aspectRatio: NOTE_PAPER_ASPECT_RATIO,
@@ -118,7 +160,7 @@ export default function StickyEditor({
       {fanned && (
         <button
           type="button"
-          aria-label="close the pad stack"
+          aria-label="Close the pads"
           className="absolute inset-0 z-20 h-full w-full cursor-default border-0 bg-transparent p-0"
           onClick={() => setFanned(false)}
         />
@@ -137,31 +179,38 @@ export default function StickyEditor({
             <button
               key={colour}
               type="button"
+              ref={i === 0 ? firstPad : undefined}
               // Closed, the pads are not individually reachable: the stack in
               // front of them is the only target.
               disabled={!fanned}
-              aria-label={`${colour} pad`}
+              aria-label={
+                content
+                  ? `Switch to ${colour} paper`
+                  : `Tear off ${colour === "orange" ? "an" : "a"} ${colour} sheet`
+              }
               onClick={() => takeSheet(colour)}
-              className="absolute bottom-0 left-0 rounded-[3px] border-0 p-0"
+              className={`absolute bottom-0 left-0 rounded-[3px] border-0 p-0 ${STILL}`}
               style={padStyle(i, colour, fanned, content?.colour === colour)}
             />
           ))}
-          {!fanned && (
-            <button
-              type="button"
-              aria-label="pad stack"
-              onClick={() => setFanned(true)}
-              className="absolute z-30 border-0 bg-transparent p-0"
-              style={{ inset: -6 }}
-            />
-          )}
+          <button
+            type="button"
+            ref={trigger}
+            aria-label="Fan out the pads"
+            aria-expanded={fanned}
+            onClick={() => setFanned((open) => !open)}
+            className="-inset-1.5 absolute z-30 border-0 bg-transparent p-0"
+          />
         </div>
 
         {/* reserved: T4's markers and the draw/write control */}
         <div className="flex min-h-12 flex-1 items-end justify-center gap-2" />
 
         <div className="flex shrink-0 items-end gap-2">
-          {/* reserved: T5's sticker-sheet tab, then T4's eraser */}
+          {/* T5 fills the first slot with the sticker sheet's tab, T4 the
+              second with the eraser */}
+          <div data-slot="sticker-tab" className="min-h-12 min-w-12" />
+          <div data-slot="eraser" className="min-h-12 min-w-12" />
           <Bin onClick={binIt} disabled={!content || crumpling} />
         </div>
       </div>
@@ -184,7 +233,10 @@ function padStyle(
     width: PAD,
     height: PAD,
     transform,
-    zIndex: 10 + i,
+    // The note's own colour tops the resting pile, the way the pad you are
+    // working from ends up on top of a real desk. Fanned, the arc keeps
+    // PAPER_COLOURS order.
+    zIndex: active && !fanned ? 10 + PAPER_COLOURS.length : 10 + i,
     transition: `transform ${FAN_MS}ms ${EASE_OUT}, box-shadow ${FAN_MS}ms`,
     backgroundColor: PAPER[colour],
     backgroundImage:
@@ -207,15 +259,14 @@ function Bin({
   return (
     <button
       type="button"
-      aria-label="bin the note"
+      aria-label="Bin this note"
       onClick={onClick}
       disabled={disabled}
       className="relative flex h-14 w-14 items-end justify-center border-0 bg-transparent p-0 disabled:opacity-45"
     >
       <span
-        className="absolute right-1.5 left-1.5 block h-1.5 rounded-sm"
+        className="absolute right-1.5 bottom-[46px] left-1.5 block h-1.5 rounded-sm"
         style={{
-          bottom: 46,
           background: "linear-gradient(180deg,#b4bec9,#6d7683)",
           boxShadow: "0 1px 2px rgba(0,0,0,.45)",
         }}

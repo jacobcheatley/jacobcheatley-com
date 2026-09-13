@@ -10,7 +10,9 @@ import { LINE_HEIGHT, wrapLines } from "./note-text";
 // element operations (add / update / move / remove) plus the geometry the
 // interaction shell needs (bounds, hit-test, off-note). No React, no DOM — so
 // the tricky bits (drag-off-to-delete, topmost hit-test, coord clamping) are
-// unit-tested here and StickyEditor stays a thin pointer→model shell.
+// unit-tested here, so the shell that grows on top of this from T4 (pointer
+// input lands then) can stay thin: it maps pointers onto these calls and holds
+// no model logic of its own.
 //
 // A drag is deliberately unclamped: `moveElement` lets coordinates leave the
 // schema's -50..550 range, because an element that can't leave the paper can

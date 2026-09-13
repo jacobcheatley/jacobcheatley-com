@@ -21,7 +21,11 @@ function StickyNotes() {
 
   return (
     <>
-      <StickyWall notes={notes} />
+      {/* the mat covers the wall but does not replace it: while it is up the
+          wall underneath must be neither tabbable nor clickable */}
+      <div inert={matUp}>
+        <StickyWall notes={notes} />
+      </div>
       <StickyMat up={matUp} />
       <Outlet />
     </>
