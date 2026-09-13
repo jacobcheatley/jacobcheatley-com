@@ -332,27 +332,23 @@ export function noteSide(bboxWidth: number, rotationDeg: number): number {
 }
 
 // --- the paper's own handles (#76) ------------------------------------------
-// No sliders anywhere (#69): the note is turned by its edge and peeled by its
-// corners, so the sheet itself is the control. All of it is geometry, so all of
-// it is here — the shell only decides which gesture a pointer started.
+// No sliders anywhere (#69): in hand mode the note is turned by a drag anywhere
+// on it and peeled by its corners, so the sheet itself is the control. All of
+// it is geometry, so all of it is here — the shell only decides which gesture a
+// pointer started.
 
 // Must match note-render's fold size, like STICKER_BASE above: one number, kept
 // here rather than pulling the renderer's JSX into the model layer.
 export const MAX_FOLD = 120;
 
-// The band along the paper's edge that turns the note. Narrow enough that the
-// middle of the sheet stays drawing surface, wide enough to find with a thumb.
-export const EDGE_BAND = 24;
+// How close to the paper's centre, in note units, a turn has no angle worth
+// reading: a hair of movement there swings the pointer's angle right round.
+// Moves inside it are ignored, and a turn pressed there reads its angle from
+// where the pointer first leaves.
+export const SPIN_DEAD = 40;
 
-export function isEdgeBand(x: number, y: number): boolean {
-  if (x < 0 || x > CANVAS || y < 0 || y > CANVAS) return false;
-  return (
-    x < EDGE_BAND ||
-    y < EDGE_BAND ||
-    x > CANVAS - EDGE_BAND ||
-    y > CANVAS - EDGE_BAND
-  );
-}
+export const outsideSpinDead = (x: number, y: number): boolean =>
+  Math.hypot(x - CANVAS / 2, y - CANVAS / 2) > SPIN_DEAD;
 
 // The note's two peelable corners, as `content.curl` names them.
 export type Corner = "bl" | "br";

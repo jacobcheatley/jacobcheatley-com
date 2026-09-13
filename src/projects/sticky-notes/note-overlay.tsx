@@ -1,7 +1,6 @@
 import {
   bounds,
   type Corner,
-  EDGE_BAND,
   elementHandles,
   MAX_FOLD,
   type Element as NoteElement,
@@ -77,23 +76,9 @@ export function caretRect(at: { x: number; y: number }, el: TextEl) {
   );
 }
 
-// What the hand has hold of, or a mouse is over: the band along the edge that
-// turns the note, or the crease of the corner that peels.
-export function gripMark(grip: "edge" | Corner, curl: NoteContent["curl"]) {
-  if (grip === "edge")
-    return (
-      <rect
-        data-grip={grip}
-        x={EDGE_BAND / 2}
-        y={EDGE_BAND / 2}
-        width={CANVAS - EDGE_BAND}
-        height={CANVAS - EDGE_BAND}
-        fill="none"
-        stroke="#1f2937"
-        strokeOpacity={0.14}
-        strokeWidth={EDGE_BAND}
-      />
-    );
+// The corner the hand has hold of, or a mouse is over: the crease that peels.
+// A turn needs no mark — the note turning under the pointer is the feedback.
+export function gripMark(grip: Corner, curl: NoteContent["curl"]) {
   const f = Math.max(curl[grip] * MAX_FOLD, 12);
   return (
     <path

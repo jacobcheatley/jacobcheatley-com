@@ -13,13 +13,14 @@ import {
   grabbedHandle,
   hitTest,
   hitTestAll,
-  isEdgeBand,
   isOffNote,
   MIN_TEXT_W,
   moveElement,
   noteSide,
+  outsideSpinDead,
   removeElement,
   rotationFromHandle,
+  SPIN_DEAD,
   settleElement,
   turnNote,
   widthFromPointer,
@@ -346,17 +347,6 @@ describe("noteSide", () => {
 });
 
 describe("the paper's own handles", () => {
-  it("finds the rotate band along every edge and nowhere in the middle", () => {
-    expect(isEdgeBand(250, 5)).toBe(true);
-    expect(isEdgeBand(5, 250)).toBe(true);
-    expect(isEdgeBand(495, 250)).toBe(true);
-    expect(isEdgeBand(250, 495)).toBe(true);
-    expect(isEdgeBand(250, 250)).toBe(false);
-    expect(isEdgeBand(250, 30)).toBe(false);
-    // off the paper entirely is not the paper's edge
-    expect(isEdgeBand(-10, 250)).toBe(false);
-  });
-
   it("takes hold of the corner a pointer came down on", () => {
     const flat = { bl: 0, br: 0 };
     expect(curlCorner(flat, 20, 480)).toBe("bl");
@@ -417,6 +407,19 @@ describe("turnNote", () => {
     // atan2 flips a whole turn there: 350 degrees clockwise is 10 back
     expect(turnNote(0, 350)).toBe(-10);
     expect(turnNote(0, -350)).toBe(10);
+  });
+});
+
+describe("outsideSpinDead", () => {
+  it("is false near the centre, where an angle would jump", () => {
+    expect(outsideSpinDead(250, 250)).toBe(false);
+    expect(outsideSpinDead(250 + SPIN_DEAD, 250)).toBe(false); // on the rim
+    expect(outsideSpinDead(250, 250 - SPIN_DEAD + 1)).toBe(false);
+  });
+
+  it("is true anywhere past the rim", () => {
+    expect(outsideSpinDead(250 + SPIN_DEAD + 1, 250)).toBe(true);
+    expect(outsideSpinDead(0, 0)).toBe(true);
   });
 });
 

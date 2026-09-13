@@ -1023,6 +1023,39 @@ describe("StickyEditor hand mode", () => {
     expect(document.querySelector("[data-grip]")).toBeNull();
   });
 
+  it("turns the note from a press on a placed text box, and leaves the box where it lies", () => {
+    render(
+      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
+    );
+    const surface = paperSurface();
+
+    down(surface, 60, 80); // on "hi"
+    move(surface, 60, 180);
+    up(surface);
+
+    // swept from -138.2 to -159.8 degrees about the centre
+    expect(tilt()).toContain("rotate(-21.6deg)");
+    expect(drawn()[0]?.getAttribute("x")).toBe("40");
+    expect(drawn()[0]?.getAttribute("y")).toBe("60");
+    expect(selectionBox()).toBeNull();
+  });
+
+  it("holds the note still until a drag from near the centre leaves it", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+
+    down(surface, 250, 220); // 30 above the centre: inside the dead zone
+    move(surface, 260, 240); // still inside
+    expect(tilt()).toContain("rotate(0deg)");
+
+    move(surface, 300, 250); // out, due right: the angle is read from here
+    expect(tilt()).toContain("rotate(0deg)");
+
+    move(surface, 300, 270);
+    expect(tilt()).toContain("rotate(21.8deg)");
+    up(surface);
+  });
+
   it("opens nothing on a second tap on placed text, and offers no fonts for it", () => {
     render(
       <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,

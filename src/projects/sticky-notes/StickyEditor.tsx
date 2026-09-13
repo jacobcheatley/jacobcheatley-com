@@ -38,9 +38,9 @@ import {
   curlFromPointer,
   emptyNote,
   hitTest,
-  isEdgeBand,
   type Element as NoteElement,
   noteSide,
+  outsideSpinDead,
   removeElement,
   turnNote,
 } from "./note-editor";
@@ -149,12 +149,12 @@ export default function StickyEditor({
   // A finger leaves the tool docked on the mat, so the dock has to show the
   // stroke happening; a mouse carries the tool itself.
   const [using, setUsing] = useState(false);
-  // What the hand has hold of the paper BY, if anything: its edge (turning it)
-  // or a bottom corner (peeling it) — or the corner a mouse is hovering over.
-  // It shows the grip on the sheet, and while the note is being turned its tilt
-  // has to sit under the finger, so the tilt's own transition (the tear-off
-  // flight) is off for the gesture.
-  const [grip, setGrip] = useState<null | "edge" | Corner>(null);
+  // What the hand is doing to the paper, if anything: turning it, or peeling a
+  // bottom corner — or the corner a mouse is hovering over. A corner shows its
+  // grip on the sheet; while the note is being turned its tilt has to sit under
+  // the finger, so the tilt's own transition (the tear-off flight) is off for
+  // the gesture.
+  const [grip, setGrip] = useState<null | "turn" | Corner>(null);
   const [fine, setFine] = useState(false);
   // The note is full: the docked tool rocks so a dead pointer-down says why.
   const [shaking, setShaking] = useState(false);
@@ -196,14 +196,14 @@ export default function StickyEditor({
   // stroke uses forceRender so the note grows as you draw.
   const draftRef = useRef<StrokeEl | null>(null);
   const rubbingRef = useRef(false);
-  // Turning the note by its edge (#76). The angle is taken in CLIENT space
-  // about the paper's centre: taken in note units it would be measured through
-  // the very rotation it is setting, and the paper would chase its own tail at
-  // half speed.
+  // Turning the note (#76, #79). The angle is taken in CLIENT space about the
+  // paper's centre: taken in note units it would be measured through the very
+  // rotation it is setting, and the paper would chase its own tail at half
+  // speed. `start` stays null while a press near the centre has no angle yet.
   const spinRef = useRef<{
     centre: [number, number];
     from: number;
-    start: number;
+    start: number | null;
   } | null>(null);
   // Peeling a corner: which, the curl it had and where it was taken hold of —
   // the pull is read from there, so grabbing the flap doesn't move the fold.
@@ -600,14 +600,15 @@ export default function StickyEditor({
     }
 
     // Hand mode: a placed element is never taken hold of (#79), so a press is
-    // only ever the paper's own — a bottom corner peels it, the edge turns it.
+    // only ever the paper's own — a bottom corner peels it, anywhere else on it
+    // (over what is drawn there too) turns it.
     const corner = curlCorner(live.curl, x, y);
     if (corner) {
       curlRef.current = { corner, start: live.curl[corner], from: [x, y] };
       setGrip(corner);
       return;
     }
-    if (isEdgeBand(x, y)) startSpin(e);
+    startSpin(e, x, y);
   }
 
   // The second finger. On a live stroke it drops the draft (a second finger is
@@ -630,7 +631,7 @@ export default function StickyEditor({
       from: [b[0] - a[0], b[1] - a[1]],
       rotation: live.rotation,
     };
-    setGrip("edge");
+    setGrip("turn");
     forceRender();
   }
 
@@ -650,9 +651,9 @@ export default function StickyEditor({
     apply({ ...live, rotation: turnNote(pinch.rotation, turned) });
   }
 
-  // Grab the note by its edge: from here on the rotation follows how far the
-  // pointer has swept round the paper's centre.
-  function startSpin(e: ReactPointerEvent) {
+  // Take hold of the note at (x, y) in note units: from here on the rotation
+  // follows how far the pointer has swept round the paper's centre.
+  function startSpin(e: ReactPointerEvent, x: number, y: number) {
     const rect = paperRef.current?.getBoundingClientRect();
     const live = contentRef.current;
     if (!rect || !live) return;
@@ -663,18 +664,28 @@ export default function StickyEditor({
     spinRef.current = {
       centre,
       from: live.rotation,
-      start: angleOf(centre, [e.clientX, e.clientY]),
+      start: outsideSpinDead(x, y)
+        ? angleOf(centre, [e.clientX, e.clientY])
+        : null,
     };
-    setGrip("edge");
+    setGrip("turn");
   }
 
-  // The swept angle, applied to the note the gesture started from.
-  function spinTo(clientX: number, clientY: number) {
+  // The swept angle, applied to the note the gesture started from. Moves near
+  // the centre are ignored; a turn pressed there takes its starting angle from
+  // the first move out, so the note doesn't jump.
+  function spinTo(e: ReactPointerEvent) {
     const spin = spinRef.current;
     const live = contentRef.current;
     if (!spin || !live) return;
-    const swept = angleOf(spin.centre, [clientX, clientY]) - spin.start;
-    apply({ ...live, rotation: turnNote(spin.from, swept) });
+    const [x, y] = toNote(e);
+    if (!outsideSpinDead(x, y)) return;
+    const at = angleOf(spin.centre, [e.clientX, e.clientY]);
+    if (spin.start === null) {
+      spin.start = at;
+      return;
+    }
+    apply({ ...live, rotation: turnNote(spin.from, at - spin.start) });
   }
 
   function onPaperMove(e: ReactPointerEvent<HTMLDivElement>) {
@@ -713,7 +724,7 @@ export default function StickyEditor({
       return;
     }
     if (spinRef.current) {
-      spinTo(e.clientX, e.clientY);
+      spinTo(e);
       return;
     }
     const curl = curlRef.current;
@@ -815,6 +826,8 @@ export default function StickyEditor({
       : draft
         ? addElement(content, draft)
         : content;
+  // the corner a grip mark is drawn on; a turn has none
+  const corner = grip === "turn" ? null : grip;
 
   return (
     <div className="absolute inset-0 select-none">
@@ -855,7 +868,7 @@ export default function StickyEditor({
                   tearing,
                   crumpling,
                   shown.rotation,
-                  grip === "edge",
+                  grip === "turn",
                 ),
               }}
             >
@@ -864,14 +877,14 @@ export default function StickyEditor({
               {/* The overlay rides inside the rotated sheet, so everything on
                   it is drawn in plain note units and turns with the paper. It
                   never takes the pointer: the paper under it does. */}
-              {((caret && textDraft) || grip) && (
+              {((caret && textDraft) || corner) && (
                 <svg
                   viewBox={`0 0 ${CANVAS} ${CANVAS}`}
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   aria-hidden="true"
                 >
                   <title>grip and caret</title>
-                  {grip && gripMark(grip, shown.curl)}
+                  {corner && gripMark(corner, shown.curl)}
                   {caret && textDraft && caretRect(caret, textDraft)}
                 </svg>
               )}
