@@ -188,9 +188,10 @@ export function bounds(el: Element): Bounds {
   };
 }
 
-// Rotate (x, y) by -deg about (cx, cy): the point as the element's own,
-// unrotated frame sees it, so a box test works on a rotated element.
-function unrotate(
+// Rotate (x, y) by deg about (cx, cy) — the same turn the renderer puts on a
+// rotated element, so a handle drawn through this lands on the corner of the
+// box the visitor can see.
+export function rotatePoint(
   x: number,
   y: number,
   cx: number,
@@ -198,7 +199,7 @@ function unrotate(
   deg: number,
 ): [number, number] {
   if (deg === 0) return [x, y];
-  const a = (-deg * Math.PI) / 180;
+  const a = (deg * Math.PI) / 180;
   const dx = x - cx;
   const dy = y - cy;
   return [
@@ -206,6 +207,16 @@ function unrotate(
     cy + dx * Math.sin(a) + dy * Math.cos(a),
   ];
 }
+
+// The point as the element's own, unrotated frame sees it, so a box test works
+// on a rotated element.
+const unrotate = (
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  deg: number,
+): [number, number] => rotatePoint(x, y, cx, cy, -deg);
 
 // Distance from (px, py) to the segment ab — the standard projection-onto-the
 // -segment clamp. A zero-length segment degenerates to point distance, which is
@@ -389,4 +400,87 @@ export const ROTATE_LIMIT = 25;
 export function turnNote(from: number, by: number): number {
   const swept = ((((by + 180) % 360) + 360) % 360) - 180;
   return Math.round(clamp(from + swept, -ROTATE_LIMIT, ROTATE_LIMIT) * 10) / 10;
+}
+
+// --- an element's own handles (#76) -----------------------------------------
+// Scale and rotation live ON the object (the T0 verdict, #70), not on a panel:
+// one handle at the corner of the selection box does both in a single drag, and
+// a text box gets a second on its right edge for the width it wraps at.
+
+// Degrees, brought back inside the contract's -180..180 after an addition.
+const wrap180 = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
+
+// An element turned by `by` degrees. Unlike the note (turnNote, held to a tilt
+// the wall can wear) an element may face any way at all, so a turn past half a
+// circle comes round the other side rather than sticking at the contract's end.
+export const turnElement = (from: number, by: number): number =>
+  round1(wrap180(from + wrap180(by)));
+
+// Where an element's handles sit, in note coordinates — already turned by the
+// element's own rotation, like the box they hang off. A stroke has none: it is
+// drawn, not placed, and the eraser is how it goes.
+export function elementHandles(
+  el: Element,
+): { corner: [number, number]; width: [number, number] | null } | null {
+  if (el.type === "stroke") return null;
+  const b = bounds(el);
+  const at = (x: number, y: number) =>
+    rotatePoint(x, y, el.x, el.y, el.rotation);
+  return {
+    corner: at(b.x1, b.y1),
+    width: el.type === "text" ? at(b.x1, (b.y0 + b.y1) / 2) : null,
+  };
+}
+
+// One drag of the corner handle: how much further the pointer is from the
+// element's anchor than where it took hold, and how far round it has swung.
+// The caller decides what "scale" means for the element it holds.
+export function handleTransform(
+  anchor: [number, number],
+  start: [number, number],
+  now: [number, number],
+  startScale: number,
+  startRotation: number,
+): { scale: number; rotation: number } {
+  const reach = (p: [number, number]) =>
+    Math.hypot(p[0] - anchor[0], p[1] - anchor[1]);
+  const held = reach(start);
+  // taken hold of right on the anchor: no direction to read, so hold still
+  if (held < 1) return { scale: startScale, rotation: startRotation };
+  const ang = (p: [number, number]) =>
+    (Math.atan2(p[1] - anchor[1], p[0] - anchor[0]) * 180) / Math.PI;
+  return {
+    scale: (startScale * reach(now)) / held,
+    rotation: turnElement(startRotation, ang(now) - ang(start)),
+  };
+}
+
+// The element that drag leaves behind, inside the contract's ranges: a sticker
+// scales, a text box grows its font, and both turn.
+export function scaleElement(
+  el: Element,
+  scale: number,
+  rotation: number,
+): Element {
+  if (el.type === "sticker")
+    return { ...el, scale: clamp(round2(scale), 0.25, 4), rotation };
+  if (el.type === "text")
+    return { ...el, fontSize: clamp(Math.round(scale), 8, 96), rotation };
+  return el;
+}
+
+// Narrower than this and a text box wraps one letter per line.
+export const MIN_TEXT_W = 40;
+
+// A text box's width from the pointer on its right-edge handle: how far along
+// the box's OWN x-axis the pointer has reached, so widening a turned box pulls
+// along the text rather than across the screen.
+export function widthFromPointer(
+  el: { x: number; y: number; rotation: number },
+  x: number,
+  y: number,
+): number {
+  const a = (el.rotation * Math.PI) / 180;
+  const along = (x - el.x) * Math.cos(a) + (y - el.y) * Math.sin(a);
+  return clamp(Math.round(along), MIN_TEXT_W, 600);
 }

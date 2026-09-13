@@ -1071,3 +1071,150 @@ describe("StickyEditor note handles", () => {
     expect(drawn()[0]?.getAttribute("x")).toBe("100");
   });
 });
+
+describe("StickyEditor object handles", () => {
+  // Scale and rotation live ON the object (#70), so a selected sticker or text
+  // box wears one handle at the far corner of its outline that does both in a
+  // single drag, and a text box a second on its right edge for its width.
+  const STAR: Element = {
+    type: "sticker",
+    x: 250,
+    y: 250,
+    emoji: "⭐",
+    scale: 1,
+    rotation: 0,
+  };
+  const flat = { bl: 0, br: 0 };
+  const glyph = () => drawn()[0];
+  const downAt = (el: HTMLElement, x: number, y: number, pointerId: number) =>
+    fireEvent.pointerDown(el, { clientX: x, clientY: y, pointerId });
+  const upAt = (el: HTMLElement, pointerId: number) =>
+    fireEvent.pointerUp(el, { pointerId });
+  const select = (surface: HTMLElement, x: number, y: number) => {
+    down(surface, x, y);
+    up(surface);
+  };
+
+  it("scales and turns a sticker from its corner handle in one drag", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat, elements: [STAR] })}
+      />,
+    );
+    const surface = paperSurface();
+    select(surface, 250, 250);
+    // the sticker's box is 48 wide, so its corner handle sits at (274, 274)
+    expect(selectionBox()?.getAttribute("width")).toBe("48");
+
+    down(surface, 274, 274);
+    move(surface, 250, 350); // a quarter turn round, and further out
+    up(surface);
+
+    // 100 out where it took hold 34 out, and swung from 45 deg to 90
+    expect(Number(glyph()?.getAttribute("font-size"))).toBeCloseTo(
+      48 * 2.95,
+      0,
+    );
+    expect(glyph()?.getAttribute("transform")).toBe("rotate(45 250 250)");
+  });
+
+  it("takes the handle before the element under it", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat, elements: [STAR] })}
+      />,
+    );
+    const surface = paperSurface();
+    select(surface, 250, 250);
+
+    // the corner handle sits ON the sticker's own box corner
+    down(surface, 274, 274);
+    move(surface, 300, 300);
+    up(surface);
+
+    expect(glyph()?.getAttribute("x")).toBe("250"); // it scaled, it never moved
+    expect(Number(glyph()?.getAttribute("font-size"))).toBeGreaterThan(48);
+  });
+
+  it("holds a sticker inside the contract's scale range", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat, elements: [STAR] })}
+      />,
+    );
+    const surface = paperSurface();
+    select(surface, 250, 250);
+
+    down(surface, 274, 274);
+    move(surface, 540, 540); // as far out as the pointer can be clamped
+    up(surface);
+
+    expect(glyph()?.getAttribute("font-size")).toBe("192"); // 48 x 4, the cap
+  });
+
+  it("widens a text box from its right-edge handle, and no narrower than a word", () => {
+    render(
+      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
+    );
+    const surface = paperSurface();
+    select(surface, 60, 80);
+    // the box is 40..280 x 60..90, so the width handle sits at (280, 75)
+    expect(selectionBox()?.getAttribute("width")).toBe("240");
+
+    down(surface, 280, 75);
+    move(surface, 400, 75);
+    up(surface);
+    expect(selectionBox()?.getAttribute("width")).toBe("360");
+
+    down(surface, 400, 75);
+    move(surface, 0, 75);
+    up(surface);
+    expect(selectionBox()?.getAttribute("width")).toBe("40");
+  });
+
+  it("scales and turns a selected sticker with two fingers", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ curl: flat, elements: [STAR] })}
+      />,
+    );
+    const surface = paperSurface();
+    select(surface, 250, 250);
+
+    down(surface, 250, 250); // the first finger stays on it
+    downAt(surface, 300, 250, 2); // the second lands 50 away
+    move(surface, 350, 250, 2); // and spreads to 100
+    upAt(surface, 2);
+
+    expect(glyph()?.getAttribute("font-size")).toBe("96"); // 48 x 2
+    expect(glyph()?.getAttribute("x")).toBe("250"); // still where it was
+  });
+
+  it("turns the note with two fingers on bare paper", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+
+    down(surface, 250, 250);
+    downAt(surface, 300, 250, 2);
+    move(surface, 300, 270, 2); // the angle between them swings round
+    upAt(surface, 2);
+
+    expect(paperSurface().style.transform).toContain("rotate(21.8deg)");
+  });
+
+  it("drops the stroke a second finger lands on, and turns the note instead", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    pickUp(/pick up the black marker/i);
+    const surface = paperSurface();
+
+    down(surface, 100, 100);
+    move(surface, 140, 160);
+    downAt(surface, 300, 300, 2); // a second finger is never more ink
+    move(surface, 300, 250, 2);
+    upAt(surface, 2);
+    up(surface);
+
+    expect(drawn()).toHaveLength(0); // nothing committed
+    expect(paperSurface().style.transform).toContain("rotate(-11.8deg)");
+  });
+});

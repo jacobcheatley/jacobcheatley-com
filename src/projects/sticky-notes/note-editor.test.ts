@@ -8,16 +8,21 @@ import {
   curlFromPointer,
   cycleHit,
   type Element,
+  elementHandles,
   emptyNote,
+  handleTransform,
   hitTest,
   hitTestAll,
   isEdgeBand,
   isOffNote,
+  MIN_TEXT_W,
   moveElement,
   noteSide,
   removeElement,
+  scaleElement,
   settleElement,
   turnNote,
+  widthFromPointer,
 } from "./note-editor";
 import { MAX_ELEMENTS, noteContentSchema, noteSchema } from "./note-schema";
 
@@ -410,5 +415,93 @@ describe("turnNote", () => {
     // atan2 flips a whole turn there: 350 degrees clockwise is 10 back
     expect(turnNote(0, 350)).toBe(-10);
     expect(turnNote(0, -350)).toBe(10);
+  });
+});
+
+describe("an element's own handles", () => {
+  it("hangs the handles off the corner and the right edge of the box", () => {
+    // a sticker is 48 wide at scale 1, so its box corner is 24 in from centre
+    expect(elementHandles(sticker(250, 250))?.corner).toEqual([274, 274]);
+    expect(elementHandles(sticker(250, 250))?.width).toBeNull();
+
+    // one line of 20pt text, 200 wide: the box is 100..300 x 100..120
+    const h = elementHandles(text());
+    expect(h?.corner).toEqual([300, 120]);
+    expect(h?.width).toEqual([300, 110]);
+  });
+
+  it("turns the handles with the element they belong to", () => {
+    const [x = 0, y = 0] = elementHandles(sticker(250, 250, 1))?.corner ?? [];
+    const turned = elementHandles({
+      ...(sticker(250, 250) as Extract<Element, { type: "sticker" }>),
+      rotation: 90,
+    })?.corner;
+    // a quarter turn about (250, 250) carries the bottom-right corner to the
+    // bottom-left, and never leaves the box behind
+    expect(turned?.[0]).toBeCloseTo(250 - (y - 250));
+    expect(turned?.[1]).toBeCloseTo(250 + (x - 250));
+  });
+
+  it("has no handles on a stroke", () => {
+    expect(elementHandles(stroke())).toBeNull();
+  });
+
+  it("reads scale off the reach and rotation off the swing", () => {
+    const anchor: [number, number] = [100, 100];
+    // straight out from the anchor, twice as far: twice the size, same angle
+    expect(handleTransform(anchor, [150, 100], [200, 100], 1, 0)).toEqual({
+      scale: 2,
+      rotation: 0,
+    });
+    // a quarter turn round it, same distance: same size, turned 90
+    const t = handleTransform(anchor, [150, 100], [100, 150], 2, 10);
+    expect(t.scale).toBeCloseTo(2);
+    expect(t.rotation).toBeCloseTo(100);
+  });
+
+  it("keeps a turn inside the contract's half circle either way", () => {
+    expect(
+      handleTransform([0, 0], [10, 0], [0, 10], 1, 170).rotation,
+    ).toBeCloseTo(-100); // 170 + 90 comes back round, it does not reach 260
+  });
+
+  it("holds still for a handle grabbed on the anchor itself", () => {
+    expect(handleTransform([100, 100], [100, 100], [300, 300], 3, 45)).toEqual({
+      scale: 3,
+      rotation: 45,
+    });
+  });
+
+  it("holds a scaled element inside the contract's ranges", () => {
+    const big = scaleElement(sticker(250, 250), 99, 30);
+    expect(big).toMatchObject({ scale: 4, rotation: 30 });
+    expect(scaleElement(sticker(250, 250), 0.01, 0)).toMatchObject({
+      scale: 0.25,
+    });
+    expect(scaleElement(text(), 200, 0)).toMatchObject({ fontSize: 96 });
+    expect(scaleElement(text(), 1, 0)).toMatchObject({ fontSize: 8 });
+    // a stroke has no handle, so nothing to scale
+    expect(scaleElement(stroke(), 4, 90)).toEqual(stroke());
+  });
+
+  it("widens a text box along its own axis", () => {
+    expect(widthFromPointer({ x: 100, y: 100, rotation: 0 }, 340, 100)).toBe(
+      240,
+    );
+    // turned a quarter turn, its width runs down the screen
+    expect(widthFromPointer({ x: 100, y: 100, rotation: 90 }, 100, 340)).toBe(
+      240,
+    );
+    // and across the screen is no width at all
+    expect(widthFromPointer({ x: 100, y: 100, rotation: 90 }, 340, 100)).toBe(
+      MIN_TEXT_W,
+    );
+  });
+
+  it("never lets a box get narrower than a word or wider than the contract", () => {
+    expect(widthFromPointer({ x: 100, y: 100, rotation: 0 }, 0, 100)).toBe(40);
+    expect(widthFromPointer({ x: 100, y: 100, rotation: 0 }, 9000, 100)).toBe(
+      600,
+    );
   });
 });
