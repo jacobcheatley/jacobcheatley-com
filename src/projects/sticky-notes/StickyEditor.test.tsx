@@ -983,3 +983,91 @@ describe("StickyEditor on a tilted note", () => {
     expect(drawn()[0]?.getAttribute("y")).toBe("0");
   });
 });
+
+describe("StickyEditor note handles", () => {
+  // The sheet is its own control (#69: no sliders anywhere) — the edge turns
+  // it, the bottom corners peel it. The paper is stubbed 500x500 at the origin,
+  // so its centre is (250, 250) and a client point is a note coordinate.
+  const tilt = () => paperSurface().style.transform;
+  // The two bottom corners as the renderer folded them, off the paper outline:
+  // "M 0 0 L 500 0 L 500 <500-br> L <500-br> 500 L <bl> 500 L 0 <500-bl> Z".
+  const fold = () => {
+    const d = document.querySelector("svg path")?.getAttribute("d") ?? "";
+    const [, br = "500", , bl = "0"] =
+      d.match(/L 500 ([\d.]+) L ([\d.]+) 500 L ([\d.]+) 500/) ?? [];
+    return { br: 500 - Number(br), bl: Number(bl) };
+  };
+  const flat = { bl: 0, br: 0 };
+
+  it("turns the note by the angle an edge drag sweeps", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+
+    down(surface, 6, 250); // the band along the left edge
+    move(surface, 6, 150);
+    expect(tilt()).toContain("rotate(22.3deg)");
+    up(surface);
+    expect(tilt()).toContain("rotate(22.3deg)"); // and it stays turned
+  });
+
+  it("holds the tilt to something the wall can wear", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+
+    down(surface, 6, 250);
+    move(surface, 250, 6); // a quarter turn of sweep
+    up(surface);
+
+    expect(tilt()).toContain("rotate(25deg)");
+  });
+
+  it("draws on the paper instead of turning it when a marker is in hand", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    pickUp(/pick up the black marker/i);
+    const surface = paperSurface();
+
+    down(surface, 6, 250);
+    move(surface, 6, 150);
+    up(surface);
+
+    expect(tilt()).toContain("rotate(0deg)");
+    expect(drawn()).toHaveLength(1);
+  });
+
+  it("peels a bottom corner further, and back, with a drag", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+
+    down(surface, 496, 496); // the bottom-right corner
+    move(surface, 440, 440);
+    const peeled = fold().br;
+    expect(peeled).toBeGreaterThan(0);
+
+    move(surface, 480, 480);
+    expect(fold().br).toBeLessThan(peeled);
+    up(surface);
+
+    expect(fold().bl).toBe(0); // the other corner never moved
+    expect(tilt()).toContain("rotate(0deg)"); // and the corner is not the edge
+  });
+
+  it("moves an element that lies in the edge band rather than the note", () => {
+    // the band is the LAST thing a press can mean: what is drawn wins
+    render(
+      <StickyEditor
+        initialContent={seeded({
+          curl: flat,
+          elements: [{ ...HI, x: 0, y: 0 }],
+        })}
+      />,
+    );
+    const surface = paperSurface();
+
+    down(surface, 6, 6);
+    move(surface, 106, 56);
+    up(surface);
+
+    expect(tilt()).toContain("rotate(0deg)");
+    expect(drawn()[0]?.getAttribute("x")).toBe("100");
+  });
+});

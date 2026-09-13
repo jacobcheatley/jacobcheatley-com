@@ -30,16 +30,22 @@ import {
   bounds,
   clampCoord,
   clientToNoteCoords,
+  curlCorner,
+  curlFromPointer,
   cycleHit,
+  EDGE_BAND,
   emptyNote,
   hitTest,
   hitTestAll,
+  isEdgeBand,
   isOffNote,
+  MAX_FOLD,
   moveElement,
   type Element as NoteElement,
   noteSide,
   removeElement,
   settleElement,
+  turnNote,
   updateElement,
 } from "./note-editor";
 import { loadFont } from "./note-fonts";
@@ -144,6 +150,11 @@ export default function StickyEditor({
   // A finger leaves the tool docked on the mat, so the dock has to show the
   // stroke happening; a mouse carries the tool itself.
   const [using, setUsing] = useState(false);
+  // What the hand has hold of the paper BY, if anything: its edge (turning it)
+  // or a bottom corner (peeling it). It shows the grip on the sheet, and while
+  // the note is being turned its tilt has to sit under the finger, so the
+  // tilt's own transition (the tear-off flight) is off for the gesture.
+  const [grip, setGrip] = useState<null | "edge" | "bl" | "br">(null);
   const [fine, setFine] = useState(false);
   // The note is full: the docked tool rocks so a dead pointer-down says why.
   const [shaking, setShaking] = useState(false);
@@ -183,6 +194,16 @@ export default function StickyEditor({
   const draftRef = useRef<StrokeEl | null>(null);
   const dragRef = useRef<{ index: number; x: number; y: number } | null>(null);
   const rubbingRef = useRef(false);
+  // Turning the note by its edge (#76). The angle is taken in CLIENT space
+  // about the paper's centre: taken in note units it would be measured through
+  // the very rotation it is setting, and the paper would chase its own tail at
+  // half speed.
+  const spinRef = useRef<{
+    centre: [number, number];
+    from: number;
+    start: number;
+  } | null>(null);
+  const curlRef = useRef<"bl" | "br" | null>(null);
   const ghostTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const ghostId = useRef(0);
@@ -191,7 +212,11 @@ export default function StickyEditor({
   // second finger into a cancel.)
   const activeId = useRef<number | null>(null);
   const busy = () =>
-    draftRef.current !== null || rubbingRef.current || dragRef.current !== null;
+    draftRef.current !== null ||
+    rubbingRef.current ||
+    dragRef.current !== null ||
+    spinRef.current !== null ||
+    curlRef.current !== null;
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
 
   // Two frames, not one: a single rAF can run before the browser has taken a
@@ -511,12 +536,53 @@ export default function StickyEditor({
       return;
     }
 
-    // hand mode: the top hit, or one layer deeper when this spot is already
-    // the selection's
+    // Hand mode, in the order a pointer can mean things: what is drawn on the
+    // paper first, then the paper itself. The note's edge and corners are the
+    // last thing a press can be, so nothing on the sheet is out of reach.
     const hits = hitTestAll(live, x, y);
-    const next = cycleHit(hits, selected);
-    setSelected(next);
-    dragRef.current = next < 0 ? null : { index: next, x, y };
+    if (hits.length) {
+      // the top hit, or one layer deeper when this spot is already the
+      // selection's
+      const next = cycleHit(hits, selected);
+      setSelected(next);
+      dragRef.current = next < 0 ? null : { index: next, x, y };
+      return;
+    }
+    setSelected(-1); // a press on bare paper is a deselect, whatever else it is
+    const corner = curlCorner(live.curl, x, y);
+    if (corner) {
+      curlRef.current = corner;
+      setGrip(corner);
+      return;
+    }
+    if (isEdgeBand(x, y)) startSpin(e);
+  }
+
+  // Grab the note by its edge: from here on the rotation follows how far the
+  // pointer has swept round the paper's centre.
+  function startSpin(e: ReactPointerEvent) {
+    const rect = paperRef.current?.getBoundingClientRect();
+    const live = contentRef.current;
+    if (!rect || !live) return;
+    const centre: [number, number] = [
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    ];
+    spinRef.current = {
+      centre,
+      from: live.rotation,
+      start: angleFrom(centre, e.clientX, e.clientY),
+    };
+    setGrip("edge");
+  }
+
+  // The swept angle, applied to the note the gesture started from.
+  function spinTo(clientX: number, clientY: number) {
+    const spin = spinRef.current;
+    const live = contentRef.current;
+    if (!spin || !live) return;
+    const swept = angleFrom(spin.centre, clientX, clientY) - spin.start;
+    apply({ ...live, rotation: turnNote(spin.from, swept) });
   }
 
   function onPaperMove(e: ReactPointerEvent<HTMLDivElement>) {
@@ -536,6 +602,19 @@ export default function StickyEditor({
     if (rubbingRef.current) {
       const [x, y] = toNote(e);
       rub(x, y);
+      return;
+    }
+    if (spinRef.current) {
+      spinTo(e.clientX, e.clientY);
+      return;
+    }
+    if (curlRef.current) {
+      const corner = curlRef.current;
+      const [x, y] = toNote(e);
+      apply({
+        ...live,
+        curl: { ...live.curl, [corner]: round2(curlFromPointer(corner, x, y)) },
+      });
       return;
     }
     const drag = dragRef.current;
@@ -562,6 +641,9 @@ export default function StickyEditor({
     }
     setUsing(false);
     rubbingRef.current = false;
+    spinRef.current = null;
+    curlRef.current = null;
+    setGrip(null);
 
     const draft = draftRef.current;
     if (draft) {
@@ -668,21 +750,27 @@ export default function StickyEditor({
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
                 // the held tool IS the cursor over the paper
                 cursor: fine && held ? "none" : undefined,
-                ...noteMotion(tearing, crumpling, shown.rotation),
+                ...noteMotion(
+                  tearing,
+                  crumpling,
+                  shown.rotation,
+                  grip === "edge",
+                ),
               }}
             >
               <NotePaper content={shown} />
 
-              {/* T6 replaces the dashed box with the element's rotated box
-                  plus handles; the caret rides the same overlay, over the
-                  paper and out of the pointer's way */}
-              {(selectedEl || (caret && textDraft)) && (
+              {/* The overlay rides inside the rotated sheet, so everything on
+                  it is drawn in plain note units and turns with the paper. It
+                  never takes the pointer: the paper under it does. */}
+              {(selectedEl || (caret && textDraft) || grip) && (
                 <svg
                   viewBox={`0 0 ${CANVAS} ${CANVAS}`}
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   aria-hidden="true"
                 >
                   <title>selection and caret</title>
+                  {grip && gripMark(grip, shown.curl)}
                   {selectedEl && selectionRect(selectedEl)}
                   {caret && textDraft && caretRect(caret, textDraft)}
                 </svg>
@@ -900,6 +988,7 @@ function noteMotion(
   tearing: boolean,
   crumpling: boolean,
   rotation: number,
+  turning: boolean,
 ): CSSProperties {
   const tilt = `rotate(${rotation}deg)`;
   if (crumpling)
@@ -911,9 +1000,21 @@ function noteMotion(
   if (tearing) return { transform: `${TEAR_FROM} ${tilt}`, transition: "none" };
   return {
     transform: tilt,
-    transition: `transform ${TEAR_MS}ms ${EASE_OUT}`,
+    // A sheet being turned must sit under the finger, not ease towards it.
+    transition: turning ? "none" : `transform ${TEAR_MS}ms ${EASE_OUT}`,
   };
 }
+
+// Degrees from a centre out to a client point — the sweep an edge drag reads.
+function angleFrom(
+  centre: [number, number],
+  clientX: number,
+  clientY: number,
+): number {
+  return (Math.atan2(clientY - centre[1], clientX - centre[0]) * 180) / Math.PI;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // The caret's tip, in note units: just past the last glyph of the last line,
 // on that line's baseline. Measured off the tspans NoteRender actually drew —
@@ -964,6 +1065,41 @@ function caretRect(at: { x: number; y: number }, el: TextEl) {
       fill={INK[el.color]}
       className="motion-reduce:animate-none!"
       style={{ animation: `desk-caret ${CARET_MS}ms step-end infinite` }}
+    />
+  );
+}
+
+// What the hand has hold of, while it holds it: the band along the edge that
+// turns the note, or the crease of the corner being peeled. ponytail: press
+// only — a hover state would cost a pointermove handler and a re-render per
+// frame on a surface that is drawn on. Add it if the edge goes unfound.
+function gripMark(grip: "edge" | "bl" | "br", curl: NoteContent["curl"]) {
+  if (grip === "edge")
+    return (
+      <rect
+        x={EDGE_BAND / 2}
+        y={EDGE_BAND / 2}
+        width={CANVAS - EDGE_BAND}
+        height={CANVAS - EDGE_BAND}
+        fill="none"
+        stroke="#1f2937"
+        strokeOpacity={0.14}
+        strokeWidth={EDGE_BAND}
+      />
+    );
+  const f = Math.max(curl[grip] * MAX_FOLD, 12);
+  return (
+    <path
+      d={
+        grip === "bl"
+          ? `M ${f} ${CANVAS} L 0 ${CANVAS - f}`
+          : `M ${CANVAS - f} ${CANVAS} L ${CANVAS} ${CANVAS - f}`
+      }
+      stroke="#ffffff"
+      strokeOpacity={0.75}
+      strokeWidth={3}
+      strokeLinecap="round"
+      fill="none"
     />
   );
 }

@@ -319,3 +319,74 @@ export function noteSide(bboxWidth: number, rotationDeg: number): number {
   const a = (rotationDeg * Math.PI) / 180;
   return bboxWidth / (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a)));
 }
+
+// --- the paper's own handles (#76) ------------------------------------------
+// No sliders anywhere (#69): the note is turned by its edge and peeled by its
+// corners, so the sheet itself is the control. All of it is geometry, so all of
+// it is here — the shell only decides which gesture a pointer started.
+
+export const clamp = (n: number, lo: number, hi: number): number =>
+  Math.max(lo, Math.min(hi, n));
+
+// Must match note-render's fold size, like STICKER_BASE above: one number, kept
+// here rather than pulling the renderer's JSX into the model layer.
+export const MAX_FOLD = 120;
+
+// The band along the paper's edge that turns the note. Narrow enough that the
+// middle of the sheet stays drawing surface, wide enough to find with a thumb.
+export const EDGE_BAND = 24;
+
+export function isEdgeBand(x: number, y: number): boolean {
+  if (x < 0 || x > CANVAS || y < 0 || y > CANVAS) return false;
+  return (
+    x < EDGE_BAND ||
+    y < EDGE_BAND ||
+    x > CANVAS - EDGE_BAND ||
+    y > CANVAS - EDGE_BAND
+  );
+}
+
+// How far from a bottom corner still counts as taking hold of the fold.
+export const CURL_GRAB = 40;
+
+// Which bottom corner a pointer took hold of, if either: anywhere inside the
+// folded triangle itself, or within reach of the corner it peels from.
+export function curlCorner(
+  curl: { bl: number; br: number },
+  x: number,
+  y: number,
+): "bl" | "br" | null {
+  const held = (cx: number, cy: number, fold: number) =>
+    Math.hypot(x - cx, y - cy) <= CURL_GRAB ||
+    // the fold triangle: the two legs and the crease between their ends
+    Math.abs(x - cx) + Math.abs(y - cy) <= fold;
+  if (held(0, CANVAS, curl.bl * MAX_FOLD)) return "bl";
+  if (held(CANVAS, CANVAS, curl.br * MAX_FOLD)) return "br";
+  return null;
+}
+
+// How far the pointer has pulled a corner in along its own diagonal, as a curl.
+// Pulling straight up an edge peels nothing: it is the diagonal into the middle
+// of the sheet that lifts paper.
+export function curlFromPointer(
+  corner: "bl" | "br",
+  x: number,
+  y: number,
+): number {
+  const dx = corner === "bl" ? x : CANVAS - x;
+  const dy = CANVAS - y;
+  return clamp((dx + dy) / Math.SQRT2 / MAX_FOLD, 0, 1);
+}
+
+// ponytail: the wall looks wrong past a light tilt, so a note is held to +-25
+// even though the contract allows a half turn either way. If a sideways note
+// is ever wanted, this is the only number in the way.
+export const ROTATE_LIMIT = 25;
+
+// The note's tilt after a gesture has swept `by` degrees round its centre.
+// The sweep is normalised first: dragging across the centre flips atan2 by a
+// whole turn, which would otherwise fling the note to the far clamp.
+export function turnNote(from: number, by: number): number {
+  const swept = ((((by + 180) % 360) + 360) % 360) - 180;
+  return Math.round(clamp(from + swept, -ROTATE_LIMIT, ROTATE_LIMIT) * 10) / 10;
+}

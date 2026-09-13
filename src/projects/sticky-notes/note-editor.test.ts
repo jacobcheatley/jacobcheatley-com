@@ -4,16 +4,20 @@ import {
   bounds,
   clampCoord,
   clientToNoteCoords,
+  curlCorner,
+  curlFromPointer,
   cycleHit,
   type Element,
   emptyNote,
   hitTest,
   hitTestAll,
+  isEdgeBand,
   isOffNote,
   moveElement,
   noteSide,
   removeElement,
   settleElement,
+  turnNote,
 } from "./note-editor";
 import { MAX_ELEMENTS, noteContentSchema, noteSchema } from "./note-schema";
 
@@ -348,5 +352,63 @@ describe("noteSide", () => {
   it("shrinks out the corners a tilted note pokes into its box", () => {
     expect(noteSide(360, 45)).toBeCloseTo(360 / Math.SQRT2);
     expect(noteSide(360, -45)).toBeCloseTo(360 / Math.SQRT2);
+  });
+});
+
+describe("the paper's own handles", () => {
+  it("finds the rotate band along every edge and nowhere in the middle", () => {
+    expect(isEdgeBand(250, 5)).toBe(true);
+    expect(isEdgeBand(5, 250)).toBe(true);
+    expect(isEdgeBand(495, 250)).toBe(true);
+    expect(isEdgeBand(250, 495)).toBe(true);
+    expect(isEdgeBand(250, 250)).toBe(false);
+    expect(isEdgeBand(250, 30)).toBe(false);
+    // off the paper entirely is not the paper's edge
+    expect(isEdgeBand(-10, 250)).toBe(false);
+  });
+
+  it("takes hold of the corner a pointer came down on", () => {
+    const flat = { bl: 0, br: 0 };
+    expect(curlCorner(flat, 20, 480)).toBe("bl");
+    expect(curlCorner(flat, 480, 480)).toBe("br");
+    expect(curlCorner(flat, 250, 250)).toBeNull();
+    // a flat corner is still grabbable; a peeled one is grabbable further in
+    expect(curlCorner(flat, 50, 450)).toBeNull();
+    expect(curlCorner({ bl: 1, br: 0 }, 50, 450)).toBe("bl");
+  });
+
+  it("peels a corner by how far it is pulled along its diagonal", () => {
+    expect(curlFromPointer("bl", 0, 500)).toBe(0); // the corner itself
+    expect(curlFromPointer("bl", 85, 415)).toBeCloseTo(1, 1);
+    expect(curlFromPointer("br", 415, 415)).toBeCloseTo(1, 1);
+    // half way in, and never past a whole fold or back past flat
+    expect(curlFromPointer("br", 458, 458)).toBeCloseTo(0.5, 1);
+    expect(curlFromPointer("br", 0, 0)).toBe(1);
+    expect(curlFromPointer("br", 600, 600)).toBe(0);
+  });
+
+  it("peels each corner along its own diagonal, not the other's", () => {
+    // mirrored across the sheet: the same pull, the same curl
+    expect(curlFromPointer("bl", 60, 440)).toBeCloseTo(
+      curlFromPointer("br", 440, 440),
+    );
+  });
+});
+
+describe("turnNote", () => {
+  it("adds the swept angle to where the note started", () => {
+    expect(turnNote(0, 12)).toBe(12);
+    expect(turnNote(-4, -6.24)).toBe(-10.2); // a tenth of a degree is plenty
+  });
+
+  it("holds the note to a tilt the wall can wear", () => {
+    expect(turnNote(0, 90)).toBe(25);
+    expect(turnNote(0, -90)).toBe(-25);
+  });
+
+  it("reads a sweep across the centre as the short way round", () => {
+    // atan2 flips a whole turn there: 350 degrees clockwise is 10 back
+    expect(turnNote(0, 350)).toBe(-10);
+    expect(turnNote(0, -350)).toBe(10);
   });
 });
