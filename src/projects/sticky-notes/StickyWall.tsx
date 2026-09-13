@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { STILL } from "./desk";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 import {
@@ -15,7 +16,7 @@ import {
 // CSS around each tile; curl and the fastener are baked into NoteRender itself.
 
 // An approved note as the loader delivers it (extra columns come along unused).
-type WallNote = { id: number; author: string; content: NoteContent };
+export type WallNote = { id: number; author: string; content: NoteContent };
 
 // What a tile/zoom needs — approved notes and the local pending note both fit.
 type DisplayNote = { author: string; content: NoteContent; pending?: boolean };
@@ -33,6 +34,21 @@ const CORK_BG: CSSProperties = {
   backgroundSize: "14px 14px, 22px 22px, 18px 18px, 16px 16px, cover",
 };
 
+// A tile's box on the board. The note's own rotation; the shadow follows the
+// paper silhouette (curl cut-outs and all), so a drop-shadow filter, not a
+// rectangular box one.
+const tileStyle = (content: NoteContent): CSSProperties => ({
+  aspectRatio: NOTE_ASPECT_RATIO,
+  transform: `rotate(${content.rotation}deg)`,
+  filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
+});
+
+const PendingBadge = () => (
+  <span className="absolute -top-1 right-1 rounded-sm bg-black/70 px-1.5 py-0.5 font-sans text-[0.6rem] font-semibold tracking-wide text-white uppercase">
+    Pending
+  </span>
+);
+
 function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
   return (
     <button
@@ -40,21 +56,32 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
       onClick={onOpen}
       aria-label={`Zoom note by ${note.author}`}
       className="relative block w-32 cursor-zoom-in select-none border-0 bg-transparent p-0"
-      style={{
-        aspectRatio: NOTE_ASPECT_RATIO,
-        // The note's own rotation; the shadow follows the paper silhouette (curl
-        // cut-outs and all), so a drop-shadow filter, not a rectangular box one.
-        transform: `rotate(${note.content.rotation}deg)`,
-        filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
-      }}
+      style={tileStyle(note.content)}
     >
       <NoteRender content={note.content} />
-      {note.pending && (
-        <span className="absolute -top-1 right-1 rounded-sm bg-black/70 px-1.5 py-0.5 font-sans text-[0.6rem] font-semibold tracking-wide text-white uppercase">
-          Pending
-        </span>
-      )}
+      {note.pending && <PendingBadge />}
     </button>
+  );
+}
+
+// The note being pinned up (#77), in the slot it will hold once submitted: the
+// same tile and badge a pending note wears, so the submit swaps one for the
+// other without anything moving. Not a zoom button — it has no author yet, and
+// it is still being fastened. The pinning UI finds it by `data-landing` (to fly
+// it in) and hangs the name tag in `data-landing-tag`.
+function LandingTile({ content }: { content: NoteContent }) {
+  return (
+    // z-45: the note flies in over the mat (z-40) as the mat slides away.
+    <li data-landing="" className={`relative z-45 ${STILL}`}>
+      <div className="relative w-32 select-none" style={tileStyle(content)}>
+        <NoteRender content={content} />
+        <PendingBadge />
+      </div>
+      <div
+        data-landing-tag=""
+        className="absolute inset-x-0 top-full flex justify-center"
+      />
+    </li>
   );
 }
 
@@ -166,15 +193,26 @@ function AddNote({ empty }: { empty: boolean }) {
   );
 }
 
-export function StickyWall({ notes }: { notes: WallNote[] }) {
+export function StickyWall({
+  notes,
+  landing,
+}: {
+  notes: WallNote[];
+  // the note being pinned up, while it is (#77)
+  landing?: NoteContent;
+}) {
   const [zoomed, setZoomed] = useState<DisplayNote | null>(null);
   const [pending, setPending] = useState<PendingNote[]>([]);
 
   // Own pending notes live only in this browser, so read them after mount (SSR
-  // has no localStorage); each drops the moment it shows up approved.
-  useEffect(() => {
+  // has no localStorage); each drops the moment it shows up approved. Read
+  // again when a landed note goes: a submit has just added it to the list. A
+  // layout effect, so the pending tile takes the landed one's slot before the
+  // browser paints the gap between them.
+  useLayoutEffect(() => {
+    if (landing) return;
     setPending(reconcilePending(readPending(), notes));
-  }, [notes]);
+  }, [notes, landing]);
 
   // Esc closes the zoom lightbox (tap-out is handled on the scrim itself).
   useEffect(() => {
@@ -186,7 +224,7 @@ export function StickyWall({ notes }: { notes: WallNote[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [zoomed]);
 
-  const empty = notes.length === 0 && pending.length === 0;
+  const empty = notes.length === 0 && pending.length === 0 && !landing;
 
   return (
     <div
@@ -210,6 +248,7 @@ export function StickyWall({ notes }: { notes: WallNote[] }) {
         <li>
           <AddNote empty={empty} />
         </li>
+        {landing && <LandingTile content={landing} />}
         {pending.map((p) => {
           const tile = { ...p, pending: true };
           return (

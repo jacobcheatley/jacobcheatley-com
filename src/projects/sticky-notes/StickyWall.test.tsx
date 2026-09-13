@@ -123,6 +123,54 @@ describe("StickyWall", () => {
     expect(screen.getAllByText(/pending/i)).toHaveLength(2);
   });
 
+  it("lands a pinned note in the newest slot, right after the invite, marked pending", async () => {
+    storePending(pending("ada", 2));
+    // the wall is up before anything lands on it
+    const notes = [note(1, "sam")];
+    const { rerender } = render(<StickyWall notes={notes} />);
+    rerender(
+      <StickyWall notes={notes} landing={content({ colour: "pink" })} />,
+    );
+
+    // invite, then the landed note, then the pending and approved ones
+    await waitFor(() =>
+      expect(screen.getAllByRole("listitem")).toHaveLength(4),
+    );
+    const items = screen.getAllByRole("listitem");
+    expect(items[0]).toContainElement(
+      screen.getByRole("link", { name: /pin a note/i }),
+    );
+    expect(items[1]).toHaveAttribute("data-landing");
+    expect(items[1]).toHaveTextContent(/pending/i);
+    expect(items[2]).toContainElement(
+      screen.getByRole("button", { name: /zoom note by ada/i }),
+    );
+  });
+
+  it("keeps the invite tile-sized while a note lands on an empty wall", () => {
+    render(<StickyWall notes={[]} landing={content()} />);
+    expect(screen.getByRole("link", { name: /pin a note/i })).toHaveClass(
+      "w-32",
+    );
+  });
+
+  it("shows the note that just landed as pending once it has been submitted", () => {
+    // the same list both times: nothing but the landing going re-reads it
+    const notes = [note(1, "sam")];
+    const { rerender } = render(
+      <StickyWall notes={notes} landing={content()} />,
+    );
+    // the submit writes the pending list, then the landed note goes
+    storePending(pending("ada", 2));
+    rerender(<StickyWall notes={notes} />);
+
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[1]).toContainElement(
+      screen.getByRole("button", { name: /zoom note by ada/i }),
+    );
+  });
+
   it("reconciles away only the pending note that got approved", async () => {
     storePending(pending("ada", 2), pending("lee", 1));
 
