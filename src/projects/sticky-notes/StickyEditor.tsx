@@ -9,15 +9,15 @@ import {
 import { EASE_OUT, STILL } from "./desk";
 import {
   Bin,
-  ERASER_HOTSPOT,
   EraserBody,
   FAN_MS,
-  MARKER_HOTSPOT,
+  heldTool,
   MarkerBody,
   type Mode,
   ModeControl,
   PAD,
   padStyle,
+  SHAKE_MS,
   ToolSlot,
 } from "./desk-objects";
 import {
@@ -25,12 +25,12 @@ import {
   bounds,
   clampCoord,
   cycleHit,
-  type Element,
   emptyNote,
   hitTest,
   hitTestAll,
   isOffNote,
   moveElement,
+  type Element as NoteElement,
   removeElement,
   settleElement,
   updateElement,
@@ -47,6 +47,7 @@ import {
   type Font,
   INKS,
   type Ink,
+  MAX_ELEMENTS,
   MAX_POINTS_PER_STROKE,
   MAX_TEXT_LEN,
   type NoteContent,
@@ -85,8 +86,8 @@ const TEXT_W = 240;
 const TEAR_FROM = "translate(-34vw, 36vh) rotate(-16deg) scale(.12)";
 const CRUMPLE_TO = "translate(34vw, 38vh) rotate(260deg) scale(.06)";
 
-type StrokeEl = Extract<Element, { type: "stroke" }>;
-type TextEl = Extract<Element, { type: "text" }>;
+type StrokeEl = Extract<NoteElement, { type: "stroke" }>;
+type TextEl = Extract<NoteElement, { type: "text" }>;
 // Nothing held is hand mode — the absence of a tool, not a tool of its own.
 type Held = Ink | "eraser" | null;
 
@@ -119,21 +120,28 @@ export default function StickyEditor({
   const [held, setHeld] = useState<Held>(null);
   const [mode, setMode] = useState<Mode>("draw");
   const [font, setFont] = useState<Font>("casual"); // the editor's default
+  // The font samples pop up over the mat, like the fanned pads: opened by the
+  // "Aa" side of the rocker, closed by a tap elsewhere, Escape or a choice.
+  const [fontsOpen, setFontsOpen] = useState(false);
   const [selected, setSelected] = useState(-1);
   const [textDraft, setTextDraft] = useState<TextEl | null>(null);
   // A finger leaves the tool docked on the mat, so the dock has to show the
   // stroke happening; a mouse carries the tool itself.
   const [using, setUsing] = useState(false);
   const [fine, setFine] = useState(false);
+  // The note is full: the docked tool rocks so a dead pointer-down says why.
+  const [shaking, setShaking] = useState(false);
   // Elements have no id, so a removed one can't fade in place: its ghost is
   // re-drawn on an overlay that fades out and unmounts. `out` travels with the
-  // ghost rather than beside it, so a second rub always mounts opaque — a
-  // separate flag would still be set from the fade before it.
+  // ghost, and `id` keys the overlay, so rubbing again mid-fade mounts a fresh
+  // node at full opacity instead of reversing the one that is fading.
   // ponytail: one ghost at a time, the newest wins. Rubbing out a pile fades
-  // only the last of them; give each its own key if that ever reads wrong.
-  const [ghost, setGhost] = useState<{ el: Element; out: boolean } | null>(
-    null,
-  );
+  // only the last of them; keep a list if that ever reads wrong.
+  const [ghost, setGhost] = useState<{
+    el: NoteElement;
+    out: boolean;
+    id: number;
+  } | null>(null);
 
   const trigger = useRef<HTMLButtonElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
@@ -147,6 +155,14 @@ export default function StickyEditor({
   const dragRef = useRef<{ index: number; x: number; y: number } | null>(null);
   const rubbingRef = useRef(false);
   const ghostTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const ghostId = useRef(0);
+  // One gesture at a time: while a stroke, rub or drag is live, events from any
+  // other pointer are ignored rather than allowed to steal it. (T6 turns a
+  // second finger into a cancel.)
+  const activeId = useRef<number | null>(null);
+  const busy = () =>
+    draftRef.current !== null || rubbingRef.current || dragRef.current !== null;
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
 
   // Two frames, not one: a single rAF can run before the browser has taken a
@@ -188,6 +204,7 @@ export default function StickyEditor({
     () => () => {
       clearTimeout(crumpleTimer.current);
       clearTimeout(ghostTimer.current);
+      clearTimeout(shakeTimer.current);
     },
     [],
   );
@@ -212,15 +229,15 @@ export default function StickyEditor({
     if (writing) for (const f of FONTS) loadFont(f);
   }, [font, writing]);
 
-  // Focus the text box AFTER the placing tap settles. Focusing it synchronously
-  // mid-gesture lets that same tap's trailing events blur it straight back out
-  // — an instant empty commit (the phase 1 lesson).
-  const textOpen = textDraft !== null;
+  // Escape closes the font samples; a tap elsewhere is the overlay below.
   useEffect(() => {
-    if (!textOpen) return;
-    const id = requestAnimationFrame(() => textRef.current?.focus());
-    return () => cancelAnimationFrame(id);
-  }, [textOpen]);
+    if (!fontsOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFontsOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fontsOpen]);
 
   // The fade's second half: flip to transparent one PAINTED frame after the
   // ghost mounts. One rAF isn't enough — it can run before the browser has
@@ -239,14 +256,20 @@ export default function StickyEditor({
     };
   }, [ghost]);
 
-  // A pad with no note on the mat tears a fresh sheet off; with a note already
-  // there it swaps the stock under the content. Both wait for the objects to
-  // stop moving — mid-crumple there is no note to swap the paper under yet.
   // Leave the element where it was, fading, after it has gone from the note.
-  function showGhost(el: Element) {
+  function showGhost(el: NoteElement) {
     clearTimeout(ghostTimer.current);
-    setGhost({ el, out: false });
+    ghostId.current += 1;
+    setGhost({ el, out: false, id: ghostId.current });
     ghostTimer.current = setTimeout(() => setGhost(null), GHOST_MS + 80);
+  }
+
+  // Nothing more fits on the note: rock the tool in its slot for a moment, so
+  // the pointer-down that drew nothing is not silence.
+  function shakeTool() {
+    setShaking(true);
+    clearTimeout(shakeTimer.current);
+    shakeTimer.current = setTimeout(() => setShaking(false), SHAKE_MS);
   }
 
   function apply(next: NoteContent) {
@@ -254,6 +277,9 @@ export default function StickyEditor({
     setContent(next);
   }
 
+  // A pad with no note on the mat tears a fresh sheet off; with a note already
+  // there it swaps the stock under the content. Both wait for the objects to
+  // stop moving — mid-crumple there is no note to swap the paper under yet.
   function takeSheet(colour: PaperColour) {
     if (!fanSettled || crumpling) return;
     setFanned(false);
@@ -283,6 +309,7 @@ export default function StickyEditor({
   function pickUp(tool: Exclude<Held, null>) {
     setHeld((h) => (h === tool ? null : tool));
     setSelected(-1);
+    setFontsOpen(false);
     hideCursorTool();
   }
 
@@ -299,13 +326,20 @@ export default function StickyEditor({
     ];
   }
 
+  // Nothing on the paper wants the browser's default pointer-down: no text
+  // selection, and no compatibility mousedown to move focus off the open text
+  // box (the paper isn't focusable, so that blur is pure loss).
   function onPaperDown(e: ReactPointerEvent<HTMLDivElement>) {
+    e.preventDefault();
     if (!content || tearing || crumpling) return;
-    // A tap anywhere else — the paper included — commits the open text box.
-    if (textDraft) {
-      commitText();
-      return;
-    }
+    if (busy() && activeId.current !== e.pointerId) return;
+    activeId.current = e.pointerId;
+    setFontsOpen(false);
+    // The text box never takes the pointer (it is pointer-events-none), so a
+    // pointer-down on the paper is always a tap away from it: commit, then let
+    // this tap do its own job.
+    if (textDraft) commitText();
+    const live = contentRef.current ?? content; // commitText may have grown it
     const [x, y, p] = toNote(e);
     // Keep the gesture on the paper even when the pointer wanders off it. The
     // guard is for jsdom (no pointer capture at all) and for a pointer id that
@@ -323,6 +357,12 @@ export default function StickyEditor({
       return;
     }
     if (isInk(held)) {
+      // Full note: `addElement` would silently drop whatever this gesture
+      // draws, so don't start one — shake the tool instead.
+      if (live.elements.length >= MAX_ELEMENTS) {
+        shakeTool();
+        return;
+      }
       if (mode === "write") {
         setTextDraft({
           type: "text",
@@ -350,13 +390,14 @@ export default function StickyEditor({
 
     // hand mode: the top hit, or one layer deeper when this spot is already
     // the selection's
-    const hits = hitTestAll(content, x, y);
+    const hits = hitTestAll(live, x, y);
     const next = cycleHit(hits, selected);
     setSelected(next);
     dragRef.current = next < 0 ? null : { index: next, x, y };
   }
 
   function onPaperMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (busy() && activeId.current !== e.pointerId) return;
     followCursorTool(e);
     const live = contentRef.current;
     if (!live) return;
@@ -386,7 +427,16 @@ export default function StickyEditor({
     apply(moveElement(live, drag.index, dx, dy));
   }
 
-  function onPaperUp() {
+  function onPaperUp(e: ReactPointerEvent<HTMLDivElement>) {
+    if (busy() && activeId.current !== e.pointerId) return;
+    activeId.current = null;
+    // iOS Safari raises the keyboard only for a focus() inside the gesture that
+    // asked for it — a frame later and the box is live with no keyboard under
+    // it. Keep this call synchronous here, and check it on a real phone.
+    if (textDraft) {
+      textRef.current?.focus();
+      return;
+    }
     setUsing(false);
     rubbingRef.current = false;
 
@@ -440,8 +490,8 @@ export default function StickyEditor({
   // re-render the note.
   function followCursorTool(e: ReactPointerEvent) {
     const el = cursorRef.current;
-    if (!el) return;
-    const [hx, hy] = held === "eraser" ? ERASER_HOTSPOT : MARKER_HOTSPOT;
+    if (!el || !tool) return;
+    const [hx, hy] = tool.hotspot;
     el.style.opacity = "1";
     el.style.transform = `translate(${e.clientX - hx}px, ${e.clientY - hy}px)`;
   }
@@ -452,12 +502,14 @@ export default function StickyEditor({
   }
 
   const draft = draftRef.current;
+  // The image of the tool in your hand, for a fine pointer to carry.
+  const tool = held ? heldTool(held) : null;
   // The live stroke and the open text box are elements like any other, so they
   // render through the same NotePaper path the committed note uses — which is
   // what makes typing WYSIWYG rather than an overlay that lies about its size.
   const shown =
     content && (textDraft ?? draft)
-      ? addElement(content, (textDraft ?? draft) as Element)
+      ? addElement(content, (textDraft ?? draft) as NoteElement)
       : content;
   const selectedEl = selected >= 0 ? content?.elements[selected] : undefined;
 
@@ -500,6 +552,7 @@ export default function StickyEditor({
 
             {ghost && (
               <svg
+                key={ghost.id}
                 viewBox={`0 0 ${CANVAS} ${CANVAS}`}
                 className={`${STILL} pointer-events-none absolute inset-0 h-full w-full`}
                 aria-hidden="true"
@@ -538,7 +591,7 @@ export default function StickyEditor({
         )}
       </div>
 
-      {/* a fanned stack closes on a tap anywhere else on the mat */}
+      {/* a fanned stack, or the font samples, close on a tap anywhere else */}
       {fanned && (
         <button
           type="button"
@@ -547,11 +600,19 @@ export default function StickyEditor({
           onClick={() => setFanned(false)}
         />
       )}
+      {fontsOpen && (
+        <button
+          type="button"
+          aria-label="Close the font samples"
+          className="absolute inset-0 z-20 h-full w-full cursor-default border-0 bg-transparent p-0"
+          onClick={() => setFontsOpen(false)}
+        />
+      )}
 
       {/* the desk strip: the mat's bottom edge, where the objects lie. Three
           groups — left: the pads; centre: the markers and the draw/write
           control; right: T5's sticker tab, the eraser, then the bin. */}
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-1 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-1 px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div
           className="relative z-30 shrink-0"
           style={{ width: PAD + 12, height: PAD + 8 }}
@@ -580,16 +641,19 @@ export default function StickyEditor({
             aria-label="Fan out the pads"
             aria-expanded={fanned}
             onClick={() => setFanned((open) => !open)}
-            className="-inset-1.5 absolute z-30 border-0 bg-transparent p-0"
+            className="-inset-1.5 absolute z-30 min-h-12 min-w-12 border-0 bg-transparent p-0"
           />
         </div>
 
-        <div className="flex min-h-12 min-w-0 flex-1 items-end justify-center gap-0.5">
+        {/* Below `sm` the markers wrap onto their own row UNDER the rest, which
+            puts the objects you reach for most nearest the thumb. */}
+        <div className="flex min-h-12 flex-1 items-end justify-center gap-1 max-sm:order-last max-sm:basis-full max-sm:justify-center">
           {INKS.map((ink) => (
             <ToolSlot
               key={ink}
               label={`${held === ink ? "Put down" : "Pick up"} the ${ink} marker`}
               held={held === ink}
+              shake={shaking && held === ink}
               onClick={() => pickUp(ink)}
             >
               <MarkerBody ink={ink} held={held === ink} using={using} />
@@ -599,18 +663,22 @@ export default function StickyEditor({
             ink={isInk(held) ? held : null}
             mode={mode}
             font={font}
-            onMode={setMode}
+            fontsOpen={fontsOpen}
+            onMode={(m) => {
+              setMode(m);
+              setFontsOpen(m === "write");
+            }}
             onFont={(f) => {
               setFont(f);
-              setMode("write");
+              setFontsOpen(false);
             }}
           />
         </div>
 
         <div className="flex shrink-0 items-end gap-1">
           {/* T5 fills this with the sticker sheet's tab */}
-          <div data-slot="sticker-tab" className="min-h-12 min-w-12" />
-          <div data-slot="eraser">
+          <div data-slot="sticker-tab" className="min-h-12 min-w-12 shrink-0" />
+          <div data-slot="eraser" className="shrink-0">
             <ToolSlot
               label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
               held={held === "eraser"}
@@ -625,31 +693,14 @@ export default function StickyEditor({
 
       {/* the held tool, riding a mouse with its nib on the hotspot. Parked
           off-screen until the pointer is over the paper. */}
-      {fine && held && (
+      {fine && tool && (
         <div
           ref={cursorRef}
           aria-hidden="true"
-          className="pointer-events-none fixed top-0 left-0 z-50 opacity-0"
+          className={`${STILL} pointer-events-none fixed top-0 left-0 z-50 opacity-0`}
           style={{ transition: "opacity 140ms" }}
         >
-          <div
-            style={{
-              transform:
-                held === "eraser" ? "rotate(-22deg)" : "rotate(-28deg)",
-              transformOrigin: (held === "eraser"
-                ? ERASER_HOTSPOT
-                : MARKER_HOTSPOT
-              )
-                .map((n) => `${n}px`)
-                .join(" "),
-            }}
-          >
-            {held === "eraser" ? (
-              <EraserBody />
-            ) : (
-              <MarkerBody ink={held} loose />
-            )}
-          </div>
+          <div style={tool.style}>{tool.body}</div>
         </div>
       )}
     </div>
@@ -671,7 +722,7 @@ function noteMotion(tearing: boolean, crumpling: boolean): CSSProperties {
 }
 
 // The dashed box around the selection, in note units.
-function selectionRect(el: Element) {
+function selectionRect(el: NoteElement) {
   const b = bounds(el);
   return (
     <rect

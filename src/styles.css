@@ -47,3 +47,16 @@ body {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* The sticky-notes desk (#74): its one keyframed motion, for the held tool
+   saying no when the note is already full. Everything else on the mat is a
+   transition timed from a JS constant, so only the frames live here — the
+   duration is applied inline, and motion-reduce:animate-none! turns it off. */
+@keyframes desk-shake {
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}

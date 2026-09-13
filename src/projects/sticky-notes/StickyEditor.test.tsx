@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Element, emptyNote } from "./note-editor";
-import type { NoteContent } from "./note-schema";
+import { MAX_ELEMENTS, type NoteContent } from "./note-schema";
 import StickyEditor from "./StickyEditor";
 
 // The desk island (#73). No tools yet — markers, eraser and stickers land in
@@ -253,11 +253,11 @@ const down = (el: HTMLElement, x: number, y: number) =>
     pointerId: 1,
     pressure: 0.5,
   });
-const move = (el: HTMLElement, x: number, y: number) =>
+const move = (el: HTMLElement, x: number, y: number, pointerId = 1) =>
   fireEvent.pointerMove(el, {
     clientX: x,
     clientY: y,
-    pointerId: 1,
+    pointerId,
     pressure: 0.5,
   });
 const up = (el: HTMLElement) => fireEvent.pointerUp(el, { pointerId: 1 });
@@ -320,7 +320,9 @@ describe("StickyEditor writing", () => {
   const openBox = (at: [number, number] = [60, 80]) => {
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
-    down(paperSurface(), at[0], at[1]);
+    const paper = paperSurface();
+    down(paper, at[0], at[1]);
+    up(paper);
     return screen.getByRole("textbox", { name: /text box/i });
   };
 
@@ -339,7 +341,9 @@ describe("StickyEditor writing", () => {
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     pickUp(/write in handwritten/i);
-    down(paperSurface(), 60, 80);
+    const paper = paperSurface();
+    down(paper, 60, 80);
+    up(paper);
 
     const box = screen.getByRole("textbox", { name: /text box/i });
     fireEvent.change(box, { target: { value: "hello" } });
@@ -395,19 +399,23 @@ describe("StickyEditor eraser and hands", () => {
     expect(screen.queryByText("bbb")).toBeNull();
   });
 
-  it("starts every rubbed-out element's fade opaque, not just the first", () => {
+  it("starts a fresh fade for a rub that lands while one is still fading", () => {
     render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
     pickUp(/pick up the eraser/i);
     const paper = paperSurface();
 
     down(paper, 60, 80);
     up(paper);
-    expect(ghostLayer()?.style.opacity).toBe("1");
-    wait(GHOST_MS);
-    expect(ghostLayer()).toBeUndefined();
+    const first = ghostLayer();
+    expect(first?.style.opacity).toBe("1");
+
+    wait(GHOST_MS / 2); // mid-fade: on its way out, still mounted
+    expect(first?.style.opacity).toBe("0");
 
     down(paper, 60, 80);
     up(paper);
+    // a node of its own, so it mounts opaque instead of reversing the fade
+    expect(ghostLayer()).not.toBe(first);
     expect(ghostLayer()?.style.opacity).toBe("1");
   });
 
@@ -456,5 +464,149 @@ describe("StickyEditor eraser and hands", () => {
 
     expect(screen.getByText("aaa")).toBeInTheDocument();
     expect(drawn()[0]?.getAttribute("x")).toBe("-50"); // back inside -50..550
+  });
+});
+
+describe("StickyEditor thumb targets", () => {
+  // jsdom measures nothing, so what is asserted is the rules that hold the
+  // size: 48px minimums that no narrow strip is allowed to squeeze (#70 —
+  // "objects are too small in general").
+  const objects = () => [
+    ...screen.getAllByRole("button", { name: /(pick up|put down) the/i }),
+    screen.getByRole("button", { name: /draw with the marker/i }),
+    screen.getByRole("button", { name: /write with the marker/i }),
+    screen.getByRole("button", { name: /bin this note/i }),
+    screen.getByRole("button", { name: /fan out the pads/i }),
+    document.querySelector<HTMLElement>('[data-slot="sticker-tab"]'),
+  ];
+
+  it("gives every object on the strip a 48px target that cannot shrink", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+
+    for (const el of objects()) {
+      const cls = el?.className ?? "";
+      expect(cls).toContain("min-w-12");
+      expect(cls).toContain("min-h-12");
+      expect(cls).not.toMatch(/(^|\s)min-w-0(\s|$)/);
+      expect(cls).not.toMatch(/(^|\s)shrink(\s|$)/);
+    }
+  });
+
+  it("stands the rocker up, one thumb wide and two tall", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const draw = screen.getByRole("button", { name: /draw with the marker/i });
+    const write = screen.getByRole("button", {
+      name: /write with the marker/i,
+    });
+
+    for (const half of [draw, write]) {
+      expect(half.style.width).toBe("48px");
+      expect(half.style.height).toBe("48px");
+    }
+    // squiggle above Aa, in one column
+    expect(draw.parentElement).toBe(write.parentElement);
+    expect(draw.parentElement?.className).toContain("flex-col");
+  });
+
+  it("wraps the markers onto their own row below sm, nearest the thumb", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const row = screen.getByRole("button", {
+      name: /pick up the red marker/i,
+    }).parentElement;
+
+    expect(row?.className).toContain("max-sm:order-last");
+    expect(row?.className).toContain("max-sm:basis-full");
+    expect(row?.parentElement?.className).toContain("flex-wrap");
+  });
+
+  it("pops the font samples over the mat instead of onto the strip", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the red marker/i);
+    const casual = () =>
+      screen.queryByRole("button", { name: /write in casual/i });
+    expect(casual()).toBeNull();
+
+    pickUp(/write with the marker/i);
+    expect(casual()?.style.height).toBe("48px");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(casual()).toBeNull();
+  });
+});
+
+describe("StickyEditor pointer gestures", () => {
+  const full = () =>
+    seeded({ elements: Array.from({ length: MAX_ELEMENTS }, () => HI) });
+
+  it("focuses the text box as the placing tap ends, not a frame later", () => {
+    // iOS Safari raises the keyboard only for a focus() inside the gesture.
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const paper = paperSurface();
+
+    down(paper, 60, 80);
+    const box = screen.getByRole("textbox", { name: /text box/i });
+    expect(box).not.toHaveFocus();
+
+    up(paper);
+    expect(box).toHaveFocus();
+  });
+
+  it("takes the browser's default off a tap on the paper", () => {
+    // the compatibility mousedown would blur the open box straight back out
+    render(<StickyEditor initialContent={seeded({})} />);
+    expect(down(paperSurface(), 60, 80)).toBe(false);
+  });
+
+  it("commits the open box on a tap away, and starts the next one", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    fireEvent.change(
+      (() => {
+        pickUp(/pick up the red marker/i);
+        pickUp(/write with the marker/i);
+        const paper = paperSurface();
+        down(paper, 60, 80);
+        up(paper);
+        return screen.getByRole("textbox", { name: /text box/i });
+      })(),
+      { target: { value: "hi" } },
+    );
+
+    const paper = paperSurface();
+    down(paper, 400, 400);
+    up(paper);
+
+    expect(screen.getByText("hi")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /text box/i })).toHaveFocus();
+  });
+
+  it("ignores a second finger while a stroke is live", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the black marker/i);
+    const paper = paperSurface();
+
+    down(paper, 100, 100);
+    move(paper, 300, 300, 2); // another finger lands: not this gesture's
+    up(paper);
+
+    // one point only, so perfect-freehand drew nothing
+    expect(drawn()).toHaveLength(0);
+  });
+
+  it("opens no draft once the note is full, and says so", () => {
+    render(<StickyEditor initialContent={full()} />);
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const paper = paperSurface();
+    down(paper, 400, 400);
+    up(paper);
+
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
+    expect(drawn()).toHaveLength(MAX_ELEMENTS);
+    expect(
+      screen.getByRole("button", { name: /put down the red marker/i }).style
+        .animation,
+    ).toContain("desk-shake");
   });
 });

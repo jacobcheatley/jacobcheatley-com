@@ -23,42 +23,48 @@ const MID = (PAPER_COLOURS.length - 1) / 2;
 
 const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
 
-// Tool sizes. The drawn objects are fixed; only the air around them flexes, so
-// a narrow strip closes the gaps instead of shrinking the stationery.
-// ponytail: nine objects will not fit across a 390px strip at 48px each, so a
-// marker's slot is tall rather than wide — 36x88 with room, closing to the
-// marker's own 22px width on a phone, where they sit shoulder to shoulder like
-// markers in a tray. Widen them if the strip ever loses an object.
+// Tool sizes. The drawn object is one thing, its slot another: every slot is a
+// 48px thumb target (the #70 verdict) and never shrinks, while the stationery
+// inside keeps the size it looks right at. The strip wraps rather than squeezes.
+const TOUCH = 48;
 const MARKER_W = 22;
 const MARKER_H = 72;
 const TOOL_H = 88;
 const ERASER_W = 40;
 const ERASER_H = 28;
-const ROCKER_W = 32;
-const ROCKER_H = 46;
-const FONT_CHIP = 44;
+// The rocker stands upright — squiggle over Aa — so it costs one thumb target
+// of width beside the four markers instead of two.
+const ROCKER_W = TOUCH;
+const ROCKER_H = TOUCH;
+const FONT_CHIP = TOUCH;
+
+// How long the held tool shakes when the note is full and nothing more fits.
+export const SHAKE_MS = 200;
 
 // The draw/write control with nothing in your hand: inert stationery grey.
 const GREY = "#8a8371";
 
 // Where the pointer sits inside the tool image that rides a mouse: the marker's
 // nib tip, the eraser's rubbing corner.
-export const MARKER_HOTSPOT: [number, number] = [MARKER_W / 2, MARKER_H + 8];
-export const ERASER_HOTSPOT: [number, number] = [5, ERASER_H - 3];
+const MARKER_HOTSPOT: [number, number] = [MARKER_W / 2, MARKER_H + 8];
+const ERASER_HOTSPOT: [number, number] = [5, ERASER_H - 3];
 
 export type Mode = "draw" | "write";
 
 // A tool lying in its slot on the mat: the object plus the shadow that IS the
-// slot. The whole slot is the target — tall rather than wide, because the strip
-// has nine objects to fit across a phone.
+// slot. The whole slot is the target, never smaller than a thumb and never
+// shrunk by a narrow strip.
 export function ToolSlot({
   label,
   held,
+  shake = false,
   onClick,
   children,
 }: {
   label: string;
   held: boolean;
+  // the note is full: rock the tool so the dead pointer-down says something
+  shake?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -66,9 +72,13 @@ export function ToolSlot({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={held}
       onClick={onClick}
-      className="relative flex w-9 min-w-0 shrink items-end justify-center border-0 bg-transparent p-0"
-      style={{ height: TOOL_H }}
+      className="relative flex min-h-12 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
+      style={{
+        height: TOOL_H,
+        animation: shake ? `desk-shake ${SHAKE_MS}ms ease-in-out` : undefined,
+      }}
     >
       <span
         aria-hidden="true"
@@ -215,6 +225,25 @@ export function EraserBody({
   );
 }
 
+// The tool in your hand, as the image that rides a fine pointer: where the
+// pointer sits inside it, the tilt around that point, and the object itself.
+export function heldTool(held: Ink | "eraser"): {
+  hotspot: [number, number];
+  style: CSSProperties;
+  body: ReactNode;
+} {
+  const eraser = held === "eraser";
+  const hotspot = eraser ? ERASER_HOTSPOT : MARKER_HOTSPOT;
+  return {
+    hotspot,
+    style: {
+      transform: eraser ? "rotate(-22deg)" : "rotate(-28deg)",
+      transformOrigin: hotspot.map((n) => `${n}px`).join(" "),
+    },
+    body: eraser ? <EraserBody /> : <MarkerBody ink={held} loose />,
+  };
+}
+
 // Draw or write with the marker in your hand: one rocker, tinted with that
 // marker's ink so it reads as part of it, inert and grey with an empty hand.
 // The "Aa" side opens the four font samples, each in its own face.
@@ -222,12 +251,15 @@ export function ModeControl({
   ink,
   mode,
   font,
+  fontsOpen,
   onMode,
   onFont,
 }: {
   ink: Ink | null;
   mode: Mode;
   font: Font;
+  // the samples are a pop-up over the mat, not a fifth object on the strip
+  fontsOpen: boolean;
   onMode: (m: Mode) => void;
   onFont: (f: Font) => void;
 }) {
@@ -241,7 +273,7 @@ export function ModeControl({
         aria-pressed={on}
         disabled={!ink}
         onClick={() => onMode(m)}
-        className={`relative flex items-center justify-center border-0 border-slate-900/15 border-l p-0 first:border-l-0 disabled:opacity-70 ${STILL}`}
+        className={`relative flex min-h-12 min-w-12 shrink-0 items-center justify-center border-0 border-slate-900/15 border-t p-0 first:border-t-0 disabled:opacity-70 ${STILL}`}
         style={{
           width: ROCKER_W,
           height: ROCKER_H,
@@ -266,44 +298,8 @@ export function ModeControl({
 
   return (
     <div className="relative shrink-0">
-      {/* the samples ARE the choice: each label in its own face */}
-      {ink && mode === "write" && (
-        <div
-          className="-translate-x-1/2 absolute bottom-[calc(100%+10px)] left-1/2 grid grid-cols-2 gap-1.5"
-          style={{ width: 2 * FONT_CHIP + 6 }}
-        >
-          {FONTS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              aria-label={`Write in ${f}`}
-              aria-pressed={f === font}
-              onClick={() => onFont(f)}
-              className={`flex items-center justify-center rounded-[2px] border-0 p-0 ${STILL}`}
-              style={{
-                width: FONT_CHIP,
-                height: FONT_CHIP,
-                fontFamily: FONT_FAMILIES[f],
-                fontSize: 20,
-                lineHeight: 1,
-                color: tint,
-                background: "linear-gradient(180deg,#fffdf6,#ece3cf)",
-                boxShadow:
-                  f === font
-                    ? `0 3px 5px rgba(0,0,0,.4), inset 0 0 0 2px ${tint}`
-                    : "0 3px 5px rgba(0,0,0,.4)",
-                transform: f === font ? "translateY(-3px)" : "none",
-                transition: `transform 160ms ${EASE_OUT}`,
-              }}
-            >
-              Aa
-            </button>
-          ))}
-        </div>
-      )}
-
       <div
-        className="flex items-stretch overflow-hidden rounded-[5px]"
+        className="flex flex-col items-stretch overflow-hidden rounded-[5px]"
         style={{
           background: "linear-gradient(180deg,#f6efe2,#ddd2bd)",
           boxShadow:
@@ -345,6 +341,41 @@ export function ModeControl({
           </span>,
         )}
       </div>
+
+      {/* the samples ARE the choice: each label in its own face. Hung off the
+          rocker's right edge, not centred on it: centred, the row runs off a
+          320px strip, since the rocker sits at the strip's right end. */}
+      {ink && fontsOpen && (
+        <div className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5">
+          {FONTS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              aria-label={`Write in ${f}`}
+              aria-pressed={f === font}
+              onClick={() => onFont(f)}
+              className={`flex items-center justify-center rounded-[2px] border-0 p-0 ${STILL}`}
+              style={{
+                width: FONT_CHIP,
+                height: FONT_CHIP,
+                fontFamily: FONT_FAMILIES[f],
+                fontSize: 20,
+                lineHeight: 1,
+                color: tint,
+                background: "linear-gradient(180deg,#fffdf6,#ece3cf)",
+                boxShadow:
+                  f === font
+                    ? `0 3px 5px rgba(0,0,0,.4), inset 0 0 0 2px ${tint}`
+                    : "0 3px 5px rgba(0,0,0,.4)",
+                transform: f === font ? "translateY(-3px)" : "none",
+                transition: `transform 160ms ${EASE_OUT}`,
+              }}
+            >
+              Aa
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -393,7 +424,7 @@ export function Bin({
       aria-label="Bin this note"
       onClick={onClick}
       disabled={disabled}
-      className="relative flex h-14 w-14 items-end justify-center border-0 bg-transparent p-0 disabled:opacity-45"
+      className="relative flex h-14 min-h-12 w-14 min-w-12 shrink-0 items-end justify-center border-0 bg-transparent p-0 disabled:opacity-45"
     >
       <span
         className="absolute right-1.5 bottom-[46px] left-1.5 block h-1.5 rounded-sm"
