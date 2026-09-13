@@ -1,4 +1,12 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NoteContent } from "./note-schema";
 import { StickyNotes } from "./StickyNotes";
@@ -8,6 +16,12 @@ import { StickyNotes } from "./StickyNotes";
 // is /sticky-notes/new), so the tests drive that prop the way Back and the
 // invite drive the URL. Motion is CSS and FLIP; these assert the state it
 // carries, never the flight.
+
+// The router and the write server fn don't belong in jsdom: stub them at the
+// seams, as the phase-1 editor tests did. The note and its contract run for
+// real. The factories read these lazily, so declaring them below is fine.
+const navigate = vi.fn();
+const addNote = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -19,7 +33,10 @@ vi.mock("@tanstack/react-router", () => ({
       {children}
     </a>
   ),
+  useNavigate: () => navigate,
 }));
+vi.mock("@tanstack/react-start", () => ({ useServerFn: () => addNote }));
+vi.mock("./sticky-notes.fn", () => ({ addNoteFn: {} }));
 
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
@@ -48,7 +65,8 @@ const pinItUp = () =>
   fireEvent.click(screen.getByRole("button", { name: /pin it up/i }));
 
 // The island is lazy, so wait for it on the real clock; then take the clock,
-// because the fan only answers a tap once it has settled.
+// because the fan only answers a tap once it has settled — and give it back
+// once the sheet is down, since the submit waits on a promise.
 async function tearOff(colour = "yellow") {
   await screen.findByRole("button", { name: /fan out the pads/i });
   vi.useFakeTimers();
@@ -58,11 +76,14 @@ async function tearOff(colour = "yellow") {
     screen.getByRole("button", { name: new RegExp(`${colour} sheet`, "i") }),
   );
   wait(300);
+  vi.useRealTimers();
 }
 
 beforeEach(() => {
   // jsdom has no scrolling, and says so loudly
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  navigate.mockReset();
+  addNote.mockReset().mockResolvedValue({ status: "pending" });
 });
 
 afterEach(() => {
@@ -151,5 +172,84 @@ describe("StickyNotes fastener drawer", () => {
     expect(fastenedWith()).toBe("none");
     expect(drawer()).toHaveAttribute("inert");
     expect(drawerTab()).toBeInTheDocument();
+  });
+});
+
+const nameTag = () => screen.queryByRole("textbox", { name: /your name/i });
+const tick = () => screen.getByRole("button", { name: /sign the tag/i });
+// what the one POST carried
+const posted = () => addNote.mock.calls[0]?.[0]?.data;
+
+describe("StickyNotes tag", () => {
+  // pinned up and fastened with a red pin, so the tag is out
+  async function fastened() {
+    render(<StickyNotes notes={[]} matUp />);
+    await tearOff();
+    pinItUp();
+    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+  }
+
+  it("hangs a name tag under the landed note once the drawer folds away", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await tearOff();
+    pinItUp();
+    expect(nameTag()).toBeNull(); // the drawer is still up
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /put the drawer away/i }),
+    );
+    const input = nameTag();
+    expect(landed()).toContainElement(input);
+    // a name, not a sentence: no browser second-guessing what is typed
+    expect(input).toHaveAttribute("autocomplete", "off");
+    expect(input).toHaveAttribute("autocapitalize", "none");
+    expect(input).toHaveAttribute("spellcheck", "false");
+    expect(input).toHaveAttribute("maxlength", "50");
+    expect(input).toHaveAttribute("placeholder", "your name");
+    expect(input).toHaveClass("lowercase");
+  });
+
+  it("keeps what was typed on the tag while the drawer is open again", async () => {
+    const user = userEvent.setup();
+    await fastened();
+    await user.type(nameTag() as HTMLElement, "ada");
+    fireEvent.click(drawerTab() as HTMLElement);
+    fireEvent.click(
+      screen.getByRole("button", { name: /put the drawer away/i }),
+    );
+
+    expect(nameTag()).toHaveValue("ada");
+  });
+
+  it("pins the note up under the name on Enter, lowercased, fastener and all", async () => {
+    const user = userEvent.setup();
+    await fastened();
+    await user.type(nameTag() as HTMLElement, "  Ada {Enter}");
+
+    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(1));
+    expect(posted()).toMatchObject({
+      author: "ada",
+      content: { colour: "yellow", fastener: "pin-red" },
+    });
+  });
+
+  it("pins it up from the tick on the tag too, for a thumb", async () => {
+    const user = userEvent.setup();
+    await fastened();
+    await user.type(nameTag() as HTMLElement, "lee");
+    await user.click(tick());
+
+    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(1));
+    expect(posted()).toMatchObject({ author: "lee" });
+  });
+
+  it("shakes a tag with no name on it, and posts nothing", async () => {
+    const user = userEvent.setup();
+    await fastened();
+    await user.type(nameTag() as HTMLElement, "   ");
+    await user.click(tick());
+
+    expect(nameTag()?.closest("form")).toHaveAttribute("data-shake");
+    expect(addNote).not.toHaveBeenCalled();
   });
 });

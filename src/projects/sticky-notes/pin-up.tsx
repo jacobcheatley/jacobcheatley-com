@@ -1,14 +1,18 @@
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { EASE_OUT, SLIDE_MS, STILL, TAPE } from "./desk";
+import { SHAKE_MS } from "./desk-objects";
 import { FONT_FAMILIES } from "./note-fonts";
 import { FastenerPreview } from "./note-render";
 import {
   FASTENERS,
   type Fastener,
   type NoteContent,
+  noteSchema,
   type PaperColour,
 } from "./note-schema";
+import { addNoteFn } from "./sticky-notes.fn";
 
 // Pinning a note up (#77): what happens between the mat and the wall. The
 // editor keeps the note and decides when; this file is the pieces it wears —
@@ -43,9 +47,11 @@ const COMPARTMENT: CSSProperties = {
   boxShadow: "inset 0 3px 6px rgba(0,0,0,.4)",
 };
 
-// The pinning phase, over the wall. Portalled to the body: the editor that
-// renders it lives inside the mat, which is off-screen and inert by now, and
-// whose transform would make `fixed` mean "fixed to the mat".
+// The pinning phase, over the wall. Portalled out of the editor: the editor
+// lives inside the mat, which is off-screen and inert by now, and whose
+// transform would make `fixed` mean "fixed to the mat". The drawer goes to the
+// body; the tag hangs in the slot the wall leaves under the landed note, so it
+// sits under it wherever the wall's layout puts it.
 export function PinUp({
   content,
   onChange,
@@ -54,18 +60,105 @@ export function PinUp({
   onChange: (note: NoteContent) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(true);
-  return createPortal(
-    <FastenerDrawer
-      open={drawerOpen}
-      colour={content.colour}
-      onChoose={(fastener) => {
-        onChange({ ...content, fastener });
-        setDrawerOpen(false);
+  // Held here rather than on the tag, which is put away while the drawer is
+  // open again: a name half typed survives choosing another fastener.
+  const [name, setName] = useState("");
+  // `useServerFn` wraps the server fn for a component: the same call, run
+  // through the router, so a redirect from the server would be followed.
+  const addNote = useServerFn(addNoteFn);
+  // The wall renders the slot in the same commit this mounts in, so it is
+  // there to be found once that commit has landed.
+  const [tagSlot, setTagSlot] = useState<Element | null>(null);
+  useEffect(() => {
+    setTagSlot(document.querySelector("[data-landing-tag]"));
+  }, []);
+
+  // Sign the tag. Returns false when there is no name to sign with, so the tag
+  // can shake — the name is the only half of the note being typed here.
+  function sign(): boolean {
+    const note = noteSchema.safeParse({ author: name, content });
+    if (!note.success) return false;
+    addNote({ data: note.data });
+    return true;
+  }
+
+  return (
+    <>
+      {createPortal(
+        <FastenerDrawer
+          open={drawerOpen}
+          colour={content.colour}
+          onChoose={(fastener) => {
+            onChange({ ...content, fastener });
+            setDrawerOpen(false);
+          }}
+          onClose={() => setDrawerOpen(false)}
+          onOpen={() => setDrawerOpen(true)}
+        />,
+        document.body,
+      )}
+      {tagSlot &&
+        !drawerOpen &&
+        createPortal(
+          <NameTag name={name} onName={setName} onSign={sign} />,
+          tagSlot,
+        )}
+    </>
+  );
+}
+
+// The paper tag under the landed note: whoever pinned it writes their name, and
+// that is the submit. A form, so Enter in the field and the tick (for a thumb,
+// which has no Enter to hand) are the same native submit.
+function NameTag({
+  name,
+  onName,
+  onSign,
+}: {
+  name: string;
+  onName: (name: string) => void;
+  onSign: () => boolean;
+}) {
+  // A blank tag rocks for a moment instead of going anywhere.
+  const [shake, setShake] = useState(false);
+  return (
+    <form
+      data-shake={shake || undefined}
+      onSubmit={(e) => {
+        e.preventDefault(); // a real submit would reload the page
+        if (!onSign()) setShake(true);
       }}
-      onClose={() => setDrawerOpen(false)}
-      onOpen={() => setDrawerOpen(true)}
-    />,
-    document.body,
+      onAnimationEnd={() => setShake(false)}
+      className="relative mt-3 flex items-center gap-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
+      style={{
+        background: "linear-gradient(180deg, #fffdf6, #efe6d2)",
+        boxShadow: "0 3px 6px rgba(0,0,0,.35)",
+        // `rotate`, not `transform`: the shake animates the transform
+        rotate: "2deg",
+        animation: shake ? `desk-shake ${SHAKE_MS}ms ease-in-out` : undefined,
+      }}
+    >
+      <input
+        aria-label="Your name"
+        placeholder="your name"
+        value={name}
+        onChange={(e) => onName(e.target.value)}
+        autoComplete="off"
+        autoCapitalize="none"
+        spellCheck={false}
+        maxLength={50}
+        // 18px: under 16 and iOS zooms the page in on focus
+        className="w-32 border-0 border-[#c9bda3] border-b bg-transparent p-0 text-[#3a3226] text-lg lowercase outline-none placeholder:text-[#a89c84]"
+        style={{ fontFamily: FONT_FAMILIES.casual }}
+      />
+      <button
+        type="submit"
+        aria-label="Sign the tag"
+        className="h-10 w-10 shrink-0 border-0 bg-transparent p-0 text-[#28714a] text-xl"
+      >
+        ✓
+      </button>
+    </form>
   );
 }
 
