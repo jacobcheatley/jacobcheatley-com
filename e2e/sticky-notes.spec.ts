@@ -12,10 +12,18 @@ test("a note drawn on the mat and pinned up shows on the wall as pending", async
   await page.goto("/sticky-notes");
   await page.getByRole("link", { name: "Pin a note" }).click();
 
-  // The pads only answer a tap once the fan has settled, so keep tapping the
-  // yellow one until a sheet is lying on the mat.
+  // A tap that lands before the island has hydrated does nothing, so tap the
+  // stack until it says it has fanned out. The pads then only answer once the
+  // fan has settled, so keep tapping the yellow one until a sheet is down.
+  const stack = page.getByRole("button", { name: "Fan out the pads" });
+  await expect(async () => {
+    if ((await stack.getAttribute("aria-expanded")) !== "true")
+      await stack.click();
+    await expect(stack).toHaveAttribute("aria-expanded", "true", {
+      timeout: 500,
+    });
+  }).toPass();
   const paper = page.locator("[data-colour]");
-  await page.getByRole("button", { name: "Fan out the pads" }).click();
   await expect(async () => {
     if (!(await paper.isVisible()))
       await page
