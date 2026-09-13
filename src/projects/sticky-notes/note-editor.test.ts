@@ -10,6 +10,7 @@ import {
   type Element,
   elementHandles,
   emptyNote,
+  fixedElement,
   grabbedHandle,
   grabPlacing,
   hitTest,
@@ -524,6 +525,18 @@ describe("an element's own handles", () => {
     expect(grabPlacing(text(), 318, 110, 24)).toBe("width");
     expect(grabPlacing(text(), 150, 110, 24)).toBe("move");
     expect(grabPlacing(text(), 400, 400, 24)).toBeNull();
+  });
+
+  it("fixes a sticker as it lies", () => {
+    const s = sticker(250, 250);
+    expect(fixedElement(s)).toBe(s);
+  });
+
+  it("fixes a text box trimmed, and an empty one as nothing", () => {
+    expect(fixedElement(text({ text: "  hi \n" }))).toEqual(
+      text({ text: "hi" }),
+    );
+    expect(fixedElement(text({ text: " \n " }))).toBeNull();
   });
 
   it("never lets a box get narrower than a word or wider than the contract", () => {

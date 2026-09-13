@@ -94,7 +94,7 @@ export function StickyMat({
 
       {everUp && (
         <Suspense fallback={null}>
-          <StickyEditor landing={landing} onLanding={onLanding} />
+          <StickyEditor up={up} landing={landing} onLanding={onLanding} />
         </Suspense>
       )}
     </div>

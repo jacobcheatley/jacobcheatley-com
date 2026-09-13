@@ -437,18 +437,21 @@ export function grabbedHandle(
   return width < corner ? "width" : "corner";
 }
 
+// The part of the element being placed that a press took hold of.
+export type PlacingGrip = "corner" | "width" | "move";
+
 // What a press at (x, y) takes hold of on the element being placed (#80): a
 // handle, its body to move it, or nothing — a press away, which fixes it.
-// `reach` is a thumb's reach in note units. Outside the element a handle is
-// caught from all of it; over the body only from half, or a sticker, whose
-// corner is nearer its middle than a thumb is wide on a phone, could never be
-// moved at all.
+// `reach` is a thumb's reach in note units, used for every pointer, a mouse's
+// too. Outside the element a handle is caught from all of it; over the body
+// only from half, or a sticker, whose corner is nearer its middle than a thumb
+// is wide on a phone, could never be moved at all.
 export function grabPlacing(
   el: Element,
   x: number,
   y: number,
   reach: number,
-): "corner" | "width" | "move" | null {
+): PlacingGrip | null {
   const onBody = hitsElement(el, x, y);
   const handles = elementHandles(el);
   const handle =
@@ -470,6 +473,14 @@ export function rotationFromHandle(
   // taken hold of right on the anchor: no direction to read, so hold still
   if (Math.hypot(from[0] - el.x, from[1] - el.y) < 1) return el.rotation;
   return turnElement(el.rotation, angleOf(anchor, now) - angleOf(anchor, from));
+}
+
+// The element being placed as it goes onto the note for good: text trimmed,
+// and an empty box is nothing to add.
+export function fixedElement(el: Element): Element | null {
+  if (el.type !== "text") return el;
+  const text = el.text.trim();
+  return text ? { ...el, text } : null;
 }
 
 // Narrower than this and a text box wraps one letter per line.

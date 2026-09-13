@@ -351,6 +351,7 @@ export function ModeControl({
         type="button"
         aria-label={label}
         aria-pressed={on}
+        data-mode={m}
         disabled={!ink}
         onClick={() => onMode(m)}
         className={`relative flex min-h-12 min-w-12 shrink-0 items-center justify-center border-0 border-slate-900/15 border-t p-0 first:border-t-0 disabled:opacity-70 ${STILL}`}
@@ -433,7 +434,10 @@ export function ModeControl({
           rocker's right edge, not centred on it: centred, the row runs off a
           320px strip, since the rocker sits at the strip's right end. */}
       {ink && fontsOpen && (
-        <div className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5">
+        <div
+          data-slot="fonts"
+          className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5"
+        >
           {FONTS.map((f) => (
             <FontChip
               key={f}

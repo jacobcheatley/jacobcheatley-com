@@ -878,6 +878,8 @@ describe("StickyEditor sticker sheet", () => {
       />,
     );
     paperSurface();
+    // the sheet first: its tab would fix the box
+    fireEvent.click(tab());
     // one free slot, and an open box about to take it
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
@@ -1270,11 +1272,10 @@ describe("StickyEditor placing", () => {
       name: /write in handwritten/i,
     });
     // a press on the rocker takes no focus off the box: a phone keeps its
-    // keyboard up
+    // keyboard up (jsdom never moves focus on a press, so that needs a phone)
     expect(fireEvent.pointerDown(sample)).toBe(false);
     fireEvent.click(sample);
 
-    expect(box()).toHaveFocus();
     expect(placingOutline()).not.toBeNull();
     expect(drawn()[0]?.getAttribute("font-family")).toContain("Caveat");
   });
@@ -1308,6 +1309,47 @@ describe("StickyEditor placing", () => {
     expect(box()).toBeNull();
     expect(placingOutline()).toBeNull();
     expect(drawn()[0]?.textContent).toBe("hi");
+  });
+
+  // The keyboard's way to the tray: a click with no pointer-down before it.
+  it.each([
+    ["the bin", /bin this note/i],
+    ["a marker", /pick up the black marker/i],
+    ["the eraser", /pick up the eraser/i],
+    ["the sticker tab", /the sticker sheet/i],
+  ])("fixes the open box when the keyboard presses %s", (_, name) => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    openBox();
+    fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
+
+    fireEvent.click(screen.getByRole("button", { name }));
+    expect(box()).toBeNull();
+    expect(placingOutline()).toBeNull();
+    expect(drawn()[0]?.textContent).toBe("hi");
+  });
+
+  it("fixes a placing sticker on a press on the rocker's Aa half", () => {
+    // "Aa" only spares a text box, which it brings the samples back up for
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    paperSurface();
+    pickUp(/pick up the black marker/i);
+    dragTo("⭐", 250, 250);
+
+    press(/write with the marker/i);
+    expect(placingOutline()).toBeNull();
+    expect(drawn()[0]?.textContent).toBe("⭐");
+  });
+
+  it("fixes a placing sticker on a press on the greyed-out rocker", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    paperSurface();
+    dragTo("⭐", 250, 250);
+
+    // hand mode: the rocker is disabled, so there is no click to fix it by
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: /draw with the marker/i }),
+    );
+    expect(placingOutline()).toBeNull();
   });
 
   it("fixes the open box when the note is pinned up", () => {

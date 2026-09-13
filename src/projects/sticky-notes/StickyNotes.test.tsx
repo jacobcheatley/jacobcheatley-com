@@ -374,6 +374,36 @@ describe("StickyNotes abandoning a pin", () => {
   });
 });
 
+describe("StickyNotes leaving the mat mid-placing", () => {
+  it("fixes a box being placed when Back takes the mat down, and leaves Escape to the wall", async () => {
+    const { rerender } = render(
+      <StickyNotes notes={[approved("sam")]} matUp />,
+    );
+    await tearOff("yellow");
+    tap(/pick up the black marker/i);
+    tap(/write with the marker/i);
+    const paper = matPaper() as HTMLElement;
+    fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(paper, { pointerId: 1 });
+    fireEvent.change(screen.getByRole("textbox", { name: /text box/i }), {
+      target: { value: "hi" },
+    });
+
+    rerender(<StickyNotes notes={[approved("sam")]} matUp={false} />); // Back
+    // kept, and no longer being placed
+    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
+    expect(marksOnTheMat()).toBe(1);
+
+    // the wall's own Escape still reaches it, and a press there fixes nothing
+    tap(/zoom note by sam/i);
+    // sent where the key goes, so an editor listener could stop it on the way
+    fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: "Escape",
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
 describe("StickyNotes submit", () => {
   it("keeps the note as pending and goes back to the wall in place of the editor's URL", async () => {
     const user = userEvent.setup();

@@ -37,6 +37,7 @@ import {
   curlCorner,
   curlFromPointer,
   emptyNote,
+  fixedElement,
   grabPlacing,
   HANDLE_TOUCH,
   hitTest,
@@ -45,6 +46,7 @@ import {
   type Element as NoteElement,
   noteSide,
   outsideSpinDead,
+  type PlacingGrip,
   removeElement,
   rotationFromHandle,
   settleElement,
@@ -116,6 +118,13 @@ type TextEl = Extract<NoteElement, { type: "text" }>;
 type StickerEl = Extract<NoteElement, { type: "sticker" }>;
 // What can be placed (#80): a stroke is drawn where it lies, never placed.
 type Placing = TextEl | StickerEl;
+// A drag on the element being placed: the part taken hold of, where, and the
+// element as it was then — every move is measured from there.
+type PlacingDrag = {
+  grip: PlacingGrip;
+  from: [number, number];
+  start: Placing;
+};
 // Nothing held is hand mode — the absence of a tool, not a tool of its own.
 type Held = Ink | "eraser" | null;
 
@@ -123,11 +132,15 @@ const isInk = (held: Held): held is Ink => held !== null && held !== "eraser";
 
 export default function StickyEditor({
   initialContent = null,
+  up = true,
   landing,
   onLanding,
 }: {
   // Tests seed a half-built note; the UI always starts from a torn-off sheet.
   initialContent?: NoteContent | null;
+  // Whether the mat is up. The island stays mounted under a mat that has gone
+  // down, and must not keep listening to the wall's presses and keys.
+  up?: boolean;
   // The pinning phase (#77): the note as it lies on the wall, while it does.
   // The page owns it (the wall shows it); this island puts it there.
   landing?: NoteContent;
@@ -194,7 +207,8 @@ export default function StickyEditor({
   // no telling where you are typing (#74) — and it is measured off the glyphs
   // the renderer drew, so it cannot drift from the text it follows.
   const [caret, setCaret] = useState<{ x: number; y: number } | null>(null);
-  // Bumped when the draft's webfont lands: one more measurement, nothing else.
+  // Bumped when the placing box's webfont lands: one more measurement, nothing
+  // else.
   const [caretTick, setCaretTick] = useState(0);
 
   // How far the sticker tab has to rise to perch on the open sheet's corner.
@@ -247,13 +261,7 @@ export default function StickyEditor({
   const ghostTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const ghostId = useRef(0);
-  // A drag on the element being placed: the part taken hold of, where, and the
-  // element as it was then — every move is measured from there.
-  const placingDragRef = useRef<{
-    grip: "corner" | "width" | "move";
-    from: [number, number];
-    start: Placing;
-  } | null>(null);
+  const placingDragRef = useRef<PlacingDrag | null>(null);
   // One gesture at a time: while a stroke, rub, turn, peel or placing drag is
   // live, moves from any other pointer are ignored rather than allowed to steal
   // it. A second finger coming DOWN is the exception: it takes over
@@ -348,7 +356,7 @@ export default function StickyEditor({
   // swallowing the press cost a whole tap: you picked a font, tapped the paper,
   // and nothing was placed (#74).
   useEffect(() => {
-    if (!fontsOpen) return;
+    if (!fontsOpen || !up) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setFontsOpen(false);
     };
@@ -361,7 +369,7 @@ export default function StickyEditor({
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", away);
     };
-  }, [fontsOpen]);
+  }, [fontsOpen, up]);
 
   // The sheet's other way out (the tab and a swipe down its handle are the two
   // on the mat itself), and the tab's ride up with it.
@@ -449,19 +457,30 @@ export default function StickyEditor({
   }, [placing, caretTick]);
 
   // While something is being placed, a press anywhere off the paper fixes it
-  // first: a tray object, the sheet, the mat, "pin it up". The paper judges its
-  // own presses by geometry (onPaperDown); the rocker is left out because its
-  // "Aa" half and font samples change the box being placed without fixing it
-  // (its draw half fixes through onMode). Escape throws it away — in the
-  // capture phase, so it is not also the Escape that puts the sticker sheet or
-  // the font samples away.
+  // first: the mat, the sheet, or a tray object before its own click does (the
+  // keyboard has no press, so each of those handlers fixes it too). The paper
+  // judges its own presses by geometry (onPaperDown). Spared: the font
+  // samples, which change the box being placed, and the "Aa" half that brings
+  // them back up for a text box. Escape throws it away — in the capture phase,
+  // so it is not also the Escape that puts the sticker sheet or the samples
+  // away. None of this outlives the mat: taken down (Back) mid-placing, the
+  // element is kept like the rest of the note, and the wall has its keys back.
   const isPlacing = placing !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: fixPlacing and applyPlacing read only refs and state setters, so the copies from the render that armed this are as good as the latest.
   useEffect(() => {
     if (!isPlacing) return;
+    if (!up) {
+      fixPlacing();
+      return;
+    }
     const away = (e: PointerEvent) => {
-      const at = e.target as Node;
-      if (paperRef.current?.contains(at) || rocker.current?.contains(at))
+      const at = e.target as Element;
+      if (paperRef.current?.contains(at) || at.closest('[data-slot="fonts"]'))
+        return;
+      if (
+        placingRef.current?.type === "text" &&
+        at.closest('[data-mode="write"]')
+      )
         return;
       fixPlacing();
     };
@@ -478,7 +497,7 @@ export default function StickyEditor({
       document.removeEventListener("pointerdown", away);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [isPlacing]);
+  }, [isPlacing, up]);
 
   // Leave the element where it was, fading, after it has gone from the note.
   function showGhost(el: NoteElement) {
@@ -521,6 +540,7 @@ export default function StickyEditor({
   }
 
   function binIt() {
+    fixPlacing();
     if (!content || crumpling) return;
     const { colour } = content;
     setCrumpling(true);
@@ -548,6 +568,7 @@ export default function StickyEditor({
   // Tapping a tool picks it up; tapping the one in your hand (or any other
   // tool) puts it down.
   function pickUp(tool: Exclude<Held, null>) {
+    fixPlacing();
     setHeld((h) => (h === tool ? null : tool));
     setFontsOpen(false);
     hideCursorTool();
@@ -597,7 +618,7 @@ export default function StickyEditor({
     // a second finger that started placing something while the first carried
     // the sticker.
     fixPlacing();
-    // That commit may have taken the last free slot, and `addElement` is a
+    // Fixing it may have taken the last free slot, and `addElement` is a
     // silent no-op on a full note: refuse the drop so the sheet flies the
     // sticker home instead of swallowing it.
     const live = contentRef.current;
@@ -628,10 +649,10 @@ export default function StickyEditor({
     // Placing (#80): the element being placed takes a press on its handles or
     // its body. A press anywhere else fixes it and does nothing more — no
     // stroke, no second box, no turn.
-    const placed = placingRef.current;
-    if (placed) {
-      const grip = placingGrip(placed, x, y);
-      if (grip) placingDragRef.current = { grip, from: [x, y], start: placed };
+    const el = placingRef.current;
+    if (el) {
+      const grip = placingGrip(el, x, y);
+      if (grip) placingDragRef.current = { grip, from: [x, y], start: el };
       else fixPlacing();
       return;
     }
@@ -846,8 +867,8 @@ export default function StickyEditor({
     endGesture();
     // A sticker let go wholly off the paper goes back to its sheet (the sheet
     // never runs out, so there is nothing to fly home): nothing is added.
-    const placed = placingRef.current;
-    if (dragged && placed?.type === "sticker" && isOffNote(placed)) {
+    const el = placingRef.current;
+    if (dragged && el?.type === "sticker" && isOffNote(el)) {
       applyPlacing(null);
       return;
     }
@@ -881,14 +902,11 @@ export default function StickyEditor({
 
   // --- placing (#80) -------------------------------------------------------
 
-  // Which part of the element being placed a press at (x, y) took hold of. A
-  // thumb's reach is HANDLE_TOUCH px wide, so how many note units it covers
-  // depends on the size the sheet is drawn right now.
-  function placingGrip(
-    el: Placing,
-    x: number,
-    y: number,
-  ): "corner" | "width" | "move" | null {
+  // Which part of the element being placed a press at (x, y) took hold of. The
+  // reach is a thumb's, HANDLE_TOUCH px across, for every pointer, a mouse's
+  // too; how many note units it covers depends on the size the sheet is drawn
+  // right now.
+  function placingGrip(el: Placing, x: number, y: number): PlacingGrip | null {
     const rect = paperRef.current?.getBoundingClientRect();
     const side = rect?.width
       ? noteSide(rect.width, contentRef.current?.rotation ?? 0)
@@ -899,11 +917,7 @@ export default function StickyEditor({
   // One move of a drag on the element being placed, measured from where the
   // drag began and merged into the live element, so a letter typed mid-drag
   // isn't lost. A move is settled back into the stored range as it goes.
-  function dragPlacing(
-    drag: NonNullable<typeof placingDragRef.current>,
-    x: number,
-    y: number,
-  ) {
+  function dragPlacing(drag: PlacingDrag, x: number, y: number) {
     const live = placingRef.current;
     if (!live) return;
     const { grip, from, start } = drag;
@@ -920,21 +934,16 @@ export default function StickyEditor({
     }
   }
 
-  // Placing ends here: the element goes onto the note for good — text trimmed,
-  // and an empty box adds nothing. Safe to call twice: one press can arrive by
-  // the document's pointer-down and then by the handler it lands on.
+  // Placing ends here: the element goes onto the note for good. Safe to call
+  // twice: one press can arrive by the document's pointer-down and then by the
+  // handler it lands on.
   function fixPlacing() {
     const el = placingRef.current;
-    const live = contentRef.current;
     if (!el) return;
     applyPlacing(null);
-    if (!live) return;
-    if (el.type === "sticker") {
-      apply(addElement(live, el));
-      return;
-    }
-    const text = el.text.trim();
-    if (text) apply(addElement(live, { ...el, text }));
+    const fixed = fixedElement(el);
+    const live = contentRef.current;
+    if (fixed && live) apply(addElement(live, fixed));
   }
 
   // --- the tool riding the cursor -----------------------------------------
@@ -1175,9 +1184,10 @@ export default function StickyEditor({
             font={font}
             fontsOpen={fontsOpen}
             onMode={(m) => {
-              // The draw half is an ordinary tool press, so it fixes what is
-              // being placed; the "Aa" half only brings the samples back up.
-              if (m === "draw") fixPlacing();
+              // An ordinary tool press, so it fixes what is being placed —
+              // except "Aa" on a text box, which only brings its samples back.
+              if (m === "draw" || placingRef.current?.type !== "text")
+                fixPlacing();
               setMode(m);
               setFontsOpen(m === "write");
             }}
@@ -1199,7 +1209,10 @@ export default function StickyEditor({
               ref={stickerTab}
               open={sheetOpen}
               lift={tabLift}
-              onClick={() => setSheetOpen((open) => !open)}
+              onClick={() => {
+                fixPlacing();
+                setSheetOpen((open) => !open);
+              }}
             />
           </div>
           <ToolSlot
