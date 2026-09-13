@@ -120,6 +120,13 @@ export default function StickyEditor({
   initialContent?: NoteContent | null;
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
+  // A pointermove's state update has not necessarily landed by the time the
+  // next pointer event runs, and a drag has to read back what the previous
+  // move wrote: settle-or-delete on release needs the moved element, and a rub
+  // needs the elements the last rub left. This ref is the live note; `apply`
+  // is the only way content changes, so the two can't drift.
+  const contentRef = useRef(content);
+  contentRef.current = content;
   const [fanned, setFanned] = useState(false);
   // The pads are only a target once they have flown: a second tap landing on
   // the stack mid-flight would otherwise tear off whichever colour is passing.
@@ -244,14 +251,19 @@ export default function StickyEditor({
   // A pad with no note on the mat tears a fresh sheet off; with a note already
   // there it swaps the stock under the content. Both wait for the objects to
   // stop moving — mid-crumple there is no note to swap the paper under yet.
+  function apply(next: NoteContent) {
+    contentRef.current = next;
+    setContent(next);
+  }
+
   function takeSheet(colour: PaperColour) {
     if (!fanSettled || crumpling) return;
     setFanned(false);
     if (content) {
-      setContent({ ...content, colour });
+      apply({ ...content, colour });
       return;
     }
-    setContent({ ...emptyNote(), colour });
+    apply({ ...emptyNote(), colour });
     setTearing(true);
   }
 
@@ -263,7 +275,7 @@ export default function StickyEditor({
     crumpleTimer.current = setTimeout(() => {
       setCrumpling(false);
       // the live colour, not the one captured at the tap
-      setContent((c) => ({ ...emptyNote(), colour: c?.colour ?? colour }));
+      apply({ ...emptyNote(), colour: contentRef.current?.colour ?? colour });
       setTearing(true);
     }, CRUMPLE_MS);
   }
@@ -342,7 +354,8 @@ export default function StickyEditor({
 
   function onPaperMove(e: ReactPointerEvent<HTMLDivElement>) {
     followCursorTool(e);
-    if (!content) return;
+    const live = contentRef.current;
+    if (!live) return;
 
     const draft = draftRef.current;
     if (draft) {
@@ -366,7 +379,7 @@ export default function StickyEditor({
     drag.y = y;
     // Deliberately unclamped: an element that can't leave the paper can never
     // be dragged off it to be deleted. Settled or deleted on release.
-    setContent((c) => c && moveElement(c, drag.index, dx, dy));
+    apply(moveElement(live, drag.index, dx, dy));
   }
 
   function onPaperUp() {
@@ -378,43 +391,44 @@ export default function StickyEditor({
       draftRef.current = null;
       // A dot (single point) draws nothing via perfect-freehand — needs ≥2, so
       // a tap in draw mode leaves no mark.
-      if (draft.points.length >= 2)
-        setContent((c) => c && addElement(c, draft));
+      if (draft.points.length >= 2 && contentRef.current)
+        apply(addElement(contentRef.current, draft));
       forceRender();
       return;
     }
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
-    const el = content?.elements[drag.index];
-    if (!el) return;
+    const live = contentRef.current;
+    const el = live?.elements[drag.index];
+    if (!live || !el) return;
     if (isOffNote(el)) {
       setGhost(el);
-      setContent((c) => c && removeElement(c, drag.index));
+      apply(removeElement(live, drag.index));
       setSelected(-1);
       return;
     }
     const settled = settleElement(el);
-    if (settled !== el)
-      setContent((c) => c && updateElement(c, drag.index, settled));
+    if (settled !== el) apply(updateElement(live, drag.index, settled));
   }
 
   // One rub of the eraser: whatever is under the nib goes, with a fade.
   function rub(x: number, y: number) {
-    if (!content) return;
-    const hit = hitTest(content, x, y);
-    const el = content.elements[hit];
+    const live = contentRef.current;
+    if (!live) return;
+    const hit = hitTest(live, x, y);
+    const el = live.elements[hit];
     if (!el) return;
     setGhost(el);
-    setContent(removeElement(content, hit));
+    apply(removeElement(live, hit));
   }
 
   function commitText() {
     const draft = textDraft;
     setTextDraft(null);
     const text = draft?.text.trim();
-    if (!draft || !text) return; // an empty box adds nothing
-    setContent((c) => c && addElement(c, { ...draft, text }));
+    if (!draft || !text || !contentRef.current) return; // empty adds nothing
+    apply(addElement(contentRef.current, { ...draft, text }));
   }
 
   // --- the tool riding the cursor -----------------------------------------
