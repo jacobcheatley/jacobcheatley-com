@@ -1,89 +1,106 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { noteSchema } from "./note-schema";
-import { StickyEditor } from "./StickyEditor";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { type Element, emptyNote } from "./note-editor";
+import type { NoteContent } from "./note-schema";
+import StickyEditor from "./StickyEditor";
 
-// The editor talks to the router, the write server-fn, and the fontsource
-// loaders — none of which belong in a jsdom unit test. Stub them at the seams;
-// the real note-editor model and note-schema contract run for real.
-const navigate = vi.fn();
-const addNote = vi.fn().mockResolvedValue({ status: "pending" });
+// The desk island (#73). No tools yet — markers, eraser and stickers land in
+// T4/T5 — so on this mat a note can only be born at the pad stack and only die
+// in the bin. Motion is CSS; these tests assert the state a transition carries,
+// never the transition itself.
 
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
-vi.mock("@tanstack/react-start", () => ({ useServerFn: () => addNote }));
-vi.mock("./sticky-notes.fn", () => ({ addNoteFn: {} }));
-vi.mock("./note-fonts", async (orig) => ({
-  ...(await orig<typeof import("./note-fonts")>()),
-  loadFont: vi.fn(),
-}));
+// exact, not a regex: the fan's backdrop is also named "…pad stack"
+const stack = () => screen.getByRole("button", { name: "pad stack" });
+const pad = (colour: string) =>
+  screen.getByRole("button", { name: new RegExp(`${colour} pad`, "i") });
+const bin = () => screen.getByRole("button", { name: /bin the note/i });
+const note = () => screen.queryByRole("img", { name: /sticky note/i });
+const paper = () =>
+  note()?.closest("[data-colour]")?.getAttribute("data-colour");
 
-afterEach(() => {
-  vi.clearAllMocks();
-  localStorage.clear();
+const HI: Element = {
+  type: "text",
+  x: 40,
+  y: 60,
+  w: 240,
+  text: "hi",
+  font: "casual",
+  color: "black",
+  fontSize: 30,
+  rotation: 0,
+};
+
+const seeded = (over: Partial<NoteContent>): NoteContent => ({
+  ...emptyNote(),
+  ...over,
 });
 
-const surface = () => screen.getByRole("img", { name: /sticky note/i });
-
 describe("StickyEditor", () => {
-  it("shows the four tools and the diegetic fastener submit row", () => {
+  it("starts bare: no note on the mat and no reachable pad", () => {
     render(<StickyEditor />);
-    for (const t of [/marker/i, /^text$/i, /stickers/i, /select and move/i]) {
-      expect(screen.getByRole("button", { name: t })).toBeInTheDocument();
-    }
-    // choosing a fastener IS the submit — no generic "submit" button
-    expect(
-      screen.getByRole("button", { name: /pin with red pin/i }),
-    ).toBeInTheDocument();
+    expect(note()).toBeNull();
+    expect(pad("blue")).toBeDisabled();
+    expect(bin()).toBeDisabled();
   });
 
-  it("blocks submit until a name is given, and doesn't post", async () => {
-    const user = userEvent.setup();
+  it("fans the stack on the first tap, without tearing a sheet off", () => {
     render(<StickyEditor />);
-    await user.click(screen.getByRole("button", { name: /pin with red pin/i }));
+    fireEvent.click(stack());
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/name/i);
-    expect(addNote).not.toHaveBeenCalled();
-    expect(navigate).not.toHaveBeenCalled();
+    expect(pad("blue")).toBeEnabled();
+    expect(note()).toBeNull();
+    // the stack itself is no longer the target — the six pads are
+    expect(screen.queryByRole("button", { name: "pad stack" })).toBeNull();
   });
 
-  it("places a text box and pins the note, posting a contract-valid payload", async () => {
-    const user = userEvent.setup();
+  it("tears a sheet off a fanned pad and closes the stack", () => {
     render(<StickyEditor />);
+    fireEvent.click(stack());
+    fireEvent.click(pad("blue"));
 
-    await user.type(screen.getByLabelText(/your name/i), "ada");
+    expect(paper()).toBe("blue");
+    expect(pad("blue")).toBeDisabled();
+  });
 
-    // pick the text tool, tap the note to drop a box, type, commit
-    await user.click(screen.getByRole("button", { name: /^text$/i }));
-    fireEvent.pointerDown(surface(), { clientX: 40, clientY: 60 });
-    const input = await screen.findByLabelText(/^text box$/i);
-    await user.type(input, "hello wall{Enter}");
-
-    // press a fastener → submit
-    await user.click(screen.getByRole("button", { name: /pin with red pin/i }));
-
-    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(1));
-    const payload = addNote.mock.calls[0]?.[0]?.data;
-    // the emitted payload passes the zod contract (the trust boundary)
-    expect(() => noteSchema.parse(payload)).not.toThrow();
-    expect(payload.author).toBe("ada");
-    expect(payload.content.fastener).toBe("pin-red");
-    expect(payload.content.elements).toContainEqual(
-      expect.objectContaining({ type: "text", text: "hello wall" }),
+  it("swaps the paper under the content when another pad is tapped", () => {
+    render(
+      <StickyEditor
+        initialContent={seeded({ colour: "yellow", elements: [HI] })}
+      />,
     );
-    // the pending copy is written to localStorage for the wall overlay
-    expect(localStorage.getItem("sticky-notes:pending")).toContain("ada");
+    fireEvent.click(stack());
+    fireEvent.click(pad("pink"));
+
+    expect(paper()).toBe("pink");
+    expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
-  it("reveals the marker inks when the marker is in hand", async () => {
-    const user = userEvent.setup();
+  it("closes the fan on a tap anywhere else", () => {
     render(<StickyEditor />);
-    // marker is the default tool, so its inks are visible
-    expect(
-      screen.getByRole("button", { name: /green ink/i }),
-    ).toBeInTheDocument();
-    // switching to select hides them
-    await user.click(screen.getByRole("button", { name: /select and move/i }));
-    expect(screen.queryByRole("button", { name: /green ink/i })).toBeNull();
+    fireEvent.click(stack());
+    fireEvent.click(
+      screen.getByRole("button", { name: /close the pad stack/i }),
+    );
+
+    expect(pad("blue")).toBeDisabled();
+    expect(note()).toBeNull();
+  });
+
+  it("crumples the note into the bin and tears a fresh sheet of the same colour", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <StickyEditor
+          initialContent={seeded({ colour: "pink", elements: [HI] })}
+        />,
+      );
+      fireEvent.click(bin());
+      act(() => void vi.advanceTimersByTime(1000));
+
+      expect(paper()).toBe("pink");
+      expect(screen.queryByText("hi")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

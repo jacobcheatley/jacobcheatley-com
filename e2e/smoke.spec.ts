@@ -11,15 +11,12 @@ test("the retired /guestbook route is gone (404)", async ({ request }) => {
   expect(response.status()).toBe(404);
 });
 
-test("the Sticky Notes editor loads and shows the in-hand tools", async ({
+test("the Sticky Notes editor loads with the mat over the wall", async ({
   page,
 }) => {
   const response = await page.goto("/sticky-notes/new");
   expect(response?.status()).toBe(200);
-  // the client-only island mounts and lays out its tray
-  await expect(page.getByRole("button", { name: /^marker$/i })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /pin with red pin/i }),
-  ).toBeVisible();
-  await expect(page.getByLabel(/your name/i)).toBeVisible();
+  // the mat is already up on a direct load, and its island has mounted
+  await expect(page.getByRole("link", { name: /the wall/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: "pad stack" })).toBeVisible();
 });

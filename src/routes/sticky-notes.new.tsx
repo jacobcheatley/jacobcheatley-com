@@ -1,19 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { DESK_BG, StickyEditor } from "@/projects/sticky-notes/StickyEditor";
 
-// The editor (`/sticky-notes/new`): a full-screen, client-only island. It seeds
-// a note with Math.random and touches localStorage / pointer APIs, so it must
-// mount only in the browser — gate on `mounted` so SSR and the first client
-// render match (a bare desk) and the editor swaps in after hydration.
+// `/sticky-notes/new`: the same page with the cutting mat slid up over the wall.
+// The layout route renders the mat and derives its state from this route
+// matching, so there is nothing to render here — the URL is the whole point.
 export const Route = createFileRoute("/sticky-notes/new")({
-  component: NewNote,
+  component: () => null,
 });
-
-function NewNote() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  // Same desk ground as the mounted editor, so hydration doesn't flash.
-  if (!mounted) return <div className="min-h-dvh" style={DESK_BG} />;
-  return <StickyEditor />;
-}
