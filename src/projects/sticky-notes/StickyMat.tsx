@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { DESK_BG, EASE_OUT, TAPE } from "./desk";
+import { DESK_BG, EASE_OUT, SLIDE_MS, TAPE } from "./desk";
+import type { NoteContent } from "./note-schema";
 
 // The cutting mat: a full-viewport surface that slides up over the cork wall and
 // back down (#69). The route IS its state — `/sticky-notes/new` means up — so
@@ -13,9 +14,18 @@ import { DESK_BG, EASE_OUT, TAPE } from "./desk";
 // mounted after that so a half-built note survives mat-down.
 const StickyEditor = lazy(() => import("./StickyEditor"));
 
-const SLIDE_MS = 500;
-
-export function StickyMat({ up }: { up: boolean }) {
+export function StickyMat({
+  up,
+  landing = null,
+  onLanding,
+}: {
+  up: boolean;
+  // The pinning phase (#77), passed straight through to the island: the note
+  // that has left the mat for the wall, and how the island moves it there and
+  // back. The page owns it, because the wall shows it too.
+  landing?: NoteContent | null;
+  onLanding?: (note: NoteContent | null) => void;
+}) {
   // Latch: once the mat has been up, the island stays mounted under it.
   // A direct /sticky-notes/new load starts latched, so the island SSRs too.
   const [everUp, setEverUp] = useState(up);
@@ -83,7 +93,7 @@ export function StickyMat({ up }: { up: boolean }) {
 
       {everUp && (
         <Suspense fallback={null}>
-          <StickyEditor />
+          <StickyEditor landing={landing} onLanding={onLanding} />
         </Suspense>
       )}
     </div>

@@ -82,6 +82,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
+import { flyToLanding, TapeLabel } from "./pin-up";
 import { SHEET_H, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
@@ -133,9 +134,15 @@ const isInk = (held: Held): held is Ink => held !== null && held !== "eraser";
 
 export default function StickyEditor({
   initialContent = null,
+  landing = null,
+  onLanding,
 }: {
   // Tests seed a half-built note; the UI always starts from a torn-off sheet.
   initialContent?: NoteContent | null;
+  // The pinning phase (#77): the note as it lies on the wall, while it does.
+  // The page owns it (the wall shows it); this island puts it there.
+  landing?: NoteContent | null;
+  onLanding?: (note: NoteContent | null) => void;
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
   // A pointermove's state update has not necessarily landed by the time the
@@ -513,6 +520,20 @@ export default function StickyEditor({
       apply({ ...emptyNote(), colour: contentRef.current?.colour ?? colour });
       setTearing(true);
     }, CRUMPLE_MS);
+  }
+
+  // "pin it up": the note leaves the mat for its slot on the wall. It goes as it
+  // is, bare paper — the fastener is chosen once it has landed.
+  function pinUp() {
+    if (textDraft) commitText(); // what is being typed goes up with it
+    const live = contentRef.current;
+    if (!live || crumpling) return;
+    setSelected(-1);
+    const from = paperRef.current?.getBoundingClientRect();
+    // The wall has to lay the landed note out before there is anywhere to fly
+    // it to, so this render happens now rather than after the handler.
+    flushSync(() => onLanding?.({ ...live, fastener: "none" }));
+    flyToLanding(from);
   }
 
   // Tapping a tool picks it up; tapping the one in your hand (or any other
@@ -1026,6 +1047,9 @@ export default function StickyEditor({
             style={{
               transform: sheetOpen ? "translateY(-12%) scale(.72)" : "none",
               transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
+              // Pinned up, the note is on the wall: the mat slides away bare,
+              // and comes back up with it lying where it was.
+              visibility: landing ? "hidden" : undefined,
             }}
           >
             <div
@@ -1136,6 +1160,13 @@ export default function StickyEditor({
           </div>
         )}
       </div>
+
+      {/* stuck along the mat's top edge, across from "← the wall" */}
+      {content && (
+        <TapeLabel onClick={pinUp} className="absolute top-3 right-3 z-40">
+          pin it up
+        </TapeLabel>
+      )}
 
       {/* a fanned stack closes on a tap anywhere else */}
       {fanned && (

@@ -10,6 +10,10 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 // prototype's ease-out (#70): quick off the mark, long settle.
 export const EASE_OUT = "cubic-bezier(.2,.8,.25,1)";
 
+// The mat's slide over the wall and away — and the pinned note's flight onto
+// the wall (#77), which rides that same slide down.
+export const SLIDE_MS = 500;
+
 // The sticker sheet's ride up off the mat's bottom edge (#75). Here rather
 // than in StickerSheet because the tab that rides up with it is drawn by
 // desk-objects, which is presentational and may not import a stateful
