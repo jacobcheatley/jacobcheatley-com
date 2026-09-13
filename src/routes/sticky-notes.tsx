@@ -13,8 +13,9 @@ export const Route = createFileRoute("/sticky-notes")({
 
 function StickyNotesRoute() {
   const notes = Route.useLoaderData();
-  // The route IS the mat state: matching the editor's URL means the mat is up.
-  // A miss returns undefined rather than throwing, which is the "wall" case.
+  // Matching the editor's URL means the mat is up, unless a note is being
+  // pinned up — StickyNotes decides that (`up = matUp && !landing`). A miss
+  // returns undefined rather than throwing, which is the "wall" case.
   const matUp =
     useMatch({ from: "/sticky-notes/new", shouldThrow: false }) !== undefined;
 

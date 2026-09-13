@@ -24,6 +24,7 @@ import {
   padStyle,
   SHAKE_MS,
   StickerTab,
+  TapeLabel,
   ToolSlot,
 } from "./desk-objects";
 import {
@@ -82,7 +83,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
-import { flyToLanding, PinUp, TapeLabel } from "./pin-up";
+import { flyToLanding, PinUp } from "./pin-up";
 import { SHEET_H, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
@@ -134,15 +135,15 @@ const isInk = (held: Held): held is Ink => held !== null && held !== "eraser";
 
 export default function StickyEditor({
   initialContent = null,
-  landing = null,
+  landing,
   onLanding,
 }: {
   // Tests seed a half-built note; the UI always starts from a torn-off sheet.
   initialContent?: NoteContent | null;
   // The pinning phase (#77): the note as it lies on the wall, while it does.
   // The page owns it (the wall shows it); this island puts it there.
-  landing?: NoteContent | null;
-  onLanding?: (note: NoteContent | null) => void;
+  landing?: NoteContent;
+  onLanding?: (note: NoteContent | undefined) => void;
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
   // A pointermove's state update has not necessarily landed by the time the
@@ -1319,7 +1320,7 @@ export default function StickyEditor({
           // Rendered now rather than after the handler: the mat is inert until
           // it is up again, and focus can't land on anything inside it.
           onBack={() => {
-            flushSync(() => onLanding(null));
+            flushSync(() => onLanding(undefined));
             pinButton.current?.focus();
           }}
           // sent: the mat is bare again for the next note

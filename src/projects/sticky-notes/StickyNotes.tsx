@@ -15,12 +15,14 @@ export function StickyNotes({
   notes: WallNote[];
   matUp: boolean;
 }) {
-  const [landing, setLanding] = useState<NoteContent | null>(null);
+  // No first value, so the type is `NoteContent | undefined`: nothing has
+  // landed yet.
+  const [landing, setLanding] = useState<NoteContent>();
   // Leaving the editor's URL — Back, or the submit's own navigation — ends the
   // pinning phase; the draft is still on the mat, which stays mounted. Setting
   // state while rendering is React's way to follow a prop without an effect: it
   // re-renders at once, so no frame shows a stale landed note.
-  if (!matUp && landing) setLanding(null);
+  if (!matUp && landing) setLanding(undefined);
   const up = matUp && !landing;
 
   return (
@@ -28,7 +30,7 @@ export function StickyNotes({
       {/* the mat covers the wall but does not replace it: while it is up the
           wall underneath must be neither tabbable nor clickable */}
       <div inert={up}>
-        <StickyWall notes={notes} landing={landing ?? undefined} />
+        <StickyWall notes={notes} landing={landing} />
       </div>
       <StickyMat up={up} landing={landing} onLanding={setLanding} />
     </>

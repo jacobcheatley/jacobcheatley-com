@@ -56,28 +56,90 @@ const approved = (author: string) => ({
   } satisfies NoteContent,
 });
 
+// --- what there is to look at ----------------------------------------------
+
 // The mat is the surface the "← the wall" link is stuck to.
 const mat = () =>
   screen.getByRole("link", { name: /the wall/i }).parentElement as HTMLElement;
-const landed = () => document.querySelector<HTMLElement>("[data-landing]");
+// the note being pinned up, as the wall lays it out
+const landing = () => document.querySelector<HTMLElement>("[data-landing]");
 // the sheet lying on the mat, as opposed to any note on the wall
 const matPaper = () => document.querySelector<HTMLElement>("[data-colour]");
-const pinItUp = () =>
-  fireEvent.click(screen.getByRole("button", { name: /pin it up/i }));
+const marksOnTheMat = () =>
+  matPaper()?.querySelector("[data-elements]")?.childElementCount ?? 0;
+const drawer = () => screen.queryByRole("region", { name: /fastener drawer/i });
+const drawerTab = () =>
+  screen.queryByRole("button", { name: /open the fastener drawer/i });
+// the nine fasteners in the drawer, a red pin first
+const choices = () =>
+  within(drawer() as HTMLElement).getAllByRole("button", {
+    name: /^fasten it with/i,
+  });
+// what the landed note is fastened with, as the wall wears it
+const fastenedWith = () =>
+  landing()?.querySelector("[data-press]")?.getAttribute("data-press") ??
+  "none";
+const nameTag = () => screen.queryByRole("textbox", { name: /your name/i });
+const tick = () => screen.getByRole("button", { name: /sign the tag/i });
+// what the one POST carried
+const posted = () => addNote.mock.calls[0]?.[0]?.data;
+const storedPending = () =>
+  JSON.parse(localStorage.getItem("sticky-notes:pending") ?? "[]");
+// the submit's navigation, as the router would be asked for it
+const backToTheWall = { to: "/sticky-notes", replace: true };
+
+// --- what there is to do -----------------------------------------------------
+
+const tap = (name: RegExp) =>
+  fireEvent.click(screen.getByRole("button", { name }));
+const pinItUp = () => tap(/pin it up/i);
+const putTheDrawerAway = () => tap(/put the drawer away/i);
 
 // The island is lazy, so wait for it on the real clock; then take the clock,
 // because the fan only answers a tap once it has settled — and give it back
 // once the sheet is down, since the submit waits on a promise.
-async function tearOff(colour = "yellow") {
+async function tearOff(colour: string) {
   await screen.findByRole("button", { name: /fan out the pads/i });
   vi.useFakeTimers();
-  fireEvent.click(screen.getByRole("button", { name: /fan out the pads/i }));
+  tap(/fan out the pads/i);
   wait(300);
-  fireEvent.click(
-    screen.getByRole("button", { name: new RegExp(`${colour} sheet`, "i") }),
-  );
+  tap(new RegExp(`${colour} sheet`, "i"));
   wait(300);
   vi.useRealTimers();
+}
+
+// a mark on the sheet, so there is content to come back with
+function drawAStroke() {
+  tap(/pick up the black marker/i);
+  const paper = matPaper() as HTMLElement;
+  fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });
+  fireEvent.pointerMove(paper, { pointerId: 1, clientX: 30, clientY: 20 });
+  fireEvent.pointerUp(paper, { pointerId: 1, clientX: 30, clientY: 20 });
+}
+
+// With the mat up (each test renders the page itself, for its `rerender`):
+// a sheet torn off, marked if asked, and pinned up...
+type Sheet = { colour?: string; marked?: boolean };
+async function pinnedUp({ colour = "yellow", marked = false }: Sheet = {}) {
+  await tearOff(colour);
+  if (marked) drawAStroke();
+  pinItUp();
+}
+// ...then fastened with a red pin, so the tag is out.
+async function fastened(sheet?: Sheet) {
+  await pinnedUp(sheet);
+  tap(/with a red pin/i);
+}
+
+// Hold the next POST in flight; the function returned lets it arrive.
+function holdThePost(): () => void {
+  let arrive = () => {};
+  addNote.mockReturnValue(
+    new Promise((resolve) => {
+      arrive = () => resolve({ status: "pending" });
+    }),
+  );
+  return () => arrive();
 }
 
 beforeEach(() => {
@@ -102,13 +164,13 @@ describe("StickyNotes pin it up", () => {
 
   it("slides the mat down and lands the note on the wall, at the top of the page", async () => {
     render(<StickyNotes notes={[approved("sam")]} matUp />);
-    await tearOff();
-    expect(landed()).toBeNull();
+    await tearOff("yellow");
+    expect(landing()).toBeNull();
 
     pinItUp();
 
     expect(mat()).toHaveStyle({ transform: "translateY(100%)" });
-    const note = landed();
+    const note = landing();
     expect(note).not.toBeNull();
     expect(
       within(note as HTMLElement).getByRole("img", { name: /sticky note/i }),
@@ -121,32 +183,18 @@ describe("StickyNotes pin it up", () => {
   });
 });
 
-const drawer = () => screen.getByRole("region", { name: /fastener drawer/i });
-const drawerTab = () =>
-  screen.queryByRole("button", { name: /open the fastener drawer/i });
-// what the landed note is fastened with, as the wall wears it
-const fastenedWith = () =>
-  landed()?.querySelector("[data-press]")?.getAttribute("data-press") ?? "none";
-
 describe("StickyNotes fastener drawer", () => {
-  async function pinned() {
-    render(<StickyNotes notes={[]} matUp />);
-    await tearOff();
-    pinItUp();
-  }
-
   it("rises over the wall with the nine fasteners in it", async () => {
-    await pinned();
+    render(<StickyNotes notes={[]} matUp />);
+    await pinnedUp();
     expect(drawer()).not.toHaveAttribute("inert");
-    expect(
-      within(drawer()).getAllByRole("button", { name: /^fasten it with/i }),
-    ).toHaveLength(9);
+    expect(choices()).toHaveLength(9);
     expect(drawerTab()).toBeNull();
   });
 
   it("fastens the landed note with the one chosen, and folds away to a tab", async () => {
-    await pinned();
-    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+    render(<StickyNotes notes={[]} matUp />);
+    await fastened();
 
     expect(fastenedWith()).toBe("pin-red");
     expect(drawer()).toHaveAttribute("inert");
@@ -154,21 +202,20 @@ describe("StickyNotes fastener drawer", () => {
   });
 
   it("opens again from its tab, and takes another choice", async () => {
-    await pinned();
-    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+    render(<StickyNotes notes={[]} matUp />);
+    await fastened();
     fireEvent.click(drawerTab() as HTMLElement);
 
     expect(drawer()).not.toHaveAttribute("inert");
     expect(drawerTab()).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /with two staples/i }));
+    tap(/with two staples/i);
     expect(fastenedWith()).toBe("staples");
   });
 
   it("leaves the note with no fastener when put away without a choice", async () => {
-    await pinned();
-    fireEvent.click(
-      screen.getByRole("button", { name: /put the drawer away/i }),
-    );
+    render(<StickyNotes notes={[]} matUp />);
+    await pinnedUp();
+    putTheDrawerAway();
 
     expect(fastenedWith()).toBe("none");
     expect(drawer()).toHaveAttribute("inert");
@@ -176,54 +223,40 @@ describe("StickyNotes fastener drawer", () => {
   });
 });
 
-const nameTag = () => screen.queryByRole("textbox", { name: /your name/i });
-const tick = () => screen.getByRole("button", { name: /sign the tag/i });
-// what the one POST carried
-const posted = () => addNote.mock.calls[0]?.[0]?.data;
-
 describe("StickyNotes tag", () => {
-  // pinned up and fastened with a red pin, so the tag is out
-  async function fastened() {
-    render(<StickyNotes notes={[]} matUp />);
-    await tearOff();
-    pinItUp();
-    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
-  }
-
   it("hangs a name tag under the landed note once the drawer folds away", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await tearOff();
-    pinItUp();
+    await pinnedUp();
     expect(nameTag()).toBeNull(); // the drawer is still up
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /put the drawer away/i }),
-    );
+    putTheDrawerAway();
     const input = nameTag();
-    expect(landed()).toContainElement(input);
+    expect(landing()).toContainElement(input);
     // a name, not a sentence: no browser second-guessing what is typed
     expect(input).toHaveAttribute("autocomplete", "off");
     expect(input).toHaveAttribute("autocapitalize", "none");
     expect(input).toHaveAttribute("spellcheck", "false");
     expect(input).toHaveAttribute("maxlength", "50");
     expect(input).toHaveAttribute("placeholder", "your name");
+    // a class on purpose: #77 asks for CSS text-transform, so the name shows
+    // lowercase as it is typed (the schema lowercases what is stored)
     expect(input).toHaveClass("lowercase");
   });
 
   it("keeps what was typed on the tag while the drawer is open again", async () => {
     const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
     await fastened();
     await user.type(nameTag() as HTMLElement, "ada");
     fireEvent.click(drawerTab() as HTMLElement);
-    fireEvent.click(
-      screen.getByRole("button", { name: /put the drawer away/i }),
-    );
+    putTheDrawerAway();
 
     expect(nameTag()).toHaveValue("ada");
   });
 
   it("pins the note up under the name on Enter, lowercased, fastener and all", async () => {
     const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
     await fastened();
     await user.type(nameTag() as HTMLElement, "  Ada {Enter}");
 
@@ -236,6 +269,7 @@ describe("StickyNotes tag", () => {
 
   it("pins it up from the tick on the tag too, for a thumb", async () => {
     const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
     await fastened();
     await user.type(nameTag() as HTMLElement, "lee");
     await user.click(tick());
@@ -246,6 +280,7 @@ describe("StickyNotes tag", () => {
 
   it("shakes a tag with no name on it, and posts nothing", async () => {
     const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
     await fastened();
     await user.type(nameTag() as HTMLElement, "   ");
     await user.click(tick());
@@ -255,6 +290,7 @@ describe("StickyNotes tag", () => {
   });
 
   it("stops shaking on the clock, so a second blank signing shakes again", async () => {
+    render(<StickyNotes notes={[]} matUp />);
     await fastened();
     const tag = nameTag()?.closest("form");
     // the clock, not animationend: reduced motion has no animation to end
@@ -270,76 +306,50 @@ describe("StickyNotes tag", () => {
 });
 
 describe("StickyNotes focus", () => {
-  const choices = () =>
-    within(drawer()).getAllByRole("button", { name: /^fasten it with/i });
-
-  it("puts the keyboard on the fasteners as the drawer rises, and again when it reopens", async () => {
+  it("starts in the drawer, not on the button the mat took away", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
-    fireEvent.click(drawerTab() as HTMLElement);
+    await pinnedUp();
     expect(choices()[0]).toHaveFocus();
   });
 
-  it("starts in the drawer, not on the button the mat took away", async () => {
+  it("goes back into the drawer when it opens again from its tab", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await tearOff();
-    pinItUp();
+    await fastened();
+    fireEvent.click(drawerTab() as HTMLElement);
     expect(choices()[0]).toHaveFocus();
   });
 
   it("moves to the name tag once a fastener is chosen", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
+    await fastened();
     expect(nameTag()).toHaveFocus();
   });
 
   it("moves to the name tag when the drawer is put away", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await tearOff();
-    pinItUp();
-    fireEvent.click(
-      screen.getByRole("button", { name: /put the drawer away/i }),
-    );
+    await pinnedUp();
+    putTheDrawerAway();
     expect(nameTag()).toHaveFocus();
   });
 
   it("goes back to pin it up when the note goes back to the desk", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
-    fireEvent.click(screen.getByRole("button", { name: /back to the desk/i }));
+    await fastened();
+    tap(/back to the desk/i);
     expect(screen.getByRole("button", { name: /pin it up/i })).toHaveFocus();
   });
 });
 
-// a mark on the sheet, so there is content to come back with
-function drawAStroke() {
-  fireEvent.click(
-    screen.getByRole("button", { name: /pick up the black marker/i }),
-  );
-  const paper = matPaper() as HTMLElement;
-  fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });
-  fireEvent.pointerMove(paper, { pointerId: 1, clientX: 30, clientY: 20 });
-  fireEvent.pointerUp(paper, { pointerId: 1, clientX: 30, clientY: 20 });
-}
-const marksOnTheMat = () =>
-  matPaper()?.querySelector("[data-elements]")?.childElementCount ?? 0;
-
 describe("StickyNotes abandoning a pin", () => {
   it("brings the note back to the desk with the mat, marks and all, unfastened", async () => {
     render(<StickyNotes notes={[]} matUp />);
-    await tearOff("pink");
-    drawAStroke();
-    expect(marksOnTheMat()).toBe(1);
-    pinItUp();
-    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+    await fastened({ colour: "pink", marked: true });
 
-    fireEvent.click(screen.getByRole("button", { name: /back to the desk/i }));
+    tap(/back to the desk/i);
 
     expect(mat()).toHaveStyle({ transform: "translateY(0)" });
-    expect(landed()).toBeNull();
-    expect(
-      screen.queryByRole("region", { name: /fastener drawer/i }),
-    ).toBeNull();
+    expect(landing()).toBeNull();
+    expect(drawer()).toBeNull();
     expect(matPaper()).toBeVisible();
     expect(matPaper()).toHaveAttribute("data-colour", "pink");
     expect(marksOnTheMat()).toBe(1);
@@ -350,15 +360,11 @@ describe("StickyNotes abandoning a pin", () => {
 
   it("keeps the draft in memory when Back leaves mid-pin, for the next time the mat comes up", async () => {
     const { rerender } = render(<StickyNotes notes={[]} matUp />);
-    await tearOff("pink");
-    drawAStroke();
-    pinItUp();
+    await pinnedUp({ colour: "pink", marked: true });
 
     rerender(<StickyNotes notes={[]} matUp={false} />); // Back
-    expect(landed()).toBeNull();
-    expect(
-      screen.queryByRole("region", { name: /fastener drawer/i }),
-    ).toBeNull();
+    expect(landing()).toBeNull();
+    expect(drawer()).toBeNull();
 
     rerender(<StickyNotes notes={[]} matUp />); // the invite again
     expect(mat()).toHaveStyle({ transform: "translateY(0)" });
@@ -368,23 +374,11 @@ describe("StickyNotes abandoning a pin", () => {
   });
 });
 
-const storedPending = () =>
-  JSON.parse(localStorage.getItem("sticky-notes:pending") ?? "[]");
-// the submit's navigation, as the router would be asked for it
-const backToTheWall = { to: "/sticky-notes", replace: true };
-
-// With the mat up: tear a sheet off, pin it up and fasten it with a red pin.
-async function pinAndFasten() {
-  await tearOff();
-  pinItUp();
-  fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
-}
-
 describe("StickyNotes submit", () => {
   it("keeps the note as pending and goes back to the wall in place of the editor's URL", async () => {
     const user = userEvent.setup();
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
+    await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(backToTheWall));
@@ -394,15 +388,10 @@ describe("StickyNotes submit", () => {
   });
 
   it("posts once, however often the tag is signed while the note is on its way", async () => {
-    let arrive: () => void = () => {};
-    addNote.mockReturnValue(
-      new Promise((resolve) => {
-        arrive = () => resolve({ status: "pending" });
-      }),
-    );
+    const arrive = holdThePost();
     const user = userEvent.setup();
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
+    await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
     await user.click(tick());
     await user.type(nameTag() as HTMLElement, "{Enter}");
@@ -413,33 +402,22 @@ describe("StickyNotes submit", () => {
   });
 
   it("keeps the fasteners shut while the note is on its way", async () => {
-    addNote.mockReturnValue(new Promise(() => {})); // never arrives
+    holdThePost(); // and never let it arrive
     const user = userEvent.setup();
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
+    await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
 
     // what was posted is what lands: no changing the fastener under it now
     expect(drawerTab()).toBeDisabled();
-    for (const choice of within(drawer()).getAllByRole("button", {
-      name: /^fasten it with/i,
-    }))
-      expect(choice).toBeDisabled();
+    for (const choice of choices()) expect(choice).toBeDisabled();
   });
 
   it("leaves the mat alone when a post from a pin that has since ended arrives", async () => {
-    let arrive: () => void = () => {};
-    addNote.mockReturnValue(
-      new Promise((resolve) => {
-        arrive = () => resolve({ status: "pending" });
-      }),
-    );
+    const arrive = holdThePost();
     const user = userEvent.setup();
     const { rerender } = render(<StickyNotes notes={[]} matUp />);
-    await tearOff("pink");
-    drawAStroke();
-    pinItUp();
-    fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+    await fastened({ colour: "pink", marked: true });
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
     rerender(<StickyNotes notes={[]} matUp={false} />); // Back, mid-post
     rerender(<StickyNotes notes={[]} matUp />); // the invite again
@@ -459,11 +437,11 @@ describe("StickyNotes submit", () => {
     addNote.mockRejectedValueOnce(new Error("offline"));
     const user = userEvent.setup();
     render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
+    await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
 
     const message = await screen.findByRole("alert");
-    expect(landed()).toContainElement(message);
+    expect(landing()).toContainElement(message);
     expect(navigate).not.toHaveBeenCalled();
     expect(storedPending()).toEqual([]);
 
@@ -475,7 +453,7 @@ describe("StickyNotes submit", () => {
   it("shows two notes pinned up one after the other both as pending", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<StickyNotes notes={[]} matUp />);
-    await pinAndFasten();
+    await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
     // the navigation lands on the wall, and the invite brings the mat back up
@@ -483,7 +461,7 @@ describe("StickyNotes submit", () => {
     rerender(<StickyNotes notes={[]} matUp />);
     expect(matPaper()).toBeNull(); // a fresh start, not the note just sent
 
-    await pinAndFasten();
+    await fastened();
     await user.type(nameTag() as HTMLElement, "lee{Enter}");
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(2));
     rerender(<StickyNotes notes={[]} matUp={false} />);

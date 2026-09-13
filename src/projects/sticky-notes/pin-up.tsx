@@ -1,16 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  type CSSProperties,
-  type ReactNode,
-  type Ref,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { EASE_OUT, SLIDE_MS, STILL, TAPE } from "./desk";
-import { SHAKE_MS } from "./desk-objects";
+import { EASE_OUT, flightTransform, SLIDE_MS, STILL } from "./desk";
+import { SHAKE_MS, TapeLabel } from "./desk-objects";
 import { FONT_FAMILIES } from "./note-fonts";
 import { FastenerPreview } from "./note-render";
 import {
@@ -46,7 +39,7 @@ const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
 };
 
 // A cardboard box of stationery; each fastener lies in a compartment of its own.
-const TRAY: CSSProperties = {
+const DRAWER_BOX: CSSProperties = {
   background: "linear-gradient(180deg, #dcc394, #c3a26b)",
   boxShadow:
     "0 -12px 30px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.35)",
@@ -102,6 +95,9 @@ export function PinUp({
   const addNote = useServerFn(addNoteFn);
   // The wall renders the slot in the same commit this mounts in, so it is
   // there to be found once that commit has landed.
+  // ponytail: found once, on mount — stale if the wall ever remounts that slot
+  // mid-pin. Upgrade: the wall hands the slot up through a callback ref, or the
+  // page passes a portal target down to both.
   const [tagSlot, setTagSlot] = useState<Element | null>(null);
   useEffect(() => {
     setTagSlot(document.querySelector("[data-landing-tag]"));
@@ -116,6 +112,9 @@ export function PinUp({
         return false;
       // The content is past a cap the editor doesn't police (the byte size):
       // say so, rather than shake at a name that was fine.
+      // ponytail: the visitor only learns at the signing, after the flight.
+      // Upgrade: a live size check in the editor, refusing the mark that
+      // would tip the note over.
       setError("too much on this note to pin up");
       return true;
     }
@@ -305,7 +304,7 @@ function FastenerDrawer({
       >
         <div
           className="rounded-t-md px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-          style={TRAY}
+          style={DRAWER_BOX}
         >
           <div className="flex justify-end">
             <button
@@ -342,39 +341,12 @@ function FastenerDrawer({
           disabled={locked}
           onClick={onOpen}
           className="-translate-x-1/2 fixed bottom-0 left-1/2 z-50 min-h-11 rounded-t-md border-0 px-5 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-[#5c4523] text-lg"
-          style={{ ...TRAY, fontFamily: FONT_FAMILIES.casual }}
+          style={{ ...DRAWER_BOX, fontFamily: FONT_FAMILIES.casual }}
         >
           fasteners
         </button>
       )}
     </>
-  );
-}
-
-// A strip of masking tape with a word on it, in the casual hand: the desk's own
-// buttons ("pin it up", "back to the desk"), stuck on rather than printed.
-export function TapeLabel({
-  children,
-  onClick,
-  className = "",
-  ref,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  className?: string;
-  // for whoever puts the keyboard back on it; a plain prop in React 19
-  ref?: Ref<HTMLButtonElement>;
-}) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onClick}
-      className={`border-0 px-4 py-1.5 text-[1.1875rem] leading-snug ${className}`}
-      style={{ ...TAPE, color: "#4a412c", fontFamily: FONT_FAMILIES.casual }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -389,19 +361,7 @@ export function flyToLanding(from: DOMRect | undefined): void {
   const tile = document.querySelector<HTMLElement>("[data-landing]");
   const to = tile?.getBoundingClientRect();
   if (!tile || !from || !to?.width) return; // nothing laid out (jsdom)
-  const scale = from.width / to.width;
-  // A wall tile is taller than its paper by the fastener's headroom, all of it
-  // above the sheet, so the sheet's centre sits half that headroom below the
-  // tile's — and that offset grows with the scale.
-  // ponytail: centres off the rotated bounding boxes, which is out by a pixel
-  // or two at the steepest tilt; unrotate the boxes if the landing ever shows
-  // a nudge.
-  const dx = from.left + from.width / 2 - (to.left + to.width / 2);
-  const dy =
-    from.top +
-    from.height / 2 -
-    (to.top + to.height / 2) -
-    (scale * (to.height - to.width)) / 2;
+  const { dx, dy, scale } = flightTransform(from, to);
   tile.style.transition = "none";
   tile.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
   // Reading layout here makes the browser take the start position before the

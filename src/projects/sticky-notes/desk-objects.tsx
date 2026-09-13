@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { EASE_OUT, SHEET_MS, STILL } from "./desk";
+import { EASE_OUT, SHEET_MS, STILL, TAPE } from "./desk";
 import { FONT_FAMILIES } from "./note-fonts";
 import { INK, PAPER } from "./note-render";
 import {
@@ -572,6 +572,33 @@ export function StickerTab({
           }}
         />
       </span>
+    </button>
+  );
+}
+
+// A strip of masking tape with a word on it, in the casual hand: the desk's own
+// buttons ("pin it up", "back to the desk"), stuck on rather than printed.
+export function TapeLabel({
+  children,
+  onClick,
+  className = "",
+  ref,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  className?: string;
+  // for whoever puts the keyboard back on it; a plain prop in React 19
+  ref?: Ref<HTMLButtonElement>;
+}) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      className={`border-0 px-4 py-1.5 text-[1.1875rem] leading-snug ${className}`}
+      style={{ ...TAPE, color: "#4a412c", fontFamily: FONT_FAMILIES.casual }}
+    >
+      {children}
     </button>
   );
 }

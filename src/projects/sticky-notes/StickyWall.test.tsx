@@ -163,10 +163,11 @@ describe("StickyWall", () => {
     expect(again).not.toBe(first);
   });
 
-  it("keeps the invite tile-sized while a note lands on an empty wall", () => {
+  it("keeps the small invite, not the empty wall's, while a note lands on an empty wall", () => {
     render(<StickyWall notes={[]} landing={content()} />);
-    expect(screen.getByRole("link", { name: /pin a note/i })).toHaveClass(
-      "w-32",
+    // "+ pin a note" is the tile-sized one; the empty wall's asks for the first
+    expect(screen.getByRole("link", { name: /pin a note/i })).toHaveTextContent(
+      "+ pin",
     );
   });
 

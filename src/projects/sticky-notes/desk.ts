@@ -14,6 +14,36 @@ export const EASE_OUT = "cubic-bezier(.2,.8,.25,1)";
 // the wall (#77), which rides that same slide down.
 export const SLIDE_MS = 500;
 
+// A box on screen as the flight reads it: a DOMRect is one, and so is a plain
+// object in a test.
+type Box = { left: number; top: number; width: number; height: number };
+
+// The pinned note's flight onto the wall (#77), as numbers: the translate and
+// scale that put its wall tile back over the sheet it lay as on the mat, for
+// the flight to let go of. The scale is about the tile's centre (CSS's default
+// origin). A wall tile is taller than its paper by the fastener's headroom,
+// all of it above the sheet, so the sheet's centre sits half that headroom
+// below the tile's — and that offset grows with the scale.
+// ponytail: centres off the rotated bounding boxes, which is out by a pixel
+// or two at the steepest tilt; unrotate the boxes if the landing ever shows
+// a nudge.
+export function flightTransform(
+  from: Box,
+  to: Box,
+): { dx: number; dy: number; scale: number } {
+  const scale = from.width / to.width;
+  const headroom = to.height - to.width;
+  return {
+    dx: from.left + from.width / 2 - (to.left + to.width / 2),
+    dy:
+      from.top +
+      from.height / 2 -
+      (to.top + to.height / 2) -
+      (scale * headroom) / 2,
+    scale,
+  };
+}
+
 // The sticker sheet's ride up off the mat's bottom edge (#75). Here rather
 // than in StickerSheet because the tab that rides up with it is drawn by
 // desk-objects, which is presentational and may not import a stateful

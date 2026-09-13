@@ -4,8 +4,9 @@ import { DESK_BG, EASE_OUT, SLIDE_MS, TAPE } from "./desk";
 import type { NoteContent } from "./note-schema";
 
 // The cutting mat: a full-viewport surface that slides up over the cork wall and
-// back down (#69). The route IS its state — `/sticky-notes/new` means up — so
-// the wall never unmounts; the mat just covers it.
+// back down (#69). It is up on `/sticky-notes/new`, except while a note is
+// being pinned up (StickyNotes: `up = matUp && !landing`); either way the wall
+// never unmounts, the mat just covers it.
 //
 // This module is the mat *surface* only, and it SSRs: a direct load of
 // /sticky-notes/new paints the mat already in place. Everything that lives ON
@@ -16,15 +17,15 @@ const StickyEditor = lazy(() => import("./StickyEditor"));
 
 export function StickyMat({
   up,
-  landing = null,
+  landing,
   onLanding,
 }: {
   up: boolean;
   // The pinning phase (#77), passed straight through to the island: the note
   // that has left the mat for the wall, and how the island moves it there and
   // back. The page owns it, because the wall shows it too.
-  landing?: NoteContent | null;
-  onLanding?: (note: NoteContent | null) => void;
+  landing?: NoteContent;
+  onLanding?: (note: NoteContent | undefined) => void;
 }) {
   // Latch: once the mat has been up, the island stays mounted under it.
   // A direct /sticky-notes/new load starts latched, so the island SSRs too.

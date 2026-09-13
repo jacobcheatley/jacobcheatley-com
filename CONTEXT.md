@@ -79,6 +79,10 @@ Using the held Marker to write: a tap on the Note opens a **Text box** in that M
 A sheet of printed emoji that pulls up from its tab on the Tray. A **Sticker** is peeled off it and dragged onto the Note; the sheet never runs out.
 _Avoid_: emoji picker
 
+**Landing**:
+A Note pinned up off the **Mat** and lying in the wall's newest slot until its **Tag** is signed — the pinning phase. The Mat slides away from under it; on the wall it takes its **Fastener** and hangs as it will once submitted, marked pending. Back to the desk (or Back) returns it to the Mat as it left, with no Fastener.
+_Avoid_: preview, draft (for the Note on the wall)
+
 **Fastener drawer**:
 The box of the nine **Fasteners** that rises over the wall once a Note is pinned up, each shown as it will look on that Note. Choosing one presses it on, and the drawer folds to a tab that opens it again until the Tag is signed. Put away without a choice, the Note keeps `none`.
 
