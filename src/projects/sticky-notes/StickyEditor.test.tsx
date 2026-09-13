@@ -19,9 +19,12 @@ const CRUMPLED = 600; // > CRUMPLE_MS
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
 const stack = () => screen.getByRole("button", { name: /fan out the pads/i });
-// the only buttons naming a colour are the pads
+// a pad is the only button whose label ends in that colour's paper/sheet —
+// the markers name colours too ("Pick up the blue marker")
 const pad = (colour: string) =>
-  screen.getByRole("button", { name: new RegExp(colour, "i") });
+  screen.getByRole("button", {
+    name: new RegExp(`${colour} (paper|sheet)`, "i"),
+  });
 const bin = () => screen.getByRole("button", { name: /bin this note/i });
 const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
@@ -161,5 +164,55 @@ describe("StickyEditor", () => {
 
     expect(paper()).toBe("pink");
     expect(screen.queryByText("hi")).toBeNull();
+  });
+});
+
+describe("StickyEditor tools", () => {
+  it("picks a marker up and puts it down again", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /pick up the red marker/i }),
+    );
+    expect(
+      screen.getByRole("button", { name: /put down the red marker/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /put down the red marker/i }),
+    );
+    expect(
+      screen.getByRole("button", { name: /pick up the red marker/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("holds one tool at a time", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /pick up the red marker/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /pick up the eraser/i }),
+    );
+
+    expect(
+      screen.getByRole("button", { name: /pick up the red marker/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /put down the eraser/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("tints the draw/write control with the held ink and disables it in hand mode", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const draw = () =>
+      screen.getByRole("button", { name: /draw with the marker/i });
+    expect(draw()).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /pick up the green marker/i }),
+    );
+    expect(draw()).toBeEnabled();
+    expect(draw().style.color).toBe("rgb(22, 163, 74)");
   });
 });

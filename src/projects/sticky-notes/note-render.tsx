@@ -498,9 +498,11 @@ function fastenerFront(fastener: Fastener, ids: FastenerIds) {
   }
 }
 
+// Exported so the editor can redraw one element on its own — the fade a rubbed
+// -out element leaves behind (#74), through this exact code so it matches.
 // Array order IS z-order and element identity (no stored id) and this render
 // never reorders, so the array index is the correct, stable React key.
-function renderElement(el: NoteElement, index: number) {
+export function renderElement(el: NoteElement, index: number) {
   switch (el.type) {
     case "stroke":
       return (
