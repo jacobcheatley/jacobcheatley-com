@@ -27,7 +27,7 @@ const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
 // 48px thumb target (the #70 verdict) and never shrinks, while the stationery
 // inside keeps the size it looks right at. The strip wraps rather than squeezes.
 const TOUCH = 48;
-const MARKER_W = 22;
+const MARKER_W = 30; // drawn width — the T0 verdict (#70) wanted fatter objects, not just fatter targets
 const MARKER_H = 72;
 const TOOL_H = 88;
 const ERASER_W = 40;
