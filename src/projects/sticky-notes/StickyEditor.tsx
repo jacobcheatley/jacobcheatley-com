@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -42,6 +43,7 @@ import {
 } from "./note-editor";
 import { loadFont } from "./note-fonts";
 import {
+  INK,
   NOTE_PAPER_ASPECT_RATIO,
   NotePaper,
   renderElement,
@@ -59,6 +61,7 @@ import {
   PAPER_COLOURS,
   type PaperColour,
 } from "./note-schema";
+import { LINE_HEIGHT, wrapLines } from "./note-text";
 import { SHEET_H, SHEET_MS, StickerSheet, TAB_PERCH } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74): the pad stack, the sheet torn off it,
@@ -80,6 +83,8 @@ import { SHEET_H, SHEET_MS, StickerSheet, TAB_PERCH } from "./StickerSheet";
 const TEAR_MS = 400;
 const CRUMPLE_MS = 400;
 const GHOST_MS = 200; // how long a rubbed-out element lingers as a fade
+
+const CARET_MS = 1000; // one blink, on a step: a cursor snaps, it doesn't fade
 
 const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
 const TEXT_SIZE = 30;
@@ -152,6 +157,11 @@ export default function StickyEditor({
     out: boolean;
     id: number;
   } | null>(null);
+
+  // Where the next glyph would land, in note units. Without a caret there is
+  // no telling where you are typing (#74) — and it is measured off the glyphs
+  // the renderer drew, so it cannot drift from the text it follows.
+  const [caret, setCaret] = useState<{ x: number; y: number } | null>(null);
 
   // How far the sticker tab has to rise to perch on the open sheet's corner.
   // Measured rather than assumed: where the tab rests is the strip's business,
@@ -298,6 +308,23 @@ export default function StickyEditor({
       cancelAnimationFrame(inner);
     };
   }, [ghost]);
+
+  // Before the browser paints the glyph, not after: the caret must not trail a
+  // frame behind the letter it follows.
+  useLayoutEffect(() => {
+    if (!textDraft) {
+      setCaret(null);
+      return;
+    }
+    setCaret(caretAt(paperRef.current, textDraft));
+    // The caret only ever sits at the end, so the textarea's own cursor goes
+    // there too — otherwise Home or a tap inside the box types somewhere the
+    // caret isn't. ponytail: end of text only. Mapping `selectionStart` onto a
+    // mid-text caret is one more `getEndPositionOfChar` on the right tspan;
+    // do it when editing an existing box (T6) needs it.
+    const box = textRef.current;
+    box?.setSelectionRange(box.value.length, box.value.length);
+  }, [textDraft]);
 
   // Leave the element where it was, fading, after it has gone from the note.
   function showGhost(el: NoteElement) {
@@ -628,15 +655,18 @@ export default function StickyEditor({
             >
               <NotePaper content={shown} />
 
-              {/* T6 replaces this with the element's rotated box plus handles */}
-              {selectedEl && (
+              {/* T6 replaces the dashed box with the element's rotated box
+                  plus handles; the caret rides the same overlay, over the
+                  paper and out of the pointer's way */}
+              {(selectedEl || (caret && textDraft)) && (
                 <svg
                   viewBox={`0 0 ${CANVAS} ${CANVAS}`}
                   className="pointer-events-none absolute inset-0 h-full w-full"
                   aria-hidden="true"
                 >
                   <title>selection</title>
-                  {selectionRect(selectedEl)}
+                  {selectedEl && selectionRect(selectedEl)}
+                  {caret && textDraft && caretRect(caret, textDraft)}
                 </svg>
               )}
 
@@ -852,6 +882,55 @@ function noteMotion(tearing: boolean, crumpling: boolean): CSSProperties {
     transform: "none",
     transition: `transform ${TEAR_MS}ms ${EASE_OUT}`,
   };
+}
+
+// The caret's tip, in note units: just past the last glyph of the last line,
+// on that line's baseline. Measured off the tspans NoteRender actually drew —
+// the same ones, so the caret cannot drift from the text — and estimated from
+// `wrapLines` when there is nothing to measure yet: the very first paint, and
+// jsdom, which lays out no glyphs at all.
+function caretAt(
+  paper: HTMLDivElement | null,
+  el: TextEl,
+): { x: number; y: number } {
+  const lines = wrapLines(el.text, el.w, el.fontSize);
+  const last = lines[lines.length - 1] ?? "";
+  const estimate = {
+    x: el.x + last.length * 0.55 * el.fontSize,
+    y: el.y + el.fontSize + LINE_HEIGHT * el.fontSize * (lines.length - 1),
+  };
+  if (!last) return estimate; // an empty line has no glyph to measure from
+  // the draft is the last element of the note, so the last text on the paper
+  const texts = paper?.querySelectorAll("g[clip-path] > text");
+  const tspans = texts?.[texts.length - 1]?.querySelectorAll("tspan");
+  const tspan = tspans?.[tspans.length - 1];
+  if (typeof tspan?.getEndPositionOfChar !== "function") return estimate;
+  try {
+    const end = tspan.getEndPositionOfChar(last.length - 1);
+    return { x: end.x, y: end.y };
+  } catch {
+    // the glyphs are not laid out (a font still loading): the estimate holds
+    return estimate;
+  }
+}
+
+// A bar in the draft's own ink, standing on the baseline. It blinks on a step
+// so it reads as a cursor rather than a fade, and holds steady for anyone who
+// asked for less motion.
+function caretRect(at: { x: number; y: number }, el: TextEl) {
+  const h = el.fontSize * 1.05;
+  return (
+    <rect
+      data-caret=""
+      x={at.x}
+      y={at.y - h * 0.82}
+      width={Math.max(1.5, el.fontSize / 16)}
+      height={h}
+      fill={INK[el.color]}
+      className="motion-reduce:animate-none!"
+      style={{ animation: `desk-caret ${CARET_MS}ms step-end infinite` }}
+    />
+  );
 }
 
 // The dashed box around the selection, in note units.

@@ -388,6 +388,74 @@ describe("StickyEditor writing", () => {
   });
 });
 
+describe("StickyEditor caret", () => {
+  // Without one you cannot tell where you are typing (#74). jsdom lays out no
+  // glyphs, so what runs here is the `wrapLines` fallback the first paint uses
+  // — the browser refines it from the rendered tspans.
+  const caret = () => document.querySelector("rect[data-caret]");
+  const at = (attr: string) => Number(caret()?.getAttribute(attr));
+  const openBox = () => {
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const surface = paperSurface();
+    down(surface, 60, 80);
+    up(surface);
+    return screen.getByRole("textbox", { name: /text box/i });
+  };
+
+  it("puts a caret on the paper in the held ink as soon as the box opens", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    expect(caret()).toBeNull();
+
+    openBox();
+    expect(caret()).not.toBeNull();
+    expect(caret()?.getAttribute("fill")).toBe("#dc2626");
+    // it sits where the first glyph will, on the first baseline
+    expect(at("x")).toBe(60);
+    expect(at("height")).toBeCloseTo(30 * 1.05);
+  });
+
+  it("moves the caret along as the text grows", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const box = openBox();
+
+    fireEvent.change(box, { target: { value: "a" } });
+    const one = at("x");
+    fireEvent.change(box, { target: { value: "ab" } });
+
+    expect(one).toBeGreaterThan(60);
+    expect(at("x")).toBeGreaterThan(one);
+  });
+
+  it("drops the caret a line and back to the margin on Enter", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const box = openBox();
+
+    fireEvent.change(box, { target: { value: "ab" } });
+    const first = at("y");
+    fireEvent.change(box, { target: { value: "ab\n" } });
+
+    expect(at("x")).toBe(60); // back to the left edge of the box
+    expect(at("y")).toBeCloseTo(first + 30 * 1.2); // one line down
+  });
+
+  it("takes the caret away with the box, committed or thrown out", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    fireEvent.change(openBox(), { target: { value: "hi" } });
+    fireEvent.blur(screen.getByRole("textbox", { name: /text box/i }));
+    expect(caret()).toBeNull();
+
+    // the marker is still in hand and still writing: open another box
+    const surface = paperSurface();
+    down(surface, 200, 200);
+    up(surface);
+    const box = screen.getByRole("textbox", { name: /text box/i });
+    fireEvent.change(box, { target: { value: "no" } });
+    fireEvent.keyDown(box, { key: "Escape" });
+    expect(caret()).toBeNull();
+  });
+});
+
 describe("StickyEditor eraser and hands", () => {
   it("rubs out only the element under the nib", () => {
     render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);

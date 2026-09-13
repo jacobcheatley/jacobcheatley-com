@@ -60,3 +60,16 @@ body {
     transform: translateX(5px);
   }
 }
+
+/* The text caret while a note is being written (#74): a step blink, so it
+   snaps on and off like a cursor instead of fading in and out. The rate is
+   inline from a JS constant, like the desk's transitions, and
+   motion-reduce:animate-none! leaves it standing steady. */
+@keyframes desk-caret {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
