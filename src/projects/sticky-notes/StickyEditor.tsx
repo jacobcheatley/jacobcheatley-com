@@ -490,7 +490,7 @@ export default function StickyEditor({
     shakeTimer.current = setTimeout(() => setShaking(false), SHAKE_MS);
   }
 
-  function apply(next: NoteContent) {
+  function apply(next: NoteContent | null) {
     contentRef.current = next;
     setContent(next);
   }
@@ -1304,7 +1304,17 @@ export default function StickyEditor({
         onClose={() => setSheetOpen(false)}
       />
 
-      {landing && onLanding && <PinUp content={landing} onChange={onLanding} />}
+      {landing && onLanding && (
+        <PinUp
+          content={landing}
+          onChange={onLanding}
+          // sent: the mat is bare again for the next note
+          onPinned={() => {
+            apply(null);
+            setSelected(-1);
+          }}
+        />
+      )}
 
       {/* the held tool, riding a mouse with its nib on the hotspot. Parked
           off-screen until the pointer is over the paper. */}

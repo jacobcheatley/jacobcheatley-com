@@ -253,3 +253,89 @@ describe("StickyNotes tag", () => {
     expect(addNote).not.toHaveBeenCalled();
   });
 });
+
+const storedPending = () =>
+  JSON.parse(localStorage.getItem("sticky-notes:pending") ?? "[]");
+// the submit's navigation, as the router would be asked for it
+const backToTheWall = { to: "/sticky-notes", replace: true };
+
+// With the mat up: tear a sheet off, pin it up and fasten it with a red pin.
+async function pinAndFasten() {
+  await tearOff();
+  pinItUp();
+  fireEvent.click(screen.getByRole("button", { name: /with a red pin/i }));
+}
+
+describe("StickyNotes submit", () => {
+  it("keeps the note as pending and goes back to the wall in place of the editor's URL", async () => {
+    const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(backToTheWall));
+    expect(storedPending()).toMatchObject([
+      { author: "ada", content: { fastener: "pin-red" } },
+    ]);
+  });
+
+  it("posts once, however often the tag is signed while the note is on its way", async () => {
+    let arrive: () => void = () => {};
+    addNote.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = () => resolve({ status: "pending" });
+      }),
+    );
+    const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+    await user.click(tick());
+    await user.type(nameTag() as HTMLElement, "{Enter}");
+
+    expect(addNote).toHaveBeenCalledTimes(1);
+    await act(async () => arrive());
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+  });
+
+  it("says so on the tag when the post fails, leaves the note where it landed, and lets it go again", async () => {
+    addNote.mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+
+    const message = await screen.findByRole("alert");
+    expect(landed()).toContainElement(message);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(storedPending()).toEqual([]);
+
+    await user.click(tick());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(backToTheWall));
+    expect(addNote).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows two notes pinned up one after the other both as pending", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<StickyNotes notes={[]} matUp />);
+    await pinAndFasten();
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    // the navigation lands on the wall, and the invite brings the mat back up
+    rerender(<StickyNotes notes={[]} matUp={false} />);
+    rerender(<StickyNotes notes={[]} matUp />);
+    expect(matPaper()).toBeNull(); // a fresh start, not the note just sent
+
+    await pinAndFasten();
+    await user.type(nameTag() as HTMLElement, "lee{Enter}");
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(2));
+    rerender(<StickyNotes notes={[]} matUp={false} />);
+
+    const tiles = screen.getAllByRole("button", { name: /zoom note by/i });
+    expect(tiles.map((t) => t.getAttribute("aria-label"))).toEqual([
+      "Zoom note by lee",
+      "Zoom note by ada",
+    ]);
+    expect(screen.getAllByText(/^pending$/i)).toHaveLength(2);
+  });
+});

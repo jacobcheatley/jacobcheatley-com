@@ -1,5 +1,12 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { EASE_OUT, SLIDE_MS, STILL, TAPE } from "./desk";
 import { SHAKE_MS } from "./desk-objects";
@@ -12,6 +19,7 @@ import {
   noteSchema,
   type PaperColour,
 } from "./note-schema";
+import { savePending } from "./pending-note";
 import { addNoteFn } from "./sticky-notes.fn";
 
 // Pinning a note up (#77): what happens between the mat and the wall. The
@@ -55,11 +63,19 @@ const COMPARTMENT: CSSProperties = {
 export function PinUp({
   content,
   onChange,
+  onPinned,
 }: {
   content: NoteContent;
   onChange: (note: NoteContent) => void;
+  // the note is on the server: clear the mat for the next one
+  onPinned: () => void;
 }) {
+  const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // A ref, not state: a second Enter can arrive before a re-render would have
+  // told it the first one is already on its way.
+  const sending = useRef(false);
   // Held here rather than on the tag, which is put away while the drawer is
   // open again: a name half typed survives choosing another fastener.
   const [name, setName] = useState("");
@@ -73,12 +89,35 @@ export function PinUp({
     setTagSlot(document.querySelector("[data-landing-tag]"));
   }, []);
 
-  // Sign the tag. Returns false when there is no name to sign with, so the tag
-  // can shake — the name is the only half of the note being typed here.
+  // Sign the tag: the one POST. Returns false when there is no name to sign
+  // with, so the tag can shake — the name is the only half being typed here.
   function sign(): boolean {
     const note = noteSchema.safeParse({ author: name, content });
-    if (!note.success) return false;
-    addNote({ data: note.data });
+    if (!note.success) {
+      if (note.error.issues.some((issue) => issue.path[0] === "author"))
+        return false;
+      // The content is past a cap the editor doesn't police (the byte size):
+      // say so, rather than shake at a name that was fine.
+      setError("too much on this note to pin up");
+      return true;
+    }
+    if (sending.current) return true;
+    sending.current = true;
+    setError(null);
+    addNote({ data: note.data }).then(
+      () => {
+        // Pending first, then the wall: its pending tile is already written
+        // when the landed note goes, so it takes the same slot in one frame.
+        savePending({ ...note.data, submittedAt: Date.now() });
+        onPinned();
+        // replace: Back from the wall shouldn't reopen a note that was sent
+        navigate({ to: "/sticky-notes", replace: true });
+      },
+      () => {
+        sending.current = false;
+        setError("it didn't stick — try again");
+      },
+    );
     return true;
   }
 
@@ -100,7 +139,7 @@ export function PinUp({
       {tagSlot &&
         !drawerOpen &&
         createPortal(
-          <NameTag name={name} onName={setName} onSign={sign} />,
+          <NameTag name={name} error={error} onName={setName} onSign={sign} />,
           tagSlot,
         )}
     </>
@@ -112,10 +151,13 @@ export function PinUp({
 // which has no Enter to hand) are the same native submit.
 function NameTag({
   name,
+  error,
   onName,
   onSign,
 }: {
   name: string;
+  // why the last signing didn't take, written on the tag itself
+  error: string | null;
   onName: (name: string) => void;
   onSign: () => boolean;
 }) {
@@ -129,7 +171,7 @@ function NameTag({
         if (!onSign()) setShake(true);
       }}
       onAnimationEnd={() => setShake(false)}
-      className="relative mt-3 flex items-center gap-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
+      className="relative mt-3 flex max-w-56 flex-wrap items-center gap-x-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
       style={{
         background: "linear-gradient(180deg, #fffdf6, #efe6d2)",
         boxShadow: "0 3px 6px rgba(0,0,0,.35)",
@@ -158,6 +200,15 @@ function NameTag({
       >
         ✓
       </button>
+      {error && (
+        <p
+          role="alert"
+          className="m-0 basis-full pr-2 pb-1 text-[#b3261e] text-base leading-tight"
+          style={{ fontFamily: FONT_FAMILIES.casual }}
+        >
+          {error}
+        </p>
+      )}
     </form>
   );
 }
