@@ -30,6 +30,7 @@ const bin = () => screen.getByRole("button", { name: /bin this note/i });
 // the fixed boxes the strip's objects lie in, by the marker on each
 const slot = (name: string) =>
   document.querySelector<HTMLElement>(`[data-slot="${name}"]`);
+const ERASER_BODY = '[data-object="eraser"]';
 const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
   note()?.closest("[data-colour]")?.getAttribute("data-colour");
@@ -556,6 +557,45 @@ describe("StickyEditor thumb targets", () => {
       name: /pick up the red marker/i,
     });
     expect(marker.style.marginInline).toContain("clamp(-4px");
+  });
+
+  // The owner's report (#74): "eraser also moves when operating the marker".
+  // jsdom can't measure, so what is asserted is the invariant that kept it
+  // still — the eraser's box never changes, and its lift is a transform that
+  // only its own hand raises.
+  it("leaves the eraser and the bin where they lie while a marker works", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const eraser = () => slot("eraser");
+    const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
+    const before = [eraser()?.style.cssText, slot("bin")?.style.cssText];
+    const still = rubber()?.style.transform;
+
+    pickUp(/pick up the red marker/i);
+    expect([eraser()?.style.cssText, slot("bin")?.style.cssText]).toEqual(
+      before,
+    );
+    expect(rubber()?.style.transform).toBe(still);
+
+    // and through a whole stroke: `using` belongs to the tool in your hand
+    const paper = paperSurface();
+    down(paper, 100, 100);
+    move(paper, 140, 160);
+    expect([eraser()?.style.cssText, slot("bin")?.style.cssText]).toEqual(
+      before,
+    );
+    expect(rubber()?.style.transform).toBe(still);
+    up(paper);
+  });
+
+  it("lifts the eraser itself, by transform alone, when it is the one held", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    const box = () => slot("eraser")?.style.cssText;
+    const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
+    const before = box();
+
+    pickUp(/pick up the eraser/i);
+    expect(rubber()?.style.transform).toContain("translateY(-17px)");
+    expect(box()).toBe(before); // the box it lies in never moved
   });
 
   it("pops the font samples over the mat instead of onto the strip", () => {

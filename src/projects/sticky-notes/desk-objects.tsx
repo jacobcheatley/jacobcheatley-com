@@ -217,7 +217,10 @@ export function MarkerBody({
   );
 }
 
-// A block eraser: cream rubber with a purple band.
+// A block eraser: cream rubber with a purple band. It lifts only when it is the
+// thing in your hand — `using` is the editor's "a tool is working" flag, and
+// reading it on its own is what made the eraser rise every time a marker drew
+// a stroke (#74). MarkerBody has always gated it on `held`; this now matches.
 export function EraserBody({
   held = false,
   using = false,
@@ -228,6 +231,7 @@ export function EraserBody({
   return (
     <span
       aria-hidden="true"
+      data-object="eraser"
       className={`pointer-events-none relative block ${STILL}`}
       style={{
         width: ERASER_W,
@@ -235,11 +239,11 @@ export function EraserBody({
         borderRadius: 3,
         background: "linear-gradient(180deg,#fbf6ee,#dbd0bf)",
         boxShadow: "0 3px 6px rgba(0,0,0,.45), inset 0 -4px 0 rgba(0,0,0,.07)",
-        transform: using
-          ? "translateY(-26px) rotate(-13deg)"
-          : held
-            ? "translateY(-17px) rotate(-6deg)"
-            : "none",
+        transform: !held
+          ? "none"
+          : using
+            ? "translateY(-26px) rotate(-13deg)"
+            : "translateY(-17px) rotate(-6deg)",
         transition: `transform ${LIFT_MS}ms ${EASE_OUT}`,
       }}
     >

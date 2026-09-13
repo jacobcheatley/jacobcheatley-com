@@ -806,6 +806,8 @@ export default function StickyEditor({
               slot={ERASER_SLOT}
               onClick={() => pickUp("eraser")}
             >
+              {/* `using` is "some tool is working"; EraserBody lifts for it
+                  only when the eraser is the tool in hand (#74) */}
               <EraserBody held={held === "eraser"} using={using} />
             </ToolSlot>
           </div>
