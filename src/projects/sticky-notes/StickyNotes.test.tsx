@@ -172,8 +172,10 @@ describe("StickyNotes pin it up", () => {
         name: /sticky note/i,
       }),
     ).toBeInTheDocument();
-    // the wall is live again under it
+    // the Spotlight hangs over the wall, which stays inert under it: nothing
+    // on the board can take the keyboard while the note is being pinned
     expect(lifted()?.closest("[inert]")).toBeNull();
+    expect(document.querySelector("[inert]")).not.toBeNull();
     expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
     // it flew off the mat: there is no second copy of it left lying there
     expect(matPaper()).not.toBeVisible();

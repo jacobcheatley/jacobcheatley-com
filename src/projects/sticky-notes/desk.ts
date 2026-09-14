@@ -64,14 +64,14 @@ export function flightTransform(
 export function flyTo(
   from: DOMRect | undefined,
   target: HTMLElement | null,
-): void {
-  if (!target || !from) return; // nothing to fly, or nowhere to fly it
+): boolean {
+  if (!target || !from) return false; // nothing to fly, or nowhere to fly it
   // Both flights end at the top of the page: the Spotlight is fixed to the
   // viewport, and the wall's newest slot leads its first row. After the guard
   // above, so a tile that mounts with no flight waiting doesn't scroll anyone.
   window.scrollTo(0, 0);
   const to = target.getBoundingClientRect();
-  if (!to.width) return; // nothing laid out (jsdom)
+  if (!to.width) return false; // nothing laid out (jsdom)
   const { dx, dy, scale } = flightTransform(from, to);
   target.style.transition = "none";
   target.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
@@ -80,12 +80,30 @@ export function flyTo(
   target.getBoundingClientRect();
   target.style.transition = `transform ${SLIDE_MS}ms ${EASE_OUT}`;
   target.style.transform = "";
+  return true;
+}
+
+// The Spotlight's scrim goes with its dialog the moment the route changes, a
+// frame before the sent note starts home; this leaves its afterimage behind to
+// fade out over the flight, so the dark lifts as the note shrinks into its
+// slot instead of snapping off. Plain DOM, outside React: nothing owns it once
+// it is gone.
+export function fadeScrim(): void {
+  const scrim = document.createElement("div");
+  scrim.className = "pointer-events-none fixed inset-0 z-50 bg-black/70";
+  scrim.style.transition = `opacity ${SLIDE_MS}ms ${EASE_OUT}`;
+  document.body.append(scrim);
+  scrim.getBoundingClientRect(); // the start value, taken before the end one
+  scrim.style.opacity = "0";
+  setTimeout(() => scrim.remove(), SLIDE_MS);
 }
 
 // The submit's flight (#88) crosses a navigation: the note is measured while it
 // still hangs in the Spotlight, and the tile it flies home into is only laid
 // out afterwards, by the wall the navigation lands on. The rect waits here in
 // between — the two sides share this module and nothing else.
+// ponytail: one slot for the whole page. Fine while there is one wall and one
+// note in flight at a time; hand the rect through a context if either changes.
 let leftBehind: DOMRect | undefined;
 
 export function flyingFrom(rect: DOMRect | undefined): void {

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useState } from "react";
-import { flightHome, flyTo } from "./desk";
+import { fadeScrim, flightHome, flyTo } from "./desk";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 import {
@@ -50,7 +50,7 @@ const tileStyle = (content: NoteContent): CSSProperties => ({
 // tile finds none waiting and stays where it is. Module scope, so the ref is
 // the same function every render and React never re-attaches it.
 function flyHome(tile: HTMLLIElement | null) {
-  if (tile) flyTo(flightHome(), tile);
+  if (tile && flyTo(flightHome(), tile)) fadeScrim();
 }
 
 const PendingBadge = () => (

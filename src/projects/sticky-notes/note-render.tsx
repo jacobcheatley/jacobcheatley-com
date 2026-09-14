@@ -30,7 +30,7 @@ export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
 // inlined for the same reason: the mat sizes its note from here.
 export const NOTE_PAPER_ASPECT_RATIO = 1;
 
-// How much paper the fastener drawer's swatch shows below the note's top edge.
+// How much paper a fastener's preview shows below the note's top edge.
 // Exported so a consumer can size the swatch box from the same number.
 export const PREVIEW_DEPTH = 100;
 
@@ -693,9 +693,9 @@ export function NotePaper({ content }: { content: NoteContent }) {
   );
 }
 
-// A fastener as applied, on a strip of the note's top edge — the fastener
-// drawer's swatch. Same drawing functions as the wall, so what the drawer shows
-// is exactly what lands on the board.
+// A fastener as applied, on a strip of the note's top edge — one of the row
+// laid beneath the note in the Spotlight. Same drawing functions as the wall,
+// so what the row shows is exactly what lands on the board.
 export function FastenerPreview({
   fastener,
   colour = "yellow",
@@ -710,7 +710,7 @@ export function FastenerPreview({
       viewBox={`0 ${-FASTENER_MARGIN} ${CANVAS} ${PREVIEW_DEPTH + FASTENER_MARGIN}`}
       width="100%"
       height="100%"
-      // decorative: the drawer's own control carries the name of the fastener
+      // decorative: the button around it carries the name of the fastener
       aria-hidden="true"
       xmlns="http://www.w3.org/2000/svg"
     >

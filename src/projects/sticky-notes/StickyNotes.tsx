@@ -27,9 +27,10 @@ export function StickyNotes({
 
   return (
     <>
-      {/* the mat covers the wall but does not replace it: while it is up the
-          wall underneath must be neither tabbable nor clickable */}
-      <div inert={up}>
+      {/* the mat covers the wall but does not replace it: while it is up, and
+          while the Spotlight hangs over it for the pinning, the wall underneath
+          must be neither tabbable nor clickable */}
+      <div inert={matUp}>
         <StickyWall notes={notes} pinning={pinning} />
       </div>
       <StickyMat up={up} pinning={pinning} onPinning={setPinning} />

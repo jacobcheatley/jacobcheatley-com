@@ -174,7 +174,7 @@ export function PinUp({
             aria-pressed={content.fastener === fastener}
             aria-label={`Fasten it with ${FASTENER_NAMES[fastener]}`}
             onClick={() => onChange({ ...content, fastener })}
-            className="h-12 w-14 border-0 bg-transparent p-0 outline-offset-2 aria-pressed:outline-2 aria-pressed:outline-white sm:w-24"
+            className="h-12 w-14 border-0 bg-transparent p-0 sm:w-24"
           >
             <FastenerPreview fastener={fastener} colour={content.colour} />
           </button>

@@ -62,7 +62,8 @@ export function Spotlight({
           className="absolute inset-0 h-full w-full cursor-zoom-out border-0 bg-black/70"
         />
       ) : (
-        <div className="absolute inset-0 bg-black/70" />
+        // the pinning's scrim comes up over the wall as the note flies in
+        <div className="starting:opacity-0 absolute inset-0 bg-black/70 transition-opacity duration-500 ease-out" />
       )}
       {onClose && (
         <button
