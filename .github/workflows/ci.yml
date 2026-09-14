@@ -45,6 +45,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: [check, test]
     runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://jacobcheatley-com-dev.fly.dev
     concurrency:
       group: deploy-staging
       cancel-in-progress: false
@@ -72,3 +75,37 @@ jobs:
         env:
           BASE_URL: https://jacobcheatley-com-dev.fly.dev
           SMOKE_WRITE: "1"
+
+  deploy-prod:
+    needs: [smoke]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://jacobcheatley.com
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # Same image staging just smoked, no rebuild. Migrations run via fly.toml release_command.
+      - run: flyctl deploy -a jacobcheatley-com --image registry.fly.io/jacobcheatley-com-dev:${{ github.sha }} --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  smoke-prod:
+    needs: [deploy-prod]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+        env:
+          BASE_URL: https://jacobcheatley.com
