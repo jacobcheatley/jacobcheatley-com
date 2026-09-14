@@ -85,9 +85,8 @@ import { SHEET_H, StickerSheet } from "./StickerSheet";
 // no note, the sheet torn off a pad, the bin, and the stationery — four
 // markers, the draw/write control and the eraser. The mat surface itself is
 // StickyMat; this is the island it lazy-loads, and the file the later tickets
-// grow into: T5 hangs the sticker sheet off the
-// reserved tab slot, T6 rotates the note and adds on-note handles, T7 the
-// pinning phase.
+// grow into: T5 hangs the sticker sheet off the reserved tab slot, T6 rotates
+// the note and adds on-note handles, T7 the pinning phase.
 //
 // The mat starts bare — no note, no prompt copy — so nothing random runs until
 // the visitor tears a sheet off. That is why the island needs no mounted-gate
@@ -123,6 +122,9 @@ type PlacingDrag = {
   from: [number, number];
   start: Placing;
 };
+// Where a torn-off sheet starts: its pad's centre, seen from where it lands, in
+// px.
+type Tear = { dx: number; dy: number };
 // Nothing held is hand mode — the absence of a tool, not a tool of its own.
 type Held = Ink | "eraser" | null;
 
@@ -156,16 +158,16 @@ export default function StickyEditor({
   // parked there for a frame, and dropping it lets the transition carry the
   // sheet to the middle of the mat. `crumpling` is the same trick in reverse,
   // into the bin.
-  const [tearing, setTearing] = useState<string | null>(null);
+  const [tearing, setTearing] = useState<Tear | null>(null);
   const [crumpling, setCrumpling] = useState(false);
-  // The bin is asking whether the note may go (#81).
-  const [asking, setAsking] = useState(false);
+  // The bin's slip is up, asking whether the note may go (#81).
+  const [binSlipOpen, setBinSlipOpen] = useState(false);
 
   const [held, setHeld] = useState<Held>(null);
   const [mode, setMode] = useState<Mode>("draw");
   const [font, setFont] = useState<Font>("casual"); // the editor's default
-  // The font samples pop up over the mat: opened by the
-  // "Aa" side of the rocker, closed by a tap elsewhere, Escape or a choice.
+  // The font samples pop up over the mat: opened by the "Aa" side of the
+  // rocker, closed by a tap elsewhere, Escape or a choice.
   const [fontsOpen, setFontsOpen] = useState(false);
   // The sticker sheet is independent of what is in your hand: opening it neither
   // puts a marker down nor picks anything up.
@@ -319,9 +321,9 @@ export default function StickyEditor({
   // it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keepIt reads only a ref and a state setter, so the copy from the render that armed this is as good as the latest.
   useEffect(() => {
-    if (!asking) return;
+    if (!binSlipOpen) return;
     if (!up) {
-      setAsking(false);
+      setBinSlipOpen(false);
       return;
     }
     binYes.current?.focus();
@@ -339,7 +341,7 @@ export default function StickyEditor({
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("pointerdown", away);
     };
-  }, [asking, up]);
+  }, [binSlipOpen, up]);
 
   useEffect(
     () => () => {
@@ -481,12 +483,13 @@ export default function StickyEditor({
   // While something is being placed, a press anywhere off the paper fixes it
   // first: the mat, the sheet, or a tray object before its own click does (the
   // keyboard has no press, so each of those handlers fixes it too). The paper
-  // judges its own presses by geometry (onPaperDown). Spared: the font
-  // samples, which change the box being placed, and the "Aa" half that brings
-  // them back up for a text box. Escape throws it away — in the capture phase,
-  // so it is not also the Escape that puts the sticker sheet or the samples
-  // away. None of this outlives the mat: taken down (Back) mid-placing, the
-  // element is kept like the rest of the note, and the wall has its keys back.
+  // judges its own presses by geometry (onPaperDown). Spared, for a text box
+  // only: the rocker, whose samples change the box, whose "Aa" brings them
+  // back up, and whose draw half fixes the box by its own click. Escape throws
+  // it away — in the capture phase, so it is not also the Escape that puts the
+  // sticker sheet or the samples away. None of this outlives the mat: taken
+  // down (Back) mid-placing, the element is kept like the rest of the note, and
+  // the wall has its keys back.
   const isPlacing = placing !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: fixPlacing and applyPlacing read only refs and state setters, so the copies from the render that armed this are as good as the latest.
   useEffect(() => {
@@ -496,13 +499,9 @@ export default function StickyEditor({
       return;
     }
     const away = (e: PointerEvent) => {
-      const at = e.target as Element;
-      if (paperRef.current?.contains(at) || at.closest('[data-slot="fonts"]'))
-        return;
-      if (
-        placingRef.current?.type === "text" &&
-        at.closest('[data-mode="write"]')
-      )
+      const at = e.target as Node;
+      if (paperRef.current?.contains(at)) return;
+      if (placingRef.current?.type === "text" && rocker.current?.contains(at))
         return;
       fixPlacing();
     };
@@ -559,21 +558,21 @@ export default function StickyEditor({
     const dx = to ? from.left + from.width / 2 - (to.left + to.width / 2) : 0;
     const dy = to ? from.top + from.height / 2 - (to.top + to.height / 2) : 0;
     apply(note);
-    setTearing(`translate(${dx}px, ${dy}px) rotate(${-note.rotation}deg)`);
+    setTearing({ dx, dy });
   }
 
   // The bin (#81): a note with anything on it asks first, a blank one goes
   // straight in. What is being placed is fixed first, so it counts. Tapped
   // again while it asks, the bin is the answer "keep".
   function binIt() {
-    if (asking) {
+    if (binSlipOpen) {
       keepIt();
       return;
     }
     fixPlacing();
     const live = contentRef.current;
     if (!live || crumpling) return;
-    if (live.elements.length > 0) setAsking(true);
+    if (live.elements.length > 0) setBinSlipOpen(true);
     else crumple();
   }
 
@@ -583,7 +582,7 @@ export default function StickyEditor({
   // here can be a render behind.
   function crumple() {
     if (crumpleTimer.current !== undefined) return;
-    setAsking(false);
+    setBinSlipOpen(false);
     setCrumpling(true);
     crumpleTimer.current = setTimeout(() => {
       crumpleTimer.current = undefined;
@@ -593,7 +592,7 @@ export default function StickyEditor({
   }
 
   function keepIt() {
-    setAsking(false);
+    setBinSlipOpen(false);
     binButton.current?.focus();
   }
 
@@ -1062,6 +1061,8 @@ export default function StickyEditor({
             <div
               ref={paperRef}
               data-colour={shown.colour}
+              // in flight onto the mat or into the bin: it takes no marks
+              aria-busy={tearing !== null || crumpling}
               className={`${STILL} pointer-events-auto relative touch-none`}
               onPointerDown={onPaperDown}
               onPointerMove={onPaperMove}
@@ -1151,7 +1152,7 @@ export default function StickyEditor({
 
       <PadChooser
         ref={firstPad}
-        away={!choosing}
+        putAway={!choosing}
         torn={content?.colour ?? null}
         onTear={takeSheet}
       />
@@ -1255,12 +1256,12 @@ export default function StickyEditor({
               onClick={binIt}
               disabled={!content || crumpling}
             />
-            {asking && (
+            {binSlipOpen && (
               <BinSlip
                 ref={binYes}
                 onBin={crumple}
                 onKeep={keepIt}
-                onLeave={() => setAsking(false)}
+                onLeave={() => setBinSlipOpen(false)}
               />
             )}
           </div>
@@ -1314,8 +1315,8 @@ export default function StickyEditor({
 // paper about its own centre whatever the flight did to it — and the pointer
 // mapping reads that same centre back off the box.
 function noteMotion(
-  // the transform a sheet being torn off starts from, for its first frame
-  tearing: string | null,
+  // where a sheet being torn off starts, for its first frame
+  tearing: Tear | null,
   crumpling: boolean,
   rotation: number,
   turning: boolean,
@@ -1331,7 +1332,8 @@ function noteMotion(
   // further — and both settle as it lands (the paper's own shadow is inline).
   if (tearing)
     return {
-      transform: `${tearing} scale(1.06) ${tilt}`,
+      // square to the screen, as it lay on its pad: no tilt yet
+      transform: `translate(${tearing.dx}px, ${tearing.dy}px) scale(1.06)`,
       filter: "drop-shadow(8px 26px 24px rgba(0,0,0,.35))",
       transition: "none",
     };

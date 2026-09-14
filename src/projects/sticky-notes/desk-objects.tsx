@@ -16,8 +16,10 @@ import {
 // owns all of that and wears these.
 
 // The sheet's side on the mat, and so each pad's on the chooser: a pad is the
-// note's real size (#81).
-export const PAPER_SIDE = "min(88vw, 60vh)";
+// note's real size (#81). `svh` is the height with a phone browser's toolbars
+// showing: `vh` counts them hidden, and the stack, which fits to the chooser's
+// real height, would lose its last pad under them.
+export const PAPER_SIDE = "min(88vw, 60svh)";
 const CHOOSER_MS = 400; // the pads left behind sliding away, or back
 
 const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
@@ -350,7 +352,6 @@ export function ModeControl({
         type="button"
         aria-label={label}
         aria-pressed={on}
-        data-mode={m}
         disabled={!ink}
         onClick={() => onMode(m)}
         className={`relative flex min-h-12 min-w-12 shrink-0 items-center justify-center border-0 border-slate-900/15 border-t p-0 first:border-t-0 disabled:opacity-70 ${STILL}`}
@@ -433,10 +434,7 @@ export function ModeControl({
           rocker's right edge, not centred on it: centred, the row runs off a
           320px strip, since the rocker sits at the strip's right end. */}
       {ink && fontsOpen && (
-        <div
-          data-slot="fonts"
-          className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5"
-        >
+        <div className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5">
           {FONTS.map((f) => (
             <FontChip
               key={f}
@@ -461,19 +459,21 @@ const PEEK = `max(${TOUCH}px, (100cqh - ${PAPER_SIDE}) / 5)`;
 
 // The pad chooser (#81): with no note on the mat, the mat is six pads at the
 // note's real size, square to the screen, stacked down it so each shows a
-// strip and the last lies whole on top. Away, the pads slide off and fade —
-// all but the one torn from, which has just become the sheet.
-// No grid: #81 wants one wherever six fit at real size, but at PAPER_SIDE two
-// never fit side by side (176vw) or one above the other (120vh), so the stack
-// is the only layout that rule can pick. Revisit if the paper's size changes.
+// strip and the last lies whole on top. Put away, the pads slide off and fade
+// — all but the one torn from, which has just become the sheet.
+// ponytail: no grid. #81 wants one wherever all six fit at real size; two pads
+// do sit side by side in landscape at desktop sizes, but six never fit at
+// PAPER_SIDE — a 2×3 or 3×2 grid needs two rows (≈120svh) or two columns
+// (≈176vw). So the stack is the only layout that rule can pick. Upgrade: a
+// grid under a container query, if the paper ever shrinks enough for six.
 export function PadChooser({
-  away,
+  putAway,
   torn,
   onTear,
   ref,
 }: {
-  // a note is on the mat: out of sight and out of reach
-  away: boolean;
+  // a note is on the mat: the pads slide out of sight and out of reach
+  putAway: boolean;
   // the colour of that note, whose pad went with the sheet
   torn: PaperColour | null;
   onTear: (colour: PaperColour, pad: HTMLElement) => void;
@@ -483,7 +483,7 @@ export function PadChooser({
   return (
     <div
       data-slot="chooser"
-      inert={away}
+      inert={putAway}
       className="absolute inset-x-0 top-16 overflow-y-auto overscroll-contain"
       style={{
         bottom: "max(0.75rem, env(safe-area-inset-bottom))",
@@ -515,8 +515,8 @@ export function PadChooser({
               boxShadow:
                 "inset 0 -7px 0 rgba(0,0,0,.08), 0 -3px 8px rgba(0,0,0,.25), 0 6px 12px rgba(0,0,0,.4)",
               visibility: torn === colour ? "hidden" : undefined,
-              opacity: away ? 0 : 1,
-              transform: away ? "translateY(12vh)" : "none",
+              opacity: putAway ? 0 : 1,
+              transform: putAway ? "translateY(12vh)" : "none",
               transition: `transform ${CHOOSER_MS}ms ${EASE_OUT}, opacity ${CHOOSER_MS}ms`,
             }}
           />

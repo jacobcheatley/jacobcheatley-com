@@ -96,14 +96,13 @@ const pinItUp = () => tap(/pin it up/i);
 const putTheDrawerAway = () => tap(/put the drawer away/i);
 
 // The island is lazy, so wait for its pad chooser, then tear a sheet off and
-// wait for it to land: a sheet still flying off its pad takes no marks.
+// wait for it to land: a sheet still flying off its pad is busy, and takes no
+// marks.
 async function tearOff(colour: string) {
   const pad = new RegExp(`${colour} sheet`, "i");
   await screen.findByRole("button", { name: pad });
   tap(pad);
-  await waitFor(() =>
-    expect(matPaper()?.style.transform).not.toContain("translate"),
-  );
+  await waitFor(() => expect(matPaper()).toHaveAttribute("aria-busy", "false"));
 }
 
 // a mark on the sheet, so there is content to come back with
