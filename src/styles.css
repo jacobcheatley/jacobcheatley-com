@@ -118,36 +118,38 @@ body {
    with the last row a whole pad: the peek is the height left over once the top
    pad lies whole, shared by the pads under it, and never less than a thumb —
    past that the chooser scrolls. `cqh` is the chooser's own height (it is a
-   size container), so the fit is CSS, with nothing measured. The 20px comes
-   off the top of that: the room the pads' jitter leans into, so a stack that
-   fits does not scroll by the few pixels a turned pad hangs past its row. The
-   pad's side and the thumb are PAPER_SIDE and TOUCH in desk-objects.tsx,
-   written out again here because a container query takes no var(). */
+   size container), so the fit is CSS, with nothing measured. The lean comes
+   off the top of that: the room a pad's jitter (±3°, ±6px) hangs past its row,
+   about 3% of its side plus the nudge, so a stack that fits does not scroll by
+   those few pixels. The column gap is that lean again, once for each of the
+   two pads facing across it — at the widest pads they can just touch, which
+   pads on a desk do. The pad's side and the thumb are PAPER_SIDE and TOUCH in
+   desk-objects.tsx; the two container conditions write them out again because
+   a container query takes no var(). */
 .pad-stacks {
+  --pad: min(88vw, 60svh);
+  --lean: calc(var(--pad) * 0.03 + 6px);
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: min(88vw, 60svh);
+  grid-auto-columns: var(--pad);
   justify-content: center;
-  column-gap: 24px;
-  grid-template-rows: repeat(
-      5,
-      max(48px, (100cqh - min(88vw, 60svh) - 20px) / 5)
-    )
-    min(88vw, 60svh);
+  column-gap: calc(2 * var(--lean));
+  grid-template-rows: repeat(5, max(48px, (100cqh - var(--pad) - var(--lean)) / 5))
+    var(--pad);
 }
 
 @container (min-width: calc(2 * min(88vw, 60svh) + 24px)) {
   .pad-stacks {
-    grid-template-rows:
-      repeat(2, max(48px, (100cqh - min(88vw, 60svh) - 20px) / 2))
-      min(88vw, 60svh);
+    grid-template-rows: repeat(
+        2,
+        max(48px, (100cqh - var(--pad) - var(--lean)) / 2)
+      )
+      var(--pad);
   }
 }
 
 @container (min-width: calc(3 * min(88vw, 60svh) + 48px)) {
   .pad-stacks {
-    grid-template-rows:
-      max(48px, 100cqh - min(88vw, 60svh) - 20px)
-      min(88vw, 60svh);
+    grid-template-rows: max(48px, 100cqh - var(--pad) - var(--lean)) var(--pad);
   }
 }

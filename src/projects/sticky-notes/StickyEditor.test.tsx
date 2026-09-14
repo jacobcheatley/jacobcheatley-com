@@ -2,7 +2,12 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PAD_JITTER } from "./desk-objects";
 import { type Element, emptyNote } from "./note-editor";
-import { MAX_ELEMENTS, type NoteContent, STICKER_EMOJI } from "./note-schema";
+import {
+  MAX_ELEMENTS,
+  type NoteContent,
+  PAPER_COLOURS,
+  STICKER_EMOJI,
+} from "./note-schema";
 import StickyEditor from "./StickyEditor";
 
 // The desk island (#73). A note is born at the pad chooser and dies in the bin,
@@ -97,7 +102,8 @@ describe("StickyEditor pad chooser", () => {
     const turned = () => pads().map((p) => p.style.transform);
 
     expect(turned()).toHaveLength(6);
-    PAD_JITTER.forEach(([deg, dx, dy], i) => {
+    PAPER_COLOURS.forEach((colour, i) => {
+      const [deg, dx, dy] = PAD_JITTER[colour];
       expect(turned()[i]).toContain(`rotate(${deg}deg)`);
       expect(turned()[i]).toContain(`translate(${dx}px, ${dy}px)`);
     });
@@ -117,8 +123,8 @@ describe("StickyEditor pad chooser", () => {
       expect(p.style.transform).toContain("12vh"); // the slide off the mat
       expect(p.style.transform).toContain("rotate("); // still askew under it
     }
-    expect(allPads()[2]?.style.visibility).toBe("hidden"); // blue
-    expect(allPads()[0]?.style.visibility).toBe("");
+    const hidden = allPads().map((p) => p.style.visibility === "hidden");
+    expect(hidden).toEqual(PAPER_COLOURS.map((c) => c === "blue"));
   });
 
   it("tears a sheet off the pad tapped, and puts the chooser away for the tray", () => {

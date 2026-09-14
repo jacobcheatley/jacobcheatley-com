@@ -525,23 +525,25 @@ export function ModeControl({
   );
 }
 
-// How each pad lies in the chooser (#85): a turn and a nudge, keyed by the
-// pad's place in the row of colours, so the same pad always lies the same way
-// and nothing flickers between renders. Within ±3° and ±6px — enough to read
-// as tossed down, not as a mistake.
-export const PAD_JITTER = [
-  [-2, 3, -4],
-  [1.5, -5, 2],
-  [3, 2, 5],
-  [-1, -3, -2],
-  [2.5, 6, -1],
-  [-3, -2, 3],
-] as const;
+// How each pad lies in the chooser (#85): a turn and a nudge, keyed by paper
+// colour, so the same pad always lies the same way and nothing flickers
+// between renders. Within ±3° and ±6px — enough to read as tossed down, not as
+// a mistake. (The lean the mat allows for is in `.pad-stacks`, styles.css.)
+export const PAD_JITTER: Record<
+  PaperColour,
+  readonly [number, number, number]
+> = {
+  yellow: [-2, 3, -4],
+  pink: [1.5, -5, 2],
+  blue: [3, 2, 5],
+  green: [-1, -3, -2],
+  orange: [2.5, 6, -1],
+  white: [-3, -2, 3],
+};
 
-// that lie as a transform, the turn about the pad's own centre. The fallback
-// is for the type only: the table has a row per paper colour.
-const lie = (i: number) => {
-  const [deg, dx, dy] = PAD_JITTER[i] ?? [0, 0, 0];
+// that lie as a transform, the turn about the pad's own centre
+const lie = (colour: PaperColour) => {
+  const [deg, dx, dy] = PAD_JITTER[colour];
   return `translate(${dx}px, ${dy}px) rotate(${deg}deg)`;
 };
 
@@ -603,7 +605,7 @@ export function PadChooser({
               opacity: putAway ? 0 : 1,
               // the slide off the mat rides in front of the pad's own jitter,
               // so putting the chooser away never straightens it
-              transform: `translateY(${putAway ? "12vh" : "0px"}) ${lie(i)}`,
+              transform: `translateY(${putAway ? "12vh" : "0px"}) ${lie(colour)}`,
               transition: `transform ${CHOOSER_MS}ms ${EASE_OUT}, opacity ${CHOOSER_MS}ms`,
             }}
           />
