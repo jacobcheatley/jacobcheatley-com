@@ -108,9 +108,9 @@ describe("StickyWall", () => {
     await user.click(screen.getByRole("button", { name: /zoom note by sam/i }));
     await screen.findByRole("dialog");
 
-    // two "Close note" buttons: the full-bleed backdrop and the × — either closes
-    const [backdrop] = screen.getAllByRole("button", { name: /close note/i });
-    await user.click(backdrop as HTMLElement);
+    // two "Close note" buttons: the full-bleed scrim and the × — either closes
+    const [scrim] = screen.getAllByRole("button", { name: /close note/i });
+    await user.click(scrim as HTMLElement);
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
