@@ -89,9 +89,12 @@ export function StickerSheet({
   useEffect(() => () => clearTimeout(backTimer.current), []);
   // The tab that opened the sheet is inert under it now, so focus would fall
   // to the body: it lands on the corner instead, the way down that is nearest.
+  // Without scrolling: the corner is still below the mat's edge as the sheet
+  // starts up, and the browser would scroll the mat's hidden overflow to show
+  // it — a scroll nothing ever undoes, leaving the whole desk 20px high.
   const corner = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (open) corner.current?.focus();
+    if (open) corner.current?.focus({ preventScroll: true });
   }, [open]);
 
   // ponytail: the pointer's position is state, so every move re-renders 24

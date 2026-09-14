@@ -157,4 +157,16 @@ describe("StickerSheet", () => {
     open(true);
     expect(corner()).toBeInTheDocument();
   });
+
+  it("takes focus at the corner as it rises, without scrolling the mat after it", () => {
+    // the corner is still below the mat's edge when the sheet starts up; a
+    // plain focus() scrolls the mat's hidden overflow to show it and leaves
+    // the whole desk sitting high once the sheet is away again
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const { open } = sheet({ open: false });
+    open(true);
+    expect(corner()).toHaveFocus();
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
 });
