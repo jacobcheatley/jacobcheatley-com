@@ -20,6 +20,10 @@ const MAX_FOLD = 120; // px a corner peels in at curl = 1
 // overhang the top edge onto the wall. The note itself stays 0..500.
 const FASTENER_MARGIN = 40;
 
+// The SVG's width / height. A consumer sizing a tile or zoom box must match this
+// exactly or the note crops, so derive it from here rather than re-typing it.
+export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
+
 // Paper backgrounds — soft, saturated sticky-note stock.
 const PAPER: Record<PaperColour, string> = {
   yellow: "#fde68a",

@@ -10,10 +10,16 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as StickyNotesRouteImport } from './routes/sticky-notes'
 import { Route as ShellIndexRouteImport } from './routes/_shell.index'
 
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StickyNotesRoute = StickyNotesRouteImport.update({
+  id: '/sticky-notes',
+  path: '/sticky-notes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ShellIndexRoute = ShellIndexRouteImport.update({
@@ -24,25 +30,29 @@ const ShellIndexRoute = ShellIndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
+  '/sticky-notes': typeof StickyNotesRoute
 }
 export interface FileRoutesByTo {
+  '/sticky-notes': typeof StickyNotesRoute
   '/': typeof ShellIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shell': typeof ShellRouteWithChildren
+  '/sticky-notes': typeof StickyNotesRoute
   '/_shell/': typeof ShellIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/sticky-notes'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/_shell' | '/_shell/'
+  to: '/sticky-notes' | '/'
+  id: '__root__' | '/_shell' | '/sticky-notes' | '/_shell/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   ShellRoute: typeof ShellRouteWithChildren
+  StickyNotesRoute: typeof StickyNotesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -52,6 +62,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sticky-notes': {
+      id: '/sticky-notes'
+      path: '/sticky-notes'
+      fullPath: '/sticky-notes'
+      preLoaderRoute: typeof StickyNotesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_shell/': {
@@ -76,6 +93,7 @@ const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   ShellRoute: ShellRouteWithChildren,
+  StickyNotesRoute: StickyNotesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
