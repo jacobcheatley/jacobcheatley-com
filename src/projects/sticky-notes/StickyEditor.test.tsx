@@ -104,7 +104,7 @@ describe("StickyEditor pad chooser", () => {
 });
 
 describe("StickyEditor bin", () => {
-  const slip = () => screen.queryByText(/bin it\?/i);
+  const slip = () => screen.queryByRole("group", { name: /bin it\?/i });
   const yes = () => screen.getByRole("button", { name: "Bin it" });
 
   it("asks before binning a note with something on it", () => {
@@ -140,6 +140,50 @@ describe("StickyEditor bin", () => {
     wait(CRUMPLED);
     expect(screen.getByText("hi")).toBeInTheDocument();
     expect(chooser()).toHaveAttribute("inert");
+  });
+
+  it("keeps the note on a second tap on the bin, and doesn't ask again", () => {
+    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    fireEvent.click(bin());
+    press(/bin this note/i);
+
+    expect(slip()).toBeNull();
+    expect(bin()).toHaveFocus();
+    wait(CRUMPLED);
+    expect(screen.getByText("hi")).toBeInTheDocument();
+  });
+
+  it("keeps the note when the keyboard tabs away from the slip", () => {
+    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    fireEvent.click(bin());
+    const pinButton = screen.getByRole("button", { name: /pin it up/i });
+    act(() => pinButton.focus());
+
+    expect(slip()).toBeNull();
+    expect(pinButton).toHaveFocus(); // the keyboard stays where it was sent
+    wait(CRUMPLED);
+    expect(screen.getByText("hi")).toBeInTheDocument();
+  });
+
+  it("crumples once, however many times it is told", () => {
+    // timeouts only, so the count is the editor's own and not React's
+    // scheduler (which runs on setImmediate)
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { unmount } = render(
+      <StickyEditor initialContent={seeded({ elements: [HI] })} />,
+    );
+    fireEvent.click(bin());
+    // two activations before React re-renders, so both reach the tick
+    const tick = yes();
+    const before = vi.getTimerCount();
+    act(() => {
+      tick.click();
+      tick.click();
+    });
+    expect(vi.getTimerCount()).toBe(before + 1); // one crumple on its way
+
+    unmount(); // mid-crumple: nothing is left to fire on a gone editor
+    expect(vi.getTimerCount()).toBe(before);
   });
 
   it("lets the press that keeps the note go on to do its own job", () => {
@@ -179,6 +223,8 @@ describe("StickyEditor bin", () => {
     expect(slip()).toBeNull();
     wait(CRUMPLED);
     expect(note()).toBeNull();
+    // jsdom lets a press through an inert chooser, so ask the attribute
+    expect(chooser()).not.toHaveAttribute("inert");
     fireEvent.click(pad("green"));
     expect(paper()).toBe("green");
     expect(held()).toEqual([]);
@@ -800,6 +846,16 @@ describe("StickyEditor sticker sheet", () => {
     expect(tab()).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("leaves Escape to the wall once the mat has gone down", () => {
+    const content = seeded({});
+    const { rerender } = render(<StickyEditor initialContent={content} />);
+    fireEvent.click(tab());
+    rerender(<StickyEditor initialContent={content} up={false} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("moves the note clear of the sheet while it is up", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const stage = () => paperSurface().parentElement;
@@ -1191,6 +1247,20 @@ describe("StickyEditor font samples", () => {
 
     fireEvent.pointerDown(document.body);
     expect(casual()).toBeNull();
+  });
+
+  it("leaves the wall's presses and Escape alone once the mat has gone down", () => {
+    const content = seeded({ curl: flat });
+    const { rerender } = render(<StickyEditor initialContent={content} />);
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    rerender(<StickyEditor initialContent={content} up={false} />);
+
+    fireEvent.pointerDown(document.body);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(
+      screen.queryByRole("button", { name: /write in casual/i }),
+    ).not.toBeNull();
   });
 });
 

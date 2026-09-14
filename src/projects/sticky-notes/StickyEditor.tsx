@@ -220,6 +220,8 @@ export default function StickyEditor({
   const firstPad = useRef<HTMLButtonElement>(null);
   const binButton = useRef<HTMLButtonElement>(null);
   const binYes = useRef<HTMLButtonElement>(null);
+  // the bin and its slip together: a press in here is not a press elsewhere
+  const binCorner = useRef<HTMLDivElement>(null);
   // the box the sheet is centred in, so where a torn-off sheet lands
   const stage = useRef<HTMLDivElement>(null);
   const crumpleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -311,8 +313,10 @@ export default function StickyEditor({
 
   // The bin's question: the tick has the keyboard; the cross, Escape or a
   // press anywhere else keeps the note, and that press still does its own job.
-  // Escape is caught first, like placing's, so it doesn't also put the sticker
-  // sheet away. A mat taken down mid-question just drops it.
+  // A press on the bin itself is left to the bin's click (binIt), so the one
+  // tap is one answer. Escape is caught first, like placing's, so it doesn't
+  // also put the sticker sheet away. A mat taken down mid-question just drops
+  // it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keepIt reads only a ref and a state setter, so the copy from the render that armed this is as good as the latest.
   useEffect(() => {
     if (!asking) return;
@@ -327,7 +331,7 @@ export default function StickyEditor({
       keepIt();
     };
     const away = (e: PointerEvent) => {
-      if (!(e.target as Element).closest('[data-slot="bin-slip"]')) keepIt();
+      if (!binCorner.current?.contains(e.target as Node)) keepIt();
     };
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("pointerdown", away);
@@ -402,6 +406,9 @@ export default function StickyEditor({
       setTabLift((lift) => Math.max(0, rect.bottom + lift - perch));
     };
     measure();
+    // A mat that has gone down leaves Escape to the wall; it measures again on
+    // its way back up.
+    if (!up) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSheetOpen(false);
     };
@@ -411,7 +418,7 @@ export default function StickyEditor({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", measure);
     };
-  }, [sheetOpen]);
+  }, [sheetOpen, up]);
 
   // The fade's second half: flip to transparent one PAINTED frame after the
   // ghost mounts. One rAF isn't enough — it can run before the browser has
@@ -556,8 +563,13 @@ export default function StickyEditor({
   }
 
   // The bin (#81): a note with anything on it asks first, a blank one goes
-  // straight in. What is being placed is fixed first, so it counts.
+  // straight in. What is being placed is fixed first, so it counts. Tapped
+  // again while it asks, the bin is the answer "keep".
   function binIt() {
+    if (asking) {
+      keepIt();
+      return;
+    }
     fixPlacing();
     const live = contentRef.current;
     if (!live || crumpling) return;
@@ -565,10 +577,16 @@ export default function StickyEditor({
     else crumple();
   }
 
+  // One crumple at a time: a second "Bin it" in the same breath (before a
+  // re-render has taken the tick away) would start a second timer, and only the
+  // last is cleared if the editor unmounts. The ref, not `crumpling`: state read
+  // here can be a render behind.
   function crumple() {
+    if (crumpleTimer.current !== undefined) return;
     setAsking(false);
     setCrumpling(true);
     crumpleTimer.current = setTimeout(() => {
+      crumpleTimer.current = undefined;
       setCrumpling(false);
       clearMat();
     }, CRUMPLE_MS);
@@ -1224,13 +1242,27 @@ export default function StickyEditor({
                 when the eraser is the tool in hand (#74) */}
             <EraserBody held={held === "eraser"} using={using} />
           </ToolSlot>
-          <div className="relative shrink-0">
+          {/* A press on the bin or its slip takes no focus, as on the rocker:
+              otherwise a tap on the bin while the slip asks moves focus out
+              of the slip, which closes it, and the bin's click asks again. */}
+          <div
+            ref={binCorner}
+            className="relative shrink-0"
+            onPointerDown={(e) => e.preventDefault()}
+          >
             <Bin
               ref={binButton}
               onClick={binIt}
               disabled={!content || crumpling}
             />
-            {asking && <BinSlip ref={binYes} onBin={crumple} onKeep={keepIt} />}
+            {asking && (
+              <BinSlip
+                ref={binYes}
+                onBin={crumple}
+                onKeep={keepIt}
+                onLeave={() => setAsking(false)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1295,11 +1327,20 @@ function noteMotion(
       opacity: 0,
       transition: `transform ${CRUMPLE_MS}ms cubic-bezier(.5,0,.8,.35), opacity ${CRUMPLE_MS}ms ease-in`,
     };
-  if (tearing) return { transform: `${tearing} ${tilt}`, transition: "none" };
+  // Coming off its pad the sheet lifts — a touch bigger, its shadow thrown
+  // further — and both settle as it lands (the paper's own shadow is inline).
+  if (tearing)
+    return {
+      transform: `${tearing} scale(1.06) ${tilt}`,
+      filter: "drop-shadow(8px 26px 24px rgba(0,0,0,.35))",
+      transition: "none",
+    };
   return {
     transform: tilt,
     // A sheet being turned must sit under the finger, not ease towards it.
-    transition: turning ? "none" : `transform ${TEAR_MS}ms ${EASE_OUT}`,
+    transition: turning
+      ? "none"
+      : `transform ${TEAR_MS}ms ${EASE_OUT}, filter ${TEAR_MS}ms ${EASE_OUT}`,
   };
 }
 

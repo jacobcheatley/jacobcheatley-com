@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode, Ref } from "react";
+import { type CSSProperties, type ReactNode, type Ref, useId } from "react";
 import { EASE_OUT, SHEET_MS, STILL, TAPE } from "./desk";
 import { FONT_FAMILIES } from "./note-fonts";
 import { INK, PAPER } from "./note-render";
@@ -582,18 +582,32 @@ export function Bin({
 export function BinSlip({
   onBin,
   onKeep,
+  onLeave,
   ref,
 }: {
   onBin: () => void;
   onKeep: () => void;
+  // focus has gone somewhere outside the slip (Tab away): keep the note, and
+  // leave the keyboard where it went
+  onLeave: () => void;
   // the tick, which takes the keyboard when the slip appears
   ref?: Ref<HTMLButtonElement>;
 }) {
   const answer =
     "flex h-11 w-11 items-center justify-center border-0 bg-transparent p-0 text-[1.5rem] leading-none";
+  // a page-unique id, so the group can be named by its own "bin it?"
+  const question = useId();
   return (
-    <div
-      data-slot="bin-slip"
+    // A fieldset is a group to a screen reader; named by aria-labelledby, not
+    // a <legend>, which browsers draw on the border outside the flex row.
+    <fieldset
+      aria-labelledby={question}
+      // React's onBlur bubbles up from the buttons inside. `relatedTarget` is
+      // where focus is going; `contains(null)` is false, so leaving the page
+      // counts as leaving the slip.
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) onLeave();
+      }}
       className="absolute right-0 bottom-[calc(100%+10px)] z-50 flex items-center py-0.5 pr-0.5 pl-3"
       style={{
         background: "linear-gradient(180deg,#fffdf6,#ece3cf)",
@@ -604,7 +618,9 @@ export function BinSlip({
         transform: "rotate(-2deg)",
       }}
     >
-      <span className="mr-1 whitespace-nowrap">bin it?</span>
+      <span id={question} className="mr-1 whitespace-nowrap">
+        bin it?
+      </span>
       <button
         ref={ref}
         type="button"
@@ -623,7 +639,7 @@ export function BinSlip({
       >
         ✕
       </button>
-    </div>
+    </fieldset>
   );
 }
 
