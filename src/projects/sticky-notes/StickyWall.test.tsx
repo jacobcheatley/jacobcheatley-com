@@ -5,8 +5,8 @@ import type { NoteContent } from "./note-schema";
 import type { PendingNote } from "./pending-note";
 import { StickyWall } from "./StickyWall";
 
-// TanStack's <Link> needs a router context we don't want to build here; the back
-// link renders as a plain anchor for this seam.
+// TanStack's <Link> needs a router context we don't want to build here; the
+// invite note renders as a plain anchor for this seam.
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
@@ -61,6 +61,15 @@ describe("StickyWall", () => {
     expect(tiles[1]).toHaveAccessibleName(/lee/i);
   });
 
+  it("wears no header — only a hidden heading for the document outline", () => {
+    render(<StickyWall notes={[]} />);
+    expect(screen.getByRole("heading", { name: "Sticky Notes" })).toHaveClass(
+      "sr-only",
+    );
+    // the wall is cork and notes; Back is the way home
+    expect(screen.queryByRole("link", { name: /jacobcheatley/i })).toBeNull();
+  });
+
   it("shows the diegetic add affordance and no note tiles when there are none", () => {
     render(<StickyWall notes={[]} />);
     expect(screen.queryByRole("button", { name: /zoom note/i })).toBeNull();
@@ -79,7 +88,7 @@ describe("StickyWall", () => {
     );
   });
 
-  it("opens a zoom lightbox on tap and closes it on Escape", async () => {
+  it("opens the zoom Spotlight on tap and closes it on Escape", async () => {
     const user = userEvent.setup();
     render(<StickyWall notes={[note(1, "sam")]} />);
     await user.click(screen.getByRole("button", { name: /zoom note by sam/i }));
@@ -93,7 +102,7 @@ describe("StickyWall", () => {
     );
   });
 
-  it("closes the lightbox on tap-out (backdrop)", async () => {
+  it("closes the Spotlight on tap-out (the scrim)", async () => {
     const user = userEvent.setup();
     render(<StickyWall notes={[note(1, "sam")]} />);
     await user.click(screen.getByRole("button", { name: /zoom note by sam/i }));

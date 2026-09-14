@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { STILL } from "./desk";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
@@ -9,6 +9,7 @@ import {
   readPending,
   reconcilePending,
 } from "./pending-note";
+import { Spotlight } from "./Spotlight";
 
 // The public wall: a corkboard of approved notes, newest-first, that SSRs with
 // no client JS needed to view it. Client JS adds only the two dynamic bits —
@@ -102,62 +103,6 @@ function LandingTile({ content }: { content: NoteContent }) {
   );
 }
 
-function Lightbox({
-  note,
-  onClose,
-}: {
-  note: DisplayNote;
-  onClose: () => void;
-}) {
-  // Move focus into the dialog on open, so Esc and the close button are reachable
-  // by keyboard right away.
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
-  // The backdrop is a real button (the tap-out target); the note and caption
-  // sit layered above it, so clicking them never reaches the backdrop and no
-  // static element needs a click handler. Esc is handled by the parent.
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Note by ${note.author}`}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close note"
-        className="absolute inset-0 h-full w-full cursor-zoom-out border-0 bg-black/70"
-      />
-      <button
-        ref={closeRef}
-        type="button"
-        onClick={onClose}
-        aria-label="Close note"
-        className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full border-0 bg-white/15 font-sans text-2xl leading-none text-white hover:bg-white/25"
-      >
-        ×
-      </button>
-      <div
-        className="relative z-10 w-[min(85vmin,520px)] select-none"
-        style={{
-          aspectRatio: NOTE_ASPECT_RATIO,
-          filter: "drop-shadow(0 12px 30px rgba(0,0,0,.5))",
-        }}
-      >
-        <NoteRender content={note.content} />
-      </div>
-      <p className="relative z-10 font-sans text-sm text-white/90">
-        — {note.author}
-        {note.pending && " · pending approval"}
-      </p>
-    </div>
-  );
-}
-
 // A blank note carrying the invite copy, pinned with the real pin-red fastener —
 // so the affordance renders through the exact same NoteRender path as any note,
 // not a look-alike CSS pin.
@@ -231,7 +176,7 @@ export function StickyWall({
     setPending(reconcilePending(readPending(), notes));
   }, [notes, landing]);
 
-  // Esc closes the zoom lightbox (tap-out is handled on the scrim itself).
+  // Esc closes the Spotlight (tap-out is handled on the scrim itself).
   useEffect(() => {
     if (!zoomed) return;
     const onKey = (e: KeyboardEvent) => {
@@ -248,17 +193,7 @@ export function StickyWall({
       className="flex min-h-dvh flex-col items-center px-4 pb-16"
       style={CORK_BG}
     >
-      <header className="flex w-full max-w-[64rem] items-baseline justify-between gap-4 py-6">
-        <h1 className="font-serif text-2xl text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]">
-          Sticky Notes
-        </h1>
-        <Link
-          to="/"
-          className="font-sans text-sm text-white/80 no-underline hover:text-white hover:underline"
-        >
-          ← jacobcheatley.com
-        </Link>
-      </header>
+      <h1 className="sr-only">Sticky Notes</h1>
 
       <ul className="flex w-full max-w-[64rem] flex-wrap justify-center gap-6 py-4">
         {/* first slot: the wall is newest-first, so "add a note" leads */}
@@ -281,7 +216,18 @@ export function StickyWall({
         ))}
       </ul>
 
-      {zoomed && <Lightbox note={zoomed} onClose={() => setZoomed(null)} />}
+      {zoomed && (
+        <Spotlight
+          content={zoomed.content}
+          label={`Note by ${zoomed.author}`}
+          onClose={() => setZoomed(null)}
+        >
+          <p className="relative z-10 font-sans text-sm text-white/90">
+            — {zoomed.author}
+            {zoomed.pending && " · pending approval"}
+          </p>
+        </Spotlight>
+      )}
     </div>
   );
 }

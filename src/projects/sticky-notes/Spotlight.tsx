@@ -1,0 +1,79 @@
+import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef } from "react";
+import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
+import type { NoteContent } from "./note-schema";
+
+// The Spotlight: the wall darkened, with one note lifted straight out of it.
+// Shared by the wall's zoom-in and by pinning (#88), which flies its note into
+// `data-spotlight` and hangs the fasteners and the tag below it. `children` is
+// whatever belongs under the note — the zoom-in's caption, say.
+
+// The lifted note: the wall's tile size is left behind, and the shadow follows
+// the paper silhouette, so a drop-shadow filter rather than a box one.
+const noteStyle: CSSProperties = {
+  aspectRatio: NOTE_ASPECT_RATIO,
+  filter: "drop-shadow(0 12px 30px rgba(0,0,0,.5))",
+};
+
+export function Spotlight({
+  content,
+  label,
+  onClose,
+  children,
+}: {
+  content: NoteContent;
+  label: string;
+  // Only when the scrim and a × are the way back; pinning brings its own.
+  onClose?: () => void;
+  children?: ReactNode;
+}) {
+  // Move focus into the dialog on open, so Esc and the close button are reachable
+  // by keyboard right away.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  // With a way back the scrim is a real button (the tap-out target); the note
+  // and whatever hangs below it sit layered above it, so clicking them never
+  // reaches the scrim and no static element needs a click handler. Esc is
+  // handled by the caller.
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6"
+    >
+      {onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close note"
+          className="absolute inset-0 h-full w-full cursor-zoom-out border-0 bg-black/70"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-black/70" />
+      )}
+      {onClose && (
+        <button
+          ref={closeRef}
+          type="button"
+          onClick={onClose}
+          aria-label="Close note"
+          className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full border-0 bg-white/15 font-sans text-2xl leading-none text-white hover:bg-white/25"
+        >
+          ×
+        </button>
+      )}
+      <div
+        data-spotlight=""
+        className="relative z-10 w-[min(85vmin,520px)] select-none"
+        style={noteStyle}
+      >
+        <NoteRender content={content} />
+      </div>
+      {children}
+    </div>
+  );
+}
