@@ -114,7 +114,8 @@ const CRUMPLE_MS = 400;
 const GHOST_MS = 200; // how long a rubbed-out element lingers as a fade
 
 // The room the tray takes along the mat's bottom edge, which the note stands
-// clear of — a little over TRAY_TOP, so a lifted marker never meets the paper.
+// clear of — a little over the rocker, the tallest thing in it, so a lifted
+// marker never meets the paper.
 const TRAY_ROOM = "8rem";
 
 const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
@@ -402,8 +403,9 @@ export default function StickyEditor({
     };
   }, [fontsOpen, up]);
 
-  // The sheet's other way out (the tab and a swipe down its handle are the two
-  // on the mat itself). A mat that has gone down leaves Escape to the wall.
+  // The sheet's other way out (its folded corner and a swipe down its handle
+  // are the two on the sheet itself; the tab is under it, in the tray it
+  // covers). A mat that has gone down leaves Escape to the wall.
   useEffect(() => {
     if (!sheetOpen || !up) return;
     const onKey = (e: KeyboardEvent) => {

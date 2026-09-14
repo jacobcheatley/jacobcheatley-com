@@ -1097,6 +1097,19 @@ describe("StickyEditor sticker sheet", () => {
     expect(surface.style.transform).toContain("rotate(0deg)");
   });
 
+  it("rubs nothing out with the eraser held while the sheet is up", () => {
+    render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
+    pickUp(/pick up the eraser/i);
+    fireEvent.click(tab());
+
+    const paper = paperSurface();
+    down(paper, 60, 80);
+    move(paper, 70, 90);
+    up(paper);
+    wait(GHOST_MS);
+    expect(drawn().map((el) => el.textContent)).toEqual(["aaa", "bbb"]);
+  });
+
   it("turns nothing with the hand held while the sheet is up", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
     takeHand();

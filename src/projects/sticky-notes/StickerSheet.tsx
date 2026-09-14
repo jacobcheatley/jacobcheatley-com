@@ -35,6 +35,9 @@ const SHEET_W = COLS * CELL + (COLS - 1) * GAP + PAD_X * 2;
 // note above this line (#86), so it is the numbers the sheet is drawn from
 // rather than anything measured. TRAY_PAD is the tray's own lip, clear of a
 // phone's home indicator: the sheet sits where the tray does now.
+// ponytail: this restates the layout below by hand; a padding added to the
+// sheet and not here floats the note. Measure with a ResizeObserver if the
+// sheet ever grows anything but rows.
 export const SHEET_H = `calc(${HANDLE_H + ROWS * CELL + (ROWS - 1) * GAP}px + ${TRAY_PAD})`;
 
 const SWIPE = 40; // how far down the handle travels before the sheet drops
@@ -84,6 +87,12 @@ export function StickerSheet({
   const swipeFrom = useRef<number | null>(null);
 
   useEffect(() => () => clearTimeout(backTimer.current), []);
+  // The tab that opened the sheet is inert under it now, so focus would fall
+  // to the body: it lands on the corner instead, the way down that is nearest.
+  const corner = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) corner.current?.focus();
+  }, [open]);
 
   // ponytail: the pointer's position is state, so every move re-renders 24
   // spans. That is nothing next to the live stroke the editor drives with refs;
@@ -190,6 +199,7 @@ export function StickerSheet({
             the sheet is up, so a sheet that is away has nothing to close. */}
         {open && (
           <button
+            ref={corner}
             type="button"
             aria-label="Close the sticker sheet"
             onClick={onClose}

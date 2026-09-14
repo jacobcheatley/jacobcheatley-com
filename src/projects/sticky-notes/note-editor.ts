@@ -305,8 +305,9 @@ export function clientToNoteCoords(
 
 // The rendered side of the square sheet, from the box a rotated one occupies.
 // Derived rather than read off `offsetWidth`: that is the LAYOUT size, and the
-// note is scaled down while the sticker sheet is up, which would put every
-// pointer a quarter of a note away from where it really is.
+// note is drawn scaled while it tears off, crumples, or is squeezed above the
+// sticker sheet on a short mat — which would put every pointer some way from
+// where it really is.
 export function noteSide(bboxWidth: number, rotationDeg: number): number {
   const a = (rotationDeg * Math.PI) / 180;
   return bboxWidth / (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a)));

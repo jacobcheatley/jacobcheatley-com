@@ -72,10 +72,6 @@ export const HAND_SLOT: CSSProperties = { width: HAND_W, height: TOOL_H };
 
 // The tray's lip under the objects, clear of a phone's home indicator.
 export const TRAY_PAD = "max(0.75rem, env(safe-area-inset-bottom))";
-// How high the tray stands off the mat's bottom edge: the rocker (two thumb
-// targets, squiggle over Aa) is the tallest thing in it. The sticker sheet
-// sits on this line (#82), so it never covers the tray.
-export const TRAY_TOP = `calc(${2 * ROCKER_H}px + ${TRAY_PAD})`;
 // The room before the bin: up to 32px from the eraser on a wide screen, and
 // nothing at all below 420px, where the markers are already squeezing (#84) —
 // no screen that tight has room to hold the bin off. The spacer takes back the
