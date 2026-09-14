@@ -1,9 +1,14 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { NoteContent } from "./note-schema";
+import type { Font, NoteContent } from "./note-schema";
 import type { PendingNote } from "./pending-note";
 import { StickyWall } from "./StickyWall";
+
+vi.mock("./note-fonts", async (orig) => ({
+  ...(await orig<typeof import("./note-fonts")>()),
+  loadFont: vi.fn(() => Promise.resolve()),
+}));
 
 // TanStack's <Link> needs a router context we don't want to build here; the
 // invite note renders as a plain anchor for this seam.
@@ -213,5 +218,38 @@ describe("StickyWall", () => {
     expect(localStorage.getItem("sticky-notes:pending")).toBe(
       JSON.stringify([pending("lee", 1)]),
     );
+  });
+});
+
+describe("StickyWall fonts (#93)", () => {
+  it("loads every font its notes use on mount, not just when the editor opens", async () => {
+    const { loadFont } = await import("./note-fonts");
+    const text = (font: Font) => ({
+      type: "text" as const,
+      x: 0,
+      y: 0,
+      w: 400,
+      text: "hi",
+      font,
+      color: "black" as const,
+      fontSize: 24,
+      rotation: 0,
+    });
+    storePending({
+      author: "pat",
+      submittedAt: 1,
+      content: content({ elements: [text("marker")] }),
+    });
+    render(
+      <StickyWall
+        notes={[note(1, "sam", { elements: [text("handwritten")] })]}
+      />,
+    );
+    await waitFor(() => {
+      // the invite note is always casual; the tiles bring their own
+      expect(loadFont).toHaveBeenCalledWith("casual");
+      expect(loadFont).toHaveBeenCalledWith("handwritten");
+      expect(loadFont).toHaveBeenCalledWith("marker");
+    });
   });
 });

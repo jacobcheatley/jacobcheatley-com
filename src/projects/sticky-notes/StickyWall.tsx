@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { fadeScrim, flightHome, flyTo } from "./desk";
+import { loadFont } from "./note-fonts";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
-import type { NoteContent } from "./note-schema";
+import type { Font, NoteContent } from "./note-schema";
 import {
   type PendingNote,
   readPending,
@@ -77,6 +78,7 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
 // A blank note carrying the invite copy, pinned with the real pin-red fastener —
 // so the affordance renders through the exact same NoteRender path as any note,
 // not a look-alike CSS pin.
+const INVITE_FONT: Font = "casual";
 function inviteContent(text: string, fontSize: number): NoteContent {
   return {
     version: 1,
@@ -93,7 +95,7 @@ function inviteContent(text: string, fontSize: number): NoteContent {
         y: 170,
         w: 420,
         text,
-        font: "casual",
+        font: INVITE_FONT,
         color: "black",
         fontSize,
         rotation: 0,
@@ -148,6 +150,17 @@ export function StickyWall({
     if (pinning) return;
     setPending(reconcilePending(readPending(), notes));
   }, [notes, pinning]);
+
+  // The note webfonts load lazily (note-fonts.ts), and until #93 only the
+  // editor asked for them — the wall sat in the cursive fallback until you
+  // opened the editor. Ask for every face a tile shows, plus the invite's.
+  // No dedupe: a dynamic import() is cached, so a repeat ask costs nothing.
+  useEffect(() => {
+    loadFont(INVITE_FONT);
+    for (const { content } of [...pending, ...notes])
+      for (const el of content.elements)
+        if (el.type === "text") loadFont(el.font);
+  }, [notes, pending]);
 
   // Esc closes the Spotlight (tap-out is handled on the scrim itself).
   useEffect(() => {
