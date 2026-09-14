@@ -22,3 +22,11 @@ go install github.com/gitleaks/gitleaks/v8@latest   # or grab a release binary
 ```
 
 The hook fails if `gitleaks` isn't on PATH. Emergency bypass: `git commit --no-verify`.
+
+## Moderating production
+
+Run the owner CLI against prod without a credential on disk:
+
+```sh
+DATABASE_URL="$(npx neon@latest connection-string --project-id cold-recipe-98352824 --branch production)" bun run sticky-notes
+```
