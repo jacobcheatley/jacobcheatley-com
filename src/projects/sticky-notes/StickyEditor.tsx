@@ -1033,22 +1033,23 @@ export default function StickyEditor({
 
   return (
     <div className="absolute inset-0 select-none">
-      {/* the sheet: bare paper, centred, clear of the strip */}
+      {/* the sheet: bare paper, centred, clear of the tray below and with room
+          above (top-20) for "pin it up" taped over it */}
       <div
         ref={stage}
-        className="pointer-events-none absolute inset-x-0 top-0 bottom-32 flex items-center justify-center"
+        className="pointer-events-none absolute inset-x-0 top-20 bottom-32 flex items-center justify-center"
       >
         {shown && (
           <div
             // The sticker sheet sits on the tray, so the note moves up out of
-            // its way and stays whole.
+            // its way and stays whole, "pin it up" and all.
             // ponytail: one fixed shift and shrink, not a measurement — checked
-            // in Chromium at 360x740 and 1280x800. A phone shorter than about
-            // 640px tall loses the note's bottom edge under the sheet; measure
+            // in Chromium from 360x740 and 1366x657 up. A mat shorter than
+            // about 660px loses the note's bottom edge under the sheet; measure
             // the room above the sheet if that matters.
-            className={STILL}
+            className={`${STILL} relative`}
             style={{
-              transform: sheetOpen ? "translateY(-18%) scale(.7)" : "none",
+              transform: sheetOpen ? "translateY(-30%) scale(.6)" : "none",
               transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
               // Pinned up, the note is on the wall: the mat slides away bare,
               // and comes back up with it lying where it was.
@@ -1139,20 +1140,22 @@ export default function StickyEditor({
                 />
               )}
             </div>
+
+            {/* "pin it up" (#82): taped just above the paper, in this frame
+                rather than on the paper, so it rides the sheet's shift with
+                the note but never turns with it. `w-max`: a box hung off the
+                middle would otherwise wrap in the half-width left to it. */}
+            <TapeLabel
+              ref={pinButton}
+              loud
+              onClick={pinUp}
+              className="-translate-x-1/2 pointer-events-auto absolute bottom-full left-1/2 mb-2 w-max"
+            >
+              pin it up
+            </TapeLabel>
           </div>
         )}
       </div>
-
-      {/* stuck along the mat's top edge, across from "← the wall" */}
-      {content && (
-        <TapeLabel
-          ref={pinButton}
-          onClick={pinUp}
-          className="absolute top-3 right-3 z-40"
-        >
-          pin it up
-        </TapeLabel>
-      )}
 
       <PadChooser
         ref={firstPad}

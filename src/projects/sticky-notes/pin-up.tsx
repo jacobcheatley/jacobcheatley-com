@@ -147,7 +147,7 @@ export function PinUp({
     <>
       {createPortal(
         <>
-          {/* Stuck where "pin it up" was. Not once the note is on its way:
+          {/* Stuck across from "← the wall". Not once the note is on its way:
               it is as good as sent, and going back would leave it both
               pending and on the mat to be pinned up twice. */}
           <TapeLabel

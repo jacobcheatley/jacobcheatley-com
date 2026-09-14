@@ -766,11 +766,15 @@ export function StickerTab({
 export function TapeLabel({
   children,
   onClick,
+  loud = false,
   className = "",
   ref,
 }: {
   children: ReactNode;
   onClick: () => void;
+  // "pin it up" (#82): the one thing on the mat that should shout, so twice
+  // the size, in bold, on the site's orange
+  loud?: boolean;
   className?: string;
   // for whoever puts the keyboard back on it; a plain prop in React 19
   ref?: Ref<HTMLButtonElement>;
@@ -780,8 +784,14 @@ export function TapeLabel({
       ref={ref}
       type="button"
       onClick={onClick}
-      className={`border-0 px-4 py-1.5 text-[1.1875rem] leading-snug ${className}`}
-      style={{ ...TAPE, color: "#4a412c", fontFamily: FONT_FAMILIES.casual }}
+      className={`border-0 leading-snug ${loud ? "px-8 py-3 font-bold text-[2.375rem]" : "px-4 py-1.5 text-[1.1875rem]"} ${className}`}
+      style={{
+        ...TAPE,
+        // the theme's own tokens, so the orange follows light and dark
+        backgroundColor: loud ? "var(--color-accent-2)" : TAPE.backgroundColor,
+        color: loud ? "var(--color-on-accent-2)" : "#4a412c",
+        fontFamily: FONT_FAMILIES.casual,
+      }}
     >
       {children}
     </button>

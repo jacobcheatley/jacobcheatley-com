@@ -96,6 +96,18 @@ describe("StickyEditor pad chooser", () => {
     expect(hand()).toHaveAttribute("aria-pressed", "true"); // hand mode
   });
 
+  it("sticks pin it up just above the note, in its unrotated frame, even on a blank note", () => {
+    render(<StickyEditor initialContent={seeded({ rotation: 12 })} />);
+    const pinButton = screen.getByRole("button", { name: /pin it up/i });
+    const surface = note()?.closest("[data-colour]");
+
+    // the frame that moves and shrinks with the sticker sheet, not the paper
+    // that turns inside it
+    expect(pinButton.parentElement).toBe(surface?.parentElement);
+    expect(surface).not.toContainElement(pinButton);
+    expect(pinButton).toBeEnabled();
+  });
+
   it("offers no way to change the paper once it is torn", () => {
     render(<StickyEditor initialContent={seeded({ colour: "pink" })} />);
     expect(chooser()).toHaveAttribute("inert");
