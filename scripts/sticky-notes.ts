@@ -1,7 +1,8 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createElement } from "react";
+import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { dbHost } from "@/db/index.server";
 import {
   NOTE_ASPECT_RATIO,
   NoteRender,
@@ -15,22 +16,40 @@ import {
 // Auth is possession of DATABASE_URL, same as db:migrate; the printed host is
 // the guard against writing to the wrong environment.
 
-const escapeHtml = (s: string) =>
-  s.replace(
-    /[&<>"]/g,
-    (ch) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch] ?? ch,
-  );
-
 async function pending() {
   const notes = await listPendingNotes();
   // ponytail: no webfonts in the gallery (text falls back to cursive/sans);
   // inline the fontsource woff2s as data URIs if a fallback ever misleads a call.
-  const tiles = notes.map(
-    (n) => `<figure>
-  <div class="note" style="transform:rotate(${n.content.rotation}deg)">${renderToStaticMarkup(createElement(NoteRender, { content: n.content }))}</div>
-  <figcaption><b>#${n.id}</b> ${escapeHtml(n.author)}<br><small>${n.createdAt.toISOString()}</small></figcaption>
-</figure>`,
+  // One React tree for every tile: NoteRender's `useId` ids are unique only
+  // within a tree, so rendering per note would give every tile the first
+  // note's clip path and fold shading.
+  const tiles = renderToStaticMarkup(
+    h(
+      "main",
+      null,
+      notes.map((n) =>
+        h(
+          "figure",
+          { key: n.id },
+          h(
+            "div",
+            {
+              className: "note",
+              style: { transform: `rotate(${n.content.rotation}deg)` },
+            },
+            h(NoteRender, { content: n.content }),
+          ),
+          h(
+            "figcaption",
+            null,
+            h("b", null, `#${n.id}`),
+            ` ${n.author}`,
+            h("br"),
+            h("small", null, n.createdAt.toISOString()),
+          ),
+        ),
+      ),
+    ),
   );
   const html = `<!doctype html><meta charset="utf-8"><title>Pending sticky notes (${notes.length})</title>
 <style>
@@ -43,14 +62,15 @@ figcaption{margin-top:12px;text-align:center}
 small{opacity:.6}
 </style>
 <h1>${notes.length} pending — approve with <code>bun run sticky-notes approve &lt;id&gt;</code></h1>
-<main>${tiles.join("\n")}</main>`;
+${tiles}`;
 
   const path = join(tmpdir(), "sticky-notes-pending.html");
   await Bun.write(path, html);
   console.log(`${notes.length} pending note(s) → ${path}`);
   const opener = process.platform === "darwin" ? "open" : "xdg-open";
   try {
-    Bun.spawn([opener, path], { stdio: ["ignore", "ignore", "ignore"] });
+    await Bun.spawn([opener, path], { stdio: ["ignore", "ignore", "ignore"] })
+      .exited;
   } catch {
     console.log(`(${opener} not available — open the file yourself)`);
   }
@@ -59,8 +79,7 @@ small{opacity:.6}
 async function approve(arg: string | undefined) {
   const id = Number(arg);
   if (!Number.isInteger(id) || id <= 0) usage();
-  // DATABASE_URL is set: importing the db module above already threw otherwise.
-  console.log(`target: ${new URL(process.env.DATABASE_URL as string).host}`);
+  console.log(`target: ${dbHost}`);
   const rows = await approveNote(id);
   console.log(`approved note #${id}: ${rows} row(s) affected`);
 }
