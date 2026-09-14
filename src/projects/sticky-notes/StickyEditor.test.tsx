@@ -14,6 +14,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 const CRUMPLED = 600; // > CRUMPLE_MS
+const TORN = 600; // > TEAR_MS
 const GHOST_MS = 400; // > the rubbed-out fade
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
@@ -242,6 +243,22 @@ describe("StickyEditor bin", () => {
     expect(paper()).toBe("green");
     expect(hand()).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("takes pin it up down while a note flies, until the next sheet has landed", () => {
+    // it stands beside the paper, not on it, so a flight would leave it behind
+    render(<StickyEditor initialContent={seeded({})} />);
+    const pinButton = () => screen.getByRole("button", { name: /pin it up/i });
+    expect(pinButton()).not.toHaveAttribute("inert");
+
+    fireEvent.click(bin()); // blank: straight in
+    expect(pinButton()).toHaveAttribute("inert");
+    wait(CRUMPLED);
+
+    fireEvent.click(pad("green"));
+    expect(pinButton()).toHaveAttribute("inert");
+    wait(TORN);
+    expect(pinButton()).not.toHaveAttribute("inert");
+  });
 });
 
 describe("StickyEditor tools", () => {
@@ -268,6 +285,14 @@ describe("StickyEditor tools", () => {
     expect(
       screen.getByRole("button", { name: /pick up the eraser/i }),
     ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("gives the hand back when the eraser is put down", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the eraser/i);
+    pickUp(/put down the eraser/i);
+
+    expect(hand()).toHaveAttribute("aria-pressed", "true");
   });
 
   it("keeps the hand when the hand is tapped again", () => {

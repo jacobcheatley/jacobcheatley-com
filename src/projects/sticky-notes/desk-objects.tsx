@@ -73,9 +73,14 @@ export const TRAY_PAD = "max(0.75rem, env(safe-area-inset-bottom))";
 // targets, squiggle over Aa) is the tallest thing in it. The sticker sheet
 // sits on this line (#82), so it never covers the tray.
 export const TRAY_TOP = `calc(${2 * ROCKER_H}px + ${TRAY_PAD})`;
-// The room left before the bin: a little on a wide screen, none on a phone.
-// A shrinkable flex item, so it gives up its width before anything else has to.
-export const BIN_GAP = "clamp(0px, 4vw, 32px)";
+// The room before the bin: up to 32px from the eraser on a wide screen, down to
+// the row's own gap on a phone. The spacer takes back the row gap on its far
+// side, so the gaps either side of it don't count twice; a shrinkable flex
+// item, it gives up its width before anything else has to.
+export const BIN_SPACER: CSSProperties = {
+  width: `clamp(0px, 4vw, 32px - ${DESK_GAP})`,
+  marginInlineEnd: `calc(-1 * ${DESK_GAP})`,
+};
 export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
 
 // How long the held tool shakes when the note is full and nothing more fits.
@@ -761,20 +766,39 @@ export function StickerTab({
   );
 }
 
+// "pin it up" (#82) is loud tape hung just above the note, and the editor keeps
+// PIN_ROOM clear over the paper for it: one line of its text, its padding, the
+// gap it stands off the paper by, and the few px its tilt lifts one end (-2.2°
+// across ~210px of tape is ~8px, half of it above the middle). The label is
+// sized from these same numbers, so the room and the tape can't drift apart.
+const LOUD_TEXT = 38; // px, twice the quiet tape's
+const LOUD_LINE = 1.375; // Tailwind's leading-snug, as the quiet tape has
+const LOUD_PAD_Y = 12;
+const PIN_GAP = 8;
+const TILT_RISE = 4;
+export const PIN_ROOM = Math.ceil(
+  LOUD_TEXT * LOUD_LINE + 2 * LOUD_PAD_Y + PIN_GAP + TILT_RISE,
+);
+
 // A strip of masking tape with a word on it, in the casual hand: the desk's own
 // buttons ("pin it up", "back to the desk"), stuck on rather than printed.
 export function TapeLabel({
   children,
   onClick,
   loud = false,
+  away = false,
   className = "",
   ref,
 }: {
   children: ReactNode;
   onClick: () => void;
   // "pin it up" (#82): the one thing on the mat that should shout, so twice
-  // the size, in bold, on the site's orange
+  // the size, on the site's orange, standing PIN_GAP off what it hangs over.
+  // Not bold: the casual hand comes in one weight, and the browser would fake
+  // a second.
   loud?: boolean;
+  // what it labels is in flight: faded out, and out of reach until it lands
+  away?: boolean;
   className?: string;
   // for whoever puts the keyboard back on it; a plain prop in React 19
   ref?: Ref<HTMLButtonElement>;
@@ -784,13 +808,24 @@ export function TapeLabel({
       ref={ref}
       type="button"
       onClick={onClick}
-      className={`border-0 leading-snug ${loud ? "px-8 py-3 font-bold text-[2.375rem]" : "px-4 py-1.5 text-[1.1875rem]"} ${className}`}
+      inert={away}
+      className={`border-0 ${loud ? "" : "px-4 py-1.5 text-[1.1875rem] leading-snug"} ${STILL} ${className}`}
       style={{
         ...TAPE,
+        ...(loud
+          ? {
+              fontSize: LOUD_TEXT,
+              lineHeight: LOUD_LINE,
+              padding: `${LOUD_PAD_Y}px 32px`,
+              marginBottom: PIN_GAP,
+            }
+          : {}),
         // the theme's own tokens, so the orange follows light and dark
         backgroundColor: loud ? "var(--color-accent-2)" : TAPE.backgroundColor,
         color: loud ? "var(--color-on-accent-2)" : "#4a412c",
         fontFamily: FONT_FAMILIES.casual,
+        opacity: away ? 0 : 1,
+        transition: "opacity 160ms",
       }}
     >
       {children}

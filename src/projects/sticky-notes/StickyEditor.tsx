@@ -10,7 +10,7 @@ import {
 import { flushSync } from "react-dom";
 import { capturePointer, EASE_OUT, SHEET_MS, STILL } from "./desk";
 import {
-  BIN_GAP,
+  BIN_SPACER,
   Bin,
   BinSlip,
   DESK_GAP,
@@ -25,6 +25,7 @@ import {
   ModeControl,
   PAPER_SIDE,
   PadChooser,
+  PIN_ROOM,
   SHAKE_MS,
   StickerTab,
   TapeLabel,
@@ -168,6 +169,11 @@ export default function StickyEditor({
   // into the bin.
   const [tearing, setTearing] = useState<Offset | null>(null);
   const [crumpling, setCrumpling] = useState<Offset | null>(null);
+  // A torn-off sheet has finished its flight onto the mat. "pin it up" hangs
+  // beside the paper, not on it, so neither flight carries it: it waits for
+  // this, and goes down again for a crumple.
+  const [landed, setLanded] = useState(true);
+  const landTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The bin's slip is up, asking whether the note may go (#81).
   const [binSlipOpen, setBinSlipOpen] = useState(false);
 
@@ -348,6 +354,7 @@ export default function StickyEditor({
   useEffect(
     () => () => {
       clearTimeout(crumpleTimer.current);
+      clearTimeout(landTimer.current);
       clearTimeout(ghostTimer.current);
       clearTimeout(shakeTimer.current);
     },
@@ -539,6 +546,9 @@ export default function StickyEditor({
     const from = pad.getBoundingClientRect();
     apply(note);
     setTearing(offset(from, stage.current?.getBoundingClientRect()));
+    setLanded(false);
+    clearTimeout(landTimer.current);
+    landTimer.current = setTimeout(() => setLanded(true), TEAR_MS);
   }
 
   // The bin (#81): a note with anything on it asks first, a blank one goes
@@ -1033,11 +1043,16 @@ export default function StickyEditor({
 
   return (
     <div className="absolute inset-0 select-none">
-      {/* the sheet: bare paper, centred, clear of the tray below and with room
-          above (top-20) for "pin it up" taped over it */}
+      {/* the sheet: bare paper, centred, clear of the tray below and with
+          PIN_ROOM above for "pin it up" taped over it.
+          ponytail: the paper is 60svh at most and the stage is the mat less
+          PIN_ROOM and the tray's 128px, so on a mat shorter than about 545px
+          the note outgrows the stage and the tape pokes above the mat's top
+          edge. Take the room off PAPER_SIDE if a mat that short turns up. */}
       <div
         ref={stage}
-        className="pointer-events-none absolute inset-x-0 top-20 bottom-32 flex items-center justify-center"
+        className="pointer-events-none absolute inset-x-0 bottom-32 flex items-center justify-center"
+        style={{ top: PIN_ROOM }}
       >
         {shown && (
           <div
@@ -1045,8 +1060,9 @@ export default function StickyEditor({
             // its way and stays whole, "pin it up" and all.
             // ponytail: one fixed shift and shrink, not a measurement — checked
             // in Chromium from 360x740 and 1366x657 up. A mat shorter than
-            // about 660px loses the note's bottom edge under the sheet; measure
-            // the room above the sheet if that matters.
+            // about 660px loses the note's bottom edge under the sheet, and at
+            // 320x568 the tape can meet "← the wall"; measure the room above
+            // the sheet if that matters.
             className={`${STILL} relative`}
             style={{
               transform: sheetOpen ? "translateY(-30%) scale(.6)" : "none",
@@ -1148,6 +1164,7 @@ export default function StickyEditor({
             <TapeLabel
               ref={pinButton}
               loud
+              away={!landed || crumpling !== null}
               onClick={pinUp}
               className="-translate-x-1/2 pointer-events-auto absolute bottom-full left-1/2 mb-2 w-max"
             >
@@ -1245,7 +1262,7 @@ export default function StickyEditor({
               when the eraser is the tool in hand (#74) */}
           <EraserBody held={held === "eraser"} using={using} />
         </ToolSlot>
-        <span aria-hidden="true" className="block" style={{ width: BIN_GAP }} />
+        <span aria-hidden="true" className="block" style={BIN_SPACER} />
         {/* A press on the bin or its slip takes no focus, as on the rocker:
             otherwise a tap on the bin while the slip asks moves focus out of
             the slip, which closes it, and the bin's click asks again. */}
