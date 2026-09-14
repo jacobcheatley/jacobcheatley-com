@@ -2,13 +2,24 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FONT_FAMILIES } from "./note-fonts";
-import { NoteRender } from "./note-render";
-import type { NoteContent } from "./note-schema";
+import {
+  FASTENER_MARGIN,
+  FastenerPreview,
+  NOTE_PAPER_ASPECT_RATIO,
+  NotePaper,
+  NoteRender,
+  PREVIEW_DEPTH,
+} from "./note-render";
+import { CANVAS, FASTENERS, type NoteContent } from "./note-schema";
 
 // createElement (not JSX) keeps this a .test.ts in the node project, which also
 // proves the acceptance criterion: NoteRender renders with no browser/DOM.
 function render(content: NoteContent) {
   return renderToStaticMarkup(createElement(NoteRender, { content }));
+}
+
+function renderPaper(content: NoteContent) {
+  return renderToStaticMarkup(createElement(NotePaper, { content }));
 }
 
 const content: NoteContent = {
@@ -94,6 +105,32 @@ describe("NoteRender", () => {
     expect(curled).toContain("feDropShadow");
   });
 
+  it("draws the fixed nib whatever pressure a point carries", () => {
+    // a marker has no pressure (#84): a mouse (0.5), a touch (0 or 1) and a
+    // pen (light force) all stored a number here, and all must render alike
+    const stroke = (pressure: number): NoteContent => ({
+      ...content,
+      elements: [
+        {
+          type: "stroke",
+          ink: "red",
+          size: 8,
+          points: [
+            [10, 10, pressure],
+            [20, 20, pressure],
+            [30, 10, pressure],
+          ],
+        },
+      ],
+    });
+    const d = (c: NoteContent) =>
+      render(c)
+        .match(/ d="([^"]*)"/g)
+        ?.join("") ?? "";
+    expect(d(stroke(0.1))).not.toBe("");
+    expect(d(stroke(0.1))).toBe(d(stroke(1)));
+  });
+
   it("is deterministic and needs no DOM", () => {
     expect(render(content)).toBe(render(content));
   });
@@ -103,5 +140,56 @@ describe("NoteRender", () => {
     expect(FONT_FAMILIES.handwritten).toContain("Caveat");
     expect(FONT_FAMILIES.casual).toContain("Patrick Hand");
     expect(FONT_FAMILIES.marker).toContain("Permanent Marker");
+  });
+});
+
+describe("NotePaper", () => {
+  it("is the bare 500-square sheet: no fastener headroom", () => {
+    expect(renderPaper(content)).toContain('viewBox="0 0 500 500"');
+    expect(NOTE_PAPER_ASPECT_RATIO).toBe(1);
+  });
+
+  it("draws no fastener even when the note carries one", () => {
+    // the note's pin-red would show its head gradient in the composed render
+    expect(render(content)).toContain("#e11d48");
+    expect(renderPaper(content)).not.toContain("#e11d48");
+  });
+
+  it("keeps the paper layer identical to the composed render", () => {
+    const paper = renderPaper({ ...content, curl: { bl: 0.4, br: 0.6 } });
+    // same content, same folds — the mat shows exactly what the wall will
+    expect(paper).toContain("hello");
+    expect(paper).toContain("\u2b50");
+    expect(paper).toContain("feDropShadow");
+  });
+});
+
+describe("FastenerPreview", () => {
+  const preview = (fastener: (typeof FASTENERS)[number]) =>
+    renderToStaticMarkup(createElement(FastenerPreview, { fastener }));
+
+  it("renders a distinct strip for every fastener", () => {
+    const outputs = FASTENERS.map(preview);
+    expect(new Set(outputs).size).toBe(FASTENERS.length);
+    // the strip is the fastener's headroom plus a shallow slice of paper
+    const viewBox = `viewBox="0 ${-FASTENER_MARGIN} ${CANVAS} ${PREVIEW_DEPTH + FASTENER_MARGIN}"`;
+    for (const svg of outputs) expect(svg).toContain(viewBox);
+  });
+
+  it("reuses the wall's drawing code, so a preview matches the real thing", () => {
+    expect(preview("pin-red")).toContain("#e11d48");
+    expect(preview("stick")).toContain("#5b7fc4");
+  });
+
+  it("renders the bare strip for none", () => {
+    expect(preview("none")).not.toContain("radialGradient");
+    expect(preview("none")).toContain("#fde68a"); // default yellow paper
+  });
+
+  it("tints the strip with the note's paper colour", () => {
+    const pink = renderToStaticMarkup(
+      createElement(FastenerPreview, { fastener: "none", colour: "pink" }),
+    );
+    expect(pink).toContain("#fbcfe8");
   });
 });

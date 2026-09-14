@@ -36,13 +36,21 @@ const BELL = String.fromCharCode(7); // a control char to smuggle in
 const CR = String.fromCharCode(13);
 
 describe("noteSchema", () => {
-  it("accepts a valid submission and trims the author", () => {
+  it("accepts a valid submission, trimming and lowercasing the author", () => {
     const result = noteSchema.safeParse({
       author: "  Ada  ",
       content: validContent(),
     });
     expect(result.success).toBe(true);
-    expect(result.data?.author).toBe("Ada");
+    expect(result.data?.author).toBe("ada");
+  });
+
+  it("stores the author lowercase, so the wall never shouts a name", () => {
+    const result = noteSchema.safeParse({
+      author: "Jacob Cheatley",
+      content: validContent(),
+    });
+    expect(result.data?.author).toBe("jacob cheatley");
   });
 
   it("accepts a note with no elements", () => {
@@ -54,6 +62,8 @@ describe("noteSchema", () => {
     ["over 50 chars", "a".repeat(51)],
     ["contains a newline", "Ada\nCheatley"],
     ["contains a control char", `Ada${BELL}`],
+    // lowercasing happens before the refine, so it can't smuggle one past
+    ["contains a control char behind caps", `ADA${BELL}`],
   ])("rejects an author that is %s", (_label, author) => {
     expect(
       noteSchema.safeParse({ author, content: validContent() }).success,

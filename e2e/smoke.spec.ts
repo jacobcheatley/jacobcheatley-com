@@ -11,4 +11,14 @@ test("the retired /guestbook route is gone (404)", async ({ request }) => {
   expect(response.status()).toBe(404);
 });
 
-// The Sticky Notes write-path smoke returns with the editor route (#61).
+test("the Sticky Notes editor loads with the mat over the wall", async ({
+  page,
+}) => {
+  const response = await page.goto("/sticky-notes/new");
+  expect(response?.status()).toBe(200);
+  // the mat is already up on a direct load, and its island has mounted
+  await expect(page.getByRole("link", { name: /the wall/i })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Tear off a yellow sheet" }),
+  ).toBeVisible();
+});

@@ -1,14 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { fadeScrim, flightHome, flyTo } from "./desk";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 import {
-  clearPending,
-  isApproved,
   type PendingNote,
   readPending,
+  reconcilePending,
 } from "./pending-note";
+import { Spotlight } from "./Spotlight";
 
 // The public wall: a corkboard of approved notes, newest-first, that SSRs with
 // no client JS needed to view it. Client JS adds only the two dynamic bits —
@@ -16,12 +17,10 @@ import {
 // CSS around each tile; curl and the fastener are baked into NoteRender itself.
 
 // An approved note as the loader delivers it (extra columns come along unused).
-type WallNote = { id: number; author: string; content: NoteContent };
+export type WallNote = { id: number; author: string; content: NoteContent };
 
 // What a tile/zoom needs — approved notes and the local pending note both fit.
 type DisplayNote = { author: string; content: NoteContent; pending?: boolean };
-
-const EDITOR_HREF = "/sticky-notes/new"; // editor route lands with #61
 
 // Warm corkboard: a faint stipple of pits over a wood-brown wash. Lifted from
 // the visual-direction probe (prototype/49-sticky-look, surface A).
@@ -36,6 +35,30 @@ const CORK_BG: CSSProperties = {
   backgroundSize: "14px 14px, 22px 22px, 18px 18px, 16px 16px, cover",
 };
 
+// A tile's box on the board. The note's own rotation; the shadow follows the
+// paper silhouette (curl cut-outs and all), so a drop-shadow filter, not a
+// rectangular box one.
+const tileStyle = (content: NoteContent): CSSProperties => ({
+  aspectRatio: NOTE_ASPECT_RATIO,
+  transform: `rotate(${content.rotation}deg)`,
+  filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
+});
+
+// A note sent from the Spotlight flies home into the newest pending tile (#88),
+// which is the first thing to exist where it is going — so the tile starts the
+// flight itself as it mounts, with the rect the pinning left behind. Any other
+// tile finds none waiting and stays where it is. Module scope, so the ref is
+// the same function every render and React never re-attaches it.
+function flyHome(tile: HTMLLIElement | null) {
+  if (tile && flyTo(flightHome(), tile)) fadeScrim();
+}
+
+const PendingBadge = () => (
+  <span className="absolute -top-1 right-1 rounded-sm bg-black/70 px-1.5 py-0.5 font-sans text-[0.6rem] font-semibold tracking-wide text-white uppercase">
+    Pending
+  </span>
+);
+
 function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
   return (
     <button
@@ -43,77 +66,11 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
       onClick={onOpen}
       aria-label={`Zoom note by ${note.author}`}
       className="relative block w-32 cursor-zoom-in select-none border-0 bg-transparent p-0"
-      style={{
-        aspectRatio: NOTE_ASPECT_RATIO,
-        // The note's own rotation; the shadow follows the paper silhouette (curl
-        // cut-outs and all), so a drop-shadow filter, not a rectangular box one.
-        transform: `rotate(${note.content.rotation}deg)`,
-        filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
-      }}
+      style={tileStyle(note.content)}
     >
       <NoteRender content={note.content} />
-      {note.pending && (
-        <span className="absolute -top-1 right-1 rounded-sm bg-black/70 px-1.5 py-0.5 font-sans text-[0.6rem] font-semibold tracking-wide text-white uppercase">
-          Pending
-        </span>
-      )}
+      {note.pending && <PendingBadge />}
     </button>
-  );
-}
-
-function Lightbox({
-  note,
-  onClose,
-}: {
-  note: DisplayNote;
-  onClose: () => void;
-}) {
-  // Move focus into the dialog on open, so Esc and the close button are reachable
-  // by keyboard right away.
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
-  // The backdrop is a real button (the tap-out target); the note and caption
-  // sit layered above it, so clicking them never reaches the backdrop and no
-  // static element needs a click handler. Esc is handled by the parent.
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Note by ${note.author}`}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close note"
-        className="absolute inset-0 h-full w-full cursor-zoom-out border-0 bg-black/70"
-      />
-      <button
-        ref={closeRef}
-        type="button"
-        onClick={onClose}
-        aria-label="Close note"
-        className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full border-0 bg-white/15 font-sans text-2xl leading-none text-white hover:bg-white/25"
-      >
-        ×
-      </button>
-      <div
-        className="relative z-10 w-[min(85vmin,520px)] select-none"
-        style={{
-          aspectRatio: NOTE_ASPECT_RATIO,
-          filter: "drop-shadow(0 12px 30px rgba(0,0,0,.5))",
-        }}
-      >
-        <NoteRender content={note.content} />
-      </div>
-      <p className="relative z-10 font-sans text-sm text-white/90">
-        — {note.author}
-        {note.pending && " · pending approval"}
-      </p>
-    </div>
   );
 }
 
@@ -153,8 +110,9 @@ function AddNote({ empty }: { empty: boolean }) {
     ? inviteContent("Nothing pinned yet — pin the first note", 46)
     : inviteContent("+ pin\na note", 62);
   return (
-    <a
-      href={EDITOR_HREF}
+    <Link
+      // A client push, so the mat slides up over the wall instead of reloading it.
+      to="/sticky-notes/new"
       aria-label="Pin a note"
       className={`block select-none no-underline ${empty ? "w-56" : "w-32"}`}
       style={{
@@ -164,24 +122,34 @@ function AddNote({ empty }: { empty: boolean }) {
       }}
     >
       <NoteRender content={content} />
-    </a>
+    </Link>
   );
 }
 
-export function StickyWall({ notes }: { notes: WallNote[] }) {
+export function StickyWall({
+  notes,
+  pinning,
+}: {
+  notes: WallNote[];
+  // the note being pinned up, while it is (#88): the wall shows nothing of it
+  // — it is lifted into the Spotlight over the top — but it must not re-read
+  // its pending notes under a note that has not been sent yet.
+  pinning?: NoteContent;
+}) {
   const [zoomed, setZoomed] = useState<DisplayNote | null>(null);
-  const [pending, setPending] = useState<PendingNote | null>(null);
+  const [pending, setPending] = useState<PendingNote[]>([]);
 
-  // Own pending note lives only in this browser, so read it after mount (SSR has
-  // no localStorage) and drop it the moment it shows up approved in the list.
-  useEffect(() => {
-    const p = readPending();
-    const reconciled = p !== null && isApproved(p, notes);
-    if (reconciled) clearPending();
-    setPending(reconciled ? null : p);
-  }, [notes]);
+  // Own pending notes live only in this browser, so read them after mount (SSR
+  // has no localStorage); each drops the moment it shows up approved. Read
+  // again when a pinning ends: a submit has just added one to the list. A
+  // layout effect, so the tile the note flies home into is laid out before the
+  // browser paints the wall it is coming back to.
+  useLayoutEffect(() => {
+    if (pinning) return;
+    setPending(reconcilePending(readPending(), notes));
+  }, [notes, pinning]);
 
-  // Esc closes the zoom lightbox (tap-out is handled on the scrim itself).
+  // Esc closes the Spotlight (tap-out is handled on the scrim itself).
   useEffect(() => {
     if (!zoomed) return;
     const onKey = (e: KeyboardEvent) => {
@@ -191,38 +159,34 @@ export function StickyWall({ notes }: { notes: WallNote[] }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [zoomed]);
 
-  const empty = notes.length === 0 && !pending;
+  const empty = notes.length === 0 && pending.length === 0 && !pinning;
 
   return (
     <div
       className="flex min-h-dvh flex-col items-center px-4 pb-16"
       style={CORK_BG}
     >
-      <header className="flex w-full max-w-[64rem] items-baseline justify-between gap-4 py-6">
-        <h1 className="font-serif text-2xl text-white drop-shadow-[0_1px_2px_rgba(0,0,0,.5)]">
-          Sticky Notes
-        </h1>
-        <Link
-          to="/"
-          className="font-sans text-sm text-white/80 no-underline hover:text-white hover:underline"
-        >
-          ← jacobcheatley.com
-        </Link>
-      </header>
+      <h1 className="sr-only">Sticky Notes</h1>
 
       <ul className="flex w-full max-w-[64rem] flex-wrap justify-center gap-6 py-4">
         {/* first slot: the wall is newest-first, so "add a note" leads */}
         <li>
           <AddNote empty={empty} />
         </li>
-        {pending && (
-          <li>
-            <NoteTile
-              note={{ ...pending, pending: true }}
-              onOpen={() => setZoomed({ ...pending, pending: true })}
-            />
-          </li>
-        )}
+        {pending.map((p, i) => {
+          const tile = { ...p, pending: true };
+          return (
+            // The newest of them holds the slot a note just sent flies home
+            // into; it is the first tile after the invite.
+            <li
+              key={`${p.submittedAt}-${p.author}`}
+              ref={i === 0 ? flyHome : undefined}
+              data-newest={i === 0 ? "" : undefined}
+            >
+              <NoteTile note={tile} onOpen={() => setZoomed(tile)} />
+            </li>
+          );
+        })}
         {notes.map((n) => (
           <li key={n.id}>
             <NoteTile note={n} onOpen={() => setZoomed(n)} />
@@ -230,7 +194,18 @@ export function StickyWall({ notes }: { notes: WallNote[] }) {
         ))}
       </ul>
 
-      {zoomed && <Lightbox note={zoomed} onClose={() => setZoomed(null)} />}
+      {zoomed && (
+        <Spotlight
+          content={zoomed.content}
+          label={`Note by ${zoomed.author}`}
+          onClose={() => setZoomed(null)}
+        >
+          <p className="relative z-10 font-sans text-sm text-white/90">
+            — {zoomed.author}
+            {zoomed.pending && " · pending approval"}
+          </p>
+        </Spotlight>
+      )}
     </div>
   );
 }
