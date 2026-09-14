@@ -1,6 +1,6 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PAD_JITTER } from "./desk-objects";
+import { PAD_JITTER, PIN_ROOM } from "./desk-objects";
 import { type Element, emptyNote } from "./note-editor";
 import {
   MAX_ELEMENTS,
@@ -40,8 +40,12 @@ const slot = (name: string) =>
 // The eraser and the sticker tab ARE their own boxes — no wrapper sets a
 // second one — so they are found the way a visitor finds them.
 const eraserSlot = () => screen.getByRole("button", { name: /the eraser/i });
+// The tab lies in the tray. The open sheet's folded corner answers to "Close
+// the sticker sheet" too, so ask the tray for this one (#86).
 const tabSlot = () =>
-  screen.getByRole("button", { name: /the sticker sheet/i });
+  within(tray() as HTMLElement).getByRole("button", {
+    name: /the sticker sheet/i,
+  });
 const ERASER_BODY = '[data-object="eraser"]';
 const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
@@ -966,7 +970,12 @@ describe("StickyEditor pointer gestures", () => {
   });
 });
 
-const tab = () => screen.getByRole("button", { name: /the sticker sheet/i });
+const tab = tabSlot;
+// the dog-ear at the sheet's top right: one of its three ways down (#86)
+const sheetCorner = () =>
+  within(slot("sheet") as HTMLElement).getByRole("button", {
+    name: /close the sticker sheet/i,
+  });
 const cell = (emoji: string) =>
   screen.getByRole("button", { name: `Peel the ${emoji} sticker` });
 // peel one off the sheet and let go at a point on the mat
@@ -998,16 +1007,37 @@ describe("StickyEditor sticker sheet", () => {
       STICKER_EMOJI.length,
     );
 
-    fireEvent.click(tab());
+    fireEvent.click(sheetCorner());
     expect(tab()).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("closes the sheet on Escape", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+  // The sheet covers the tray, so the tab is under it: the corner, a swipe
+  // and Escape are the three ways down (#86), and each hands back the marker
+  // that was in hand all along.
+  it.each([
+    ["its folded corner", () => fireEvent.click(sheetCorner())],
+    [
+      "a swipe down its handle",
+      () => {
+        const grip = slot("sheet-handle") as HTMLElement;
+        down(grip, 160, 400);
+        move(grip, 160, 460);
+      },
+    ],
+    ["Escape", () => fireEvent.keyDown(window, { key: "Escape" })],
+  ])("puts the sheet away on %s, with the marker back in hand", (_, close) => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
     fireEvent.click(tab());
-    fireEvent.keyDown(window, { key: "Escape" });
+    close();
 
     expect(tab()).toHaveAttribute("aria-expanded", "false");
+    expect(tray()).not.toHaveAttribute("inert");
+    expect(marker("black")).toHaveAttribute("aria-pressed", "true");
+    down(surface, 100, 100);
+    move(surface, 160, 180);
+    up(surface);
+    expect(drawn()).toHaveLength(1);
   });
 
   it("leaves Escape to the wall once the mat has gone down", () => {
@@ -1020,18 +1050,23 @@ describe("StickyEditor sticker sheet", () => {
     expect(tab()).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("moves the note clear of the sheet while it is up", () => {
+  it("stands the note in the room above the sheet, at the size it already was", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    const stage = () => paperSurface().parentElement;
-    expect(stage()?.style.transform).toBe("none");
+    const frame = () => paperSurface().parentElement as HTMLElement;
+    const room = () => frame().parentElement as HTMLElement;
+    expect(room().style.top).toBe(`${PIN_ROOM}px`);
 
     fireEvent.click(tab());
-    expect(stage()?.style.transform).toContain("scale(");
-    fireEvent.click(tab());
-    expect(stage()?.style.transform).toBe("none");
+    // the sheet's top edge is the room's floor, and "pin it up" is away, so
+    // the room it stood in is the note's: it moves up rather than shrinking
+    expect(room().style.top).toBe("0px");
+    expect(frame().style.transform).not.toContain("scale(");
+
+    fireEvent.click(sheetCorner());
+    expect(room().style.top).toBe(`${PIN_ROOM}px`);
   });
 
-  it("leaves the tab where it lies in the tray while the sheet is up, and the tray usable", () => {
+  it("covers the tray and takes it out of reach while it is up", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const box = tabSlot().style.cssText;
 
@@ -1039,14 +1074,74 @@ describe("StickyEditor sticker sheet", () => {
     expect(tab()).toHaveAttribute("aria-expanded", "true");
     expect(tabSlot().style.cssText).toBe(box); // no lift onto the sheet
     expect(tray()).toContainElement(tab());
+    // dimmed under the sheet, and nothing in it answers a press
+    expect(tray()).toHaveAttribute("inert");
+    expect(tray()?.style.opacity).toBe("0.4");
+
+    fireEvent.click(sheetCorner());
     expect(tray()).not.toHaveAttribute("inert");
+    expect(tray()?.style.opacity).toBe("1");
+  });
+
+  it("is the thing you hold: no stroke, no turn, no curl while it is up", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+    fireEvent.click(tab());
+
+    // the black marker is still held — it just doesn't reach the paper
+    expect(marker("black")).toHaveAttribute("aria-pressed", "true");
+    down(surface, 100, 100);
+    move(surface, 160, 180);
+    up(surface);
+    expect(drawn()).toHaveLength(0);
+    expect(surface.style.transform).toContain("rotate(0deg)");
+  });
+
+  it("turns nothing with the hand held while the sheet is up", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    takeHand();
+    const surface = paperSurface();
+    fireEvent.click(tab());
+
+    down(surface, 6, 250); // out by the left edge, where a drag turns it
+    move(surface, 6, 150);
+    up(surface);
+    expect(surface.style.transform).toContain("rotate(0deg)");
+  });
+
+  it("takes only the peeled sticker's placing while the sheet is up", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const surface = paperSurface();
+    dragTo("⭐", 250, 250);
+    expect(placingOutline()).not.toBeNull();
+
+    // a press elsewhere on the paper fixes it, and does nothing more
+    down(surface, 400, 60);
+    move(surface, 400, 160);
+    up(surface);
+    expect(placingOutline()).toBeNull();
+    expect(surface.style.transform).toContain("rotate(0deg)");
+    expect(drawn().map((el) => el.textContent)).toEqual(["⭐"]);
+  });
+
+  it("takes pin it up down while the sheet is up, and while a box is open", () => {
+    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    const pinButton = () => screen.getByRole("button", { name: /pin it up/i });
+    expect(pinButton()).not.toHaveAttribute("inert");
+
+    fireEvent.click(tab());
+    expect(pinButton()).toHaveAttribute("inert");
+    fireEvent.click(sheetCorner());
+    expect(pinButton()).not.toHaveAttribute("inert");
 
     pickUp(/pick up the red marker/i);
-    expect(
-      screen.getByRole("button", { name: /put down the red marker/i }),
-    ).toBeEnabled();
-    expect(bin()).toBeEnabled();
-    expect(tab()).toHaveAttribute("aria-expanded", "true");
+    pickUp(/write with the marker/i);
+    const surface = paperSurface();
+    down(surface, 60, 80);
+    up(surface);
+    expect(pinButton()).toHaveAttribute("inert");
+    tapAway(); // the box fixed, and the tape is back
+    expect(pinButton()).not.toHaveAttribute("inert");
   });
 
   it("sticks a peeled sticker where it was dropped on the paper", () => {
@@ -1109,7 +1204,7 @@ describe("StickyEditor sticker sheet", () => {
     expect(drawn()).toHaveLength(MAX_ELEMENTS);
   });
 
-  it("refuses a drop that the committed box left no room for", () => {
+  it("refuses a drop that the sticker being placed left no room for", () => {
     render(
       <StickyEditor
         initialContent={seeded({
@@ -1118,42 +1213,16 @@ describe("StickyEditor sticker sheet", () => {
       />,
     );
     paperSurface();
-    // the sheet first: its tab would fix the box
-    fireEvent.click(tab());
-    // one free slot, and an open box about to take it
-    pickUp(/pick up the red marker/i);
-    pickUp(/write with the marker/i);
-    down(paperSurface(), 60, 80);
-    up(paperSurface());
-    fireEvent.change(screen.getByRole("textbox", { name: /text box/i }), {
-      target: { value: "last" },
-    });
-    const slot = dragTo("⭐", 250, 250);
+    // one free slot, and the star still being placed in it
+    dragTo("⭐", 250, 250);
+    const slot = dragTo("🔥", 300, 300);
 
-    // the text committed; the sticker was refused, not silently dropped
+    // the star stuck; the flame was refused, not silently dropped
     expect(drawn()).toHaveLength(MAX_ELEMENTS);
-    expect(drawn().at(-1)?.textContent).toBe("last");
+    expect(drawn().at(-1)?.textContent).toBe("⭐");
     expect(slot).toHaveAttribute("data-peeled"); // on its way home
     wait(400);
     expect(slot).not.toHaveAttribute("data-peeled");
-  });
-
-  it("keeps the sheet up when Escape throws an open box away", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-    paperSurface();
-    fireEvent.click(tab());
-    pickUp(/pick up the red marker/i);
-    pickUp(/write with the marker/i);
-    down(paperSurface(), 60, 80);
-    up(paperSurface());
-    const box = screen.getByRole("textbox", { name: /text box/i });
-    fireEvent.change(box, { target: { value: "no" } });
-
-    fireEvent.keyDown(box, { key: "Escape" });
-
-    expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
-    expect(drawn()).toHaveLength(0);
-    expect(tab()).toHaveAttribute("aria-expanded", "true");
   });
 
   it("keeps the marker in your hand through a peel and a drop", () => {

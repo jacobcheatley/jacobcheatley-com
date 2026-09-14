@@ -18,6 +18,9 @@ const handle = () =>
     | HTMLElement
     | undefined;
 const flying = () => screen.queryByText("⭐", { ignore: "button *" });
+// the dog-ear at the sheet's top right, one of its three ways down
+const corner = () =>
+  screen.queryByRole("button", { name: "Close the sticker sheet" });
 
 const down = (el: HTMLElement, x: number, y: number, pointerId = 1) =>
   fireEvent.pointerDown(el, { clientX: x, clientY: y, pointerId });
@@ -139,5 +142,19 @@ describe("StickerSheet", () => {
 
     move(grip, 160, 460);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts the sheet away on its folded corner", () => {
+    const { onClose } = sheet();
+    fireEvent.click(corner() as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the corner up only while the sheet is up", () => {
+    const { open } = sheet({ open: false });
+    expect(corner()).toBeNull(); // nothing to close a sheet that is away
+
+    open(true);
+    expect(corner()).toBeInTheDocument();
   });
 });

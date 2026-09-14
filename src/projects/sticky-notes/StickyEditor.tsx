@@ -91,7 +91,7 @@ import {
   type PaperColour,
 } from "./note-schema";
 import { flyToLanding, PinUp } from "./pin-up";
-import { StickerSheet } from "./StickerSheet";
+import { SHEET_H, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74, #81): the pad chooser while there is
 // no note, the sheet torn off a pad, the bin, and the stationery — four
@@ -112,6 +112,10 @@ import { StickerSheet } from "./StickerSheet";
 const TEAR_MS = 400;
 const CRUMPLE_MS = 400;
 const GHOST_MS = 200; // how long a rubbed-out element lingers as a fade
+
+// The room the tray takes along the mat's bottom edge, which the note stands
+// clear of — a little over TRAY_TOP, so a lifted marker never meets the paper.
+const TRAY_ROOM = "8rem";
 
 const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
 const TEXT_SIZE = 30;
@@ -571,9 +575,6 @@ export default function StickyEditor({
     if (crumpleTimer.current !== undefined) return;
     setBinSlipOpen(false);
     // Into the bin wherever the centred tray puts it (#82).
-    // ponytail: measured in screen px, but applied inside the frame the open
-    // sticker sheet shrinks, so with the sheet up the note falls a little short
-    // of the bin — it is a speck by then. Divide by that scale if it shows.
     setCrumpling(
       centreOffset(
         binButton.current?.getBoundingClientRect(),
@@ -712,6 +713,12 @@ export default function StickyEditor({
       return;
     }
 
+    // The open sticker sheet is what you hold (#86): the paper takes the
+    // peeled sticker's placing, above, and nothing else — no stroke, no box,
+    // no rub, no turn and no curl. The held tool is untouched, and reaches the
+    // paper again the moment the sheet goes down.
+    if (sheetOpen) return;
+
     if (held === "eraser") {
       rubbingRef.current = true;
       setUsing(true);
@@ -777,6 +784,7 @@ export default function StickyEditor({
     // under a drag on it; and a held tool that isn't mid-stroke (the eraser, a
     // marker writing) keeps to one finger.
     if (
+      sheetOpen ||
       placingDragRef.current ||
       (held !== "hand" && draftRef.current === null)
     )
@@ -864,7 +872,12 @@ export default function StickyEditor({
       // A mouse can hover, so a bottom corner lifts under it before it is
       // pressed (#69). A finger can't: its press shows the same mark. Not
       // while something is being placed: a press there would only fix it.
-      if (held === "hand" && !placingRef.current && e.pointerType === "mouse") {
+      if (
+        held === "hand" &&
+        !sheetOpen &&
+        !placingRef.current &&
+        e.pointerType === "mouse"
+      ) {
         const [x, y] = toNote(e);
         setGripCorner(curlCorner(live.curl, x, y));
       }
@@ -1032,8 +1045,9 @@ export default function StickyEditor({
 
   const draft = draftRef.current;
   // The image of the tool in your hand, for a fine pointer to carry. The hand
-  // has none: a mouse's own grab cursor already is one.
-  const tool = held === "hand" ? null : heldTool(held);
+  // has none: a mouse's own grab cursor already is one, and neither rides the
+  // pointer while the sticker sheet is what is held (#86).
+  const tool = held === "hand" || sheetOpen ? null : heldTool(held);
   // The live stroke and the element being placed are elements like any other:
   // each joins the end of the note while it is being made.
   const shown = !content
@@ -1046,30 +1060,26 @@ export default function StickyEditor({
 
   return (
     <div className="absolute inset-0 select-none">
-      {/* the sheet: bare paper, centred, clear of the tray below and with
-          PIN_ROOM above for "pin it up" taped over it.
-          ponytail: the paper is 60svh at most and the stage is the mat less
-          PIN_ROOM and the tray's 128px, so on a mat shorter than about 545px
-          the note outgrows the stage and the tape pokes above the mat's top
-          edge. Take the room off PAPER_SIDE if a mat that short turns up. */}
+      {/* The room the sheet stands in: bare paper, centred, clear of the tray
+          below and with PIN_ROOM above for "pin it up" taped over it. While the
+          sticker sheet is up (#86) its top edge is the floor instead, and the
+          tape is away, so the note has that room too — it moves up rather than
+          shrinking. A size container, so the paper below fits itself to what
+          room there is without anyone measuring anything. */}
       <div
         ref={stage}
-        className="pointer-events-none absolute inset-x-0 bottom-32 flex items-center justify-center"
-        style={{ top: PIN_ROOM }}
+        className={`${STILL} pointer-events-none absolute inset-x-0 flex items-center justify-center`}
+        style={{
+          top: sheetOpen ? 0 : PIN_ROOM,
+          bottom: sheetOpen ? SHEET_H : TRAY_ROOM,
+          containerType: "size",
+          transition: `top ${SHEET_MS}ms ${EASE_OUT}, bottom ${SHEET_MS}ms ${EASE_OUT}`,
+        }}
       >
         {shown && (
           <div
-            // The sticker sheet sits on the tray, so the note moves up out of
-            // its way and stays whole, "pin it up" and all.
-            // ponytail: one fixed shift and shrink, not a measurement — checked
-            // in Chromium from 360x740 and 1366x657 up. A mat shorter than
-            // about 660px loses the note's bottom edge under the sheet, and at
-            // 320x568 the tape can meet "← the wall"; measure the room above
-            // the sheet if that matters.
-            className={`${STILL} relative`}
+            className="relative"
             style={{
-              transform: sheetOpen ? "translateY(-30%) scale(.6)" : "none",
-              transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
               // Pinned up, the note is on the wall: the mat slides away bare,
               // and comes back up with it lying where it was.
               visibility: landing ? "hidden" : undefined,
@@ -1087,18 +1097,25 @@ export default function StickyEditor({
               onPointerCancel={onPaperUp}
               onPointerLeave={leavePaper}
               style={{
-                width: PAPER_SIDE,
+                // Scaling down is the last resort (#86): the side is the note's
+                // own until the room the stage leaves is the smaller of the two.
+                // ponytail: the side, not the tilted box it really occupies,
+                // which is up to 7% bigger at 4°. Only a mat short enough for
+                // the cap to bite at all can lose a corner to it; take the
+                // tilt off the cap if one turns up.
+                width: `min(${PAPER_SIDE}, 100cqh)`,
                 aspectRatio: NOTE_PAPER_ASPECT_RATIO,
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
                 // the held tool IS the cursor over the paper; the hand is the
                 // browser's own, closed while it turns or peels
-                cursor: !fine
-                  ? undefined
-                  : held !== "hand"
-                    ? "none"
-                    : using || turning
-                      ? "grabbing"
-                      : "grab",
+                cursor:
+                  !fine || sheetOpen
+                    ? undefined
+                    : held !== "hand"
+                      ? "none"
+                      : using || turning
+                        ? "grabbing"
+                        : "grab",
                 ...noteMotion(tearing, crumpling, shown.rotation, turning),
               }}
             >
@@ -1170,7 +1187,14 @@ export default function StickyEditor({
             <TapeLabel
               ref={pinButton}
               loud
-              away={!landed || crumpling !== null}
+              // away while the sticker sheet is up or a text box is being
+              // written, at every size (#86): neither is a moment to pin up.
+              away={
+                !landed ||
+                crumpling !== null ||
+                sheetOpen ||
+                placing?.type === "text"
+              }
               onClick={pinUp}
               className="-translate-x-1/2 pointer-events-auto absolute bottom-full left-1/2 mb-2 w-max"
             >
@@ -1192,11 +1216,12 @@ export default function StickyEditor({
           eraser, a gap, bin. Nothing wraps: the room a narrow screen takes
           comes out of the gap before the bin, then out of the space BETWEEN
           the markers (the SQUEEZE in MARKER_SLOT leans them on each other).
-          z-40: the sticker sheet rises from behind it. While a pad is being
-          chosen the tray is away below the mat's edge, and out of reach. */}
+          z-40: the sticker sheet (z-50) covers it, and the tray lies dim and
+          out of reach under it (#86) — the tab included, which stays put. While
+          a pad is being chosen the tray is away below the mat's edge. */}
       <div
         data-slot="tray"
-        inert={choosing}
+        inert={choosing || sheetOpen}
         // `justify-center-safe`: centred while the row fits; on a screen too
         // narrow for it, it overflows off the right end only, where plain
         // centring would push the hand off the left edge out of reach.
@@ -1206,7 +1231,8 @@ export default function StickyEditor({
           paddingInline: DESK_GAP,
           paddingBottom: TRAY_PAD,
           transform: choosing ? "translateY(110%)" : "none",
-          transition: `transform ${TEAR_MS}ms ${EASE_OUT}`,
+          opacity: sheetOpen ? 0.4 : 1,
+          transition: `transform ${TEAR_MS}ms ${EASE_OUT}, opacity ${SHEET_MS}ms ${EASE_OUT}`,
         }}
       >
         <ToolSlot

@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { capturePointer, EASE_OUT, SHEET_MS, STILL } from "./desk";
-import { TRAY_TOP } from "./desk-objects";
+import { TRAY_PAD } from "./desk-objects";
 import { STICKER_EMOJI } from "./note-schema";
 
 // The sticker sheet (#75): a pull-up sheet of printed stickers that the visitor
@@ -15,9 +15,9 @@ import { STICKER_EMOJI } from "./note-schema";
 // the note, the held tool and whatever is being placed out of this file.
 //
 // The sheet is sized to its 24 stickers, never to a fraction of the viewport
-// (the T0 verdict, #70): six 48px cells across, four rows down. It rises from
-// behind the tray and sits on top of it (#82), so every object in the tray
-// stays in reach while it is up.
+// (the T0 verdict, #70): six 48px cells across, four rows down. Up, it IS what
+// you hold (#86): it rises to the mat's bottom edge and covers the tray, and
+// the dog-eared corner, a swipe down the handle or Escape put it away again.
 
 type StickerEmoji = (typeof STICKER_EMOJI)[number];
 
@@ -25,10 +25,17 @@ const CELL = 48; // a thumb target, like every other object on the desk
 const GAP = 4;
 const COLS = 6;
 const PAD_X = 12;
-const PAD_B = 12;
-const HANDLE_H = 26;
+const HANDLE_H = 44; // the grab strip, a thumb tall, and the corner's row
+const ROWS = Math.ceil(STICKER_EMOJI.length / COLS);
+const CORNER = 44; // the folded corner's target, a thumb like the cells
+const DOG_EAR = 28; // the fold as it is drawn, inside that target
 
 const SHEET_W = COLS * CELL + (COLS - 1) * GAP + PAD_X * 2;
+// How tall the sheet stands off the mat's bottom edge. The editor keeps the
+// note above this line (#86), so it is the numbers the sheet is drawn from
+// rather than anything measured. TRAY_PAD is the tray's own lip, clear of a
+// phone's home indicator: the sheet sits where the tray does now.
+export const SHEET_H = `calc(${HANDLE_H + ROWS * CELL + (ROWS - 1) * GAP}px + ${TRAY_PAD})`;
 
 const SWIPE = 40; // how far down the handle travels before the sheet drops
 const BACK_MS = 250; // a missed sticker's flight home
@@ -140,24 +147,21 @@ export function StickerSheet({
         // sheet out of the tab order, the screen-reader tree and the pointer's
         // way in one go, which is what the mat itself does when it slides off.
         inert={!open}
-        // z-30: under the tray (z-40), so it comes up from behind it, and a
-        // lifted marker or the font samples still show over its bottom edge.
-        className={`${STILL} absolute inset-x-0 z-30 mx-auto`}
+        // z-50: over the tray (z-40), which it covers while it is up (#86).
+        className={`${STILL} absolute inset-x-0 z-50 mx-auto`}
         style={{
-          bottom: TRAY_TOP,
+          bottom: 0,
           width: `min(${SHEET_W}px, 100vw)`,
           paddingLeft: PAD_X,
           paddingRight: PAD_X,
-          paddingBottom: PAD_B,
+          paddingBottom: TRAY_PAD,
           background: "linear-gradient(180deg,#ffffff,#f7f4ea)",
           borderRadius: "10px 10px 0 0",
           boxShadow:
             "0 -10px 24px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.06)",
-          // Away, it is its own height plus the tray's below where it sits:
-          // wholly off the mat, not showing between the tray's objects.
-          transform: open
-            ? "translateY(0)"
-            : `translateY(calc(100% + ${TRAY_TOP}))`,
+          // Away, it is its own height below the mat's bottom edge: wholly
+          // off it, with the tray it covered back in the clear.
+          transform: open ? "translateY(0)" : "translateY(100%)",
           transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
         }}
       >
@@ -180,6 +184,34 @@ export function StickerSheet({
             style={{ background: "rgba(0,0,0,.16)" }}
           />
         </div>
+
+        {/* The way down that is on the sheet itself: its top corner turned up,
+            showing the paper's back over the fold's shadow. Drawn only while
+            the sheet is up, so a sheet that is away has nothing to close. */}
+        {open && (
+          <button
+            type="button"
+            aria-label="Close the sticker sheet"
+            onClick={onClose}
+            className="absolute top-0 right-0 cursor-pointer border-0 bg-transparent p-0"
+            style={{ width: CORNER, height: CORNER }}
+          >
+            <span
+              aria-hidden="true"
+              className="absolute top-0 right-0 block"
+              style={{
+                width: DOG_EAR,
+                height: DOG_EAR,
+                // 225deg runs to the bottom left, so the filled half is the
+                // top-right triangle: the flap, folded down over the fold.
+                background:
+                  "linear-gradient(225deg,#e3dcc8 0 50%,transparent 50%)",
+                borderTopRightRadius: 10,
+                filter: "drop-shadow(-2px 2px 2px rgba(0,0,0,.3))",
+              }}
+            />
+          </button>
+        )}
 
         <div
           className="grid justify-center"
