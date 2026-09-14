@@ -41,8 +41,11 @@ const paper = () =>
 // on it is reachable by pointer, keyboard or screen reader.
 const chooser = () => slot("chooser");
 const tray = () => slot("tray");
-// One tool is always held (#82): the hand, when nothing else is.
+// One tool is always held (#82): the black marker on a fresh sheet, the hand
+// when whatever was picked up is put down again.
 const hand = () => screen.getByRole("button", { name: /the hand$/i });
+const marker = (ink: string) =>
+  screen.getByRole("button", { name: new RegExp(`the ${ink} marker$`, "i") });
 
 const HI: Element = {
   type: "text",
@@ -94,7 +97,7 @@ describe("StickyEditor pad chooser", () => {
     expect(
       screen.getByRole("button", { name: /pin it up/i }),
     ).toBeInTheDocument();
-    expect(hand()).toHaveAttribute("aria-pressed", "true"); // hand mode
+    expect(marker("black")).toHaveAttribute("aria-pressed", "true");
   });
 
   it("sticks pin it up just above the note, in its unrotated frame, even on a blank note", () => {
@@ -204,7 +207,6 @@ describe("StickyEditor bin", () => {
     render(
       <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
     );
-    pickUp(/pick up the black marker/i);
     fireEvent.click(bin());
 
     const surface = paperSurface();
@@ -229,7 +231,7 @@ describe("StickyEditor bin", () => {
     expect(pad("yellow")).toHaveFocus();
   });
 
-  it("bins a blank note at once, and the next sheet starts with the hand", () => {
+  it("bins a blank note at once, and the next sheet starts with the black marker", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     pickUp(/pick up the red marker/i);
     fireEvent.click(bin());
@@ -241,7 +243,7 @@ describe("StickyEditor bin", () => {
     expect(chooser()).not.toHaveAttribute("inert");
     fireEvent.click(pad("green"));
     expect(paper()).toBe("green");
-    expect(hand()).toHaveAttribute("aria-pressed", "true");
+    expect(marker("black")).toHaveAttribute("aria-pressed", "true");
   });
 
   it("takes pin it up down while a note flies, until the next sheet has landed", () => {
@@ -262,13 +264,23 @@ describe("StickyEditor bin", () => {
 });
 
 describe("StickyEditor tools", () => {
-  it("holds the hand until a marker is picked up, and again once it is put down", () => {
+  it("tears a sheet off with the black marker in hand and the rocker live", () => {
     render(<StickyEditor />);
     fireEvent.click(pad("blue"));
-    expect(hand()).toHaveAccessibleName("Put down the hand");
-    expect(hand()).toHaveAttribute("aria-pressed", "true");
+    expect(marker("black")).toHaveAccessibleName("Put down the black marker");
+    expect(marker("black")).toHaveAttribute("aria-pressed", "true");
+    expect(hand()).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: /draw with the marker/i }),
+    ).toBeEnabled();
+  });
+
+  it("holds the black marker until another is picked up, and the hand once it is put down", () => {
+    render(<StickyEditor />);
+    fireEvent.click(pad("blue"));
 
     pickUp(/pick up the red marker/i);
+    expect(marker("black")).toHaveAttribute("aria-pressed", "false");
     expect(hand()).toHaveAccessibleName("Pick up the hand");
     expect(hand()).toHaveAttribute("aria-pressed", "false");
 
@@ -297,6 +309,7 @@ describe("StickyEditor tools", () => {
 
   it("keeps the hand when the hand is tapped again", () => {
     render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the hand/i);
     pickUp(/put down the hand/i);
     expect(hand()).toHaveAttribute("aria-pressed", "true");
   });
@@ -340,6 +353,7 @@ describe("StickyEditor tools", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const draw = () =>
       screen.getByRole("button", { name: /draw with the marker/i });
+    pickUp(/pick up the hand/i);
     expect(draw()).toBeDisabled();
 
     fireEvent.click(
@@ -399,6 +413,9 @@ const up = (el: HTMLElement) => fireEvent.pointerUp(el, { pointerId: 1 });
 
 const pickUp = (name: RegExp) =>
   fireEvent.click(screen.getByRole("button", { name }));
+// Hand mode is reached by picking the hand up: a torn sheet comes with the
+// black marker in hand (#84).
+const takeHand = () => pickUp(/pick up the hand/i);
 // A real press on something on the mat: the pointer comes down, then the click.
 const press = (name: RegExp) => {
   const el = screen.getByRole("button", { name });
@@ -462,7 +479,6 @@ describe("StickyEditor drawing", () => {
 
   it("draws nothing from a tap that never moves", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    pickUp(/pick up the black marker/i);
     const paper = paperSurface();
     down(paper, 100, 100);
     up(paper);
@@ -717,8 +733,8 @@ describe("StickyEditor thumb targets", () => {
         b.getAttribute("aria-label"),
       ),
     ).toEqual([
-      "Put down the hand",
-      "Pick up the black marker",
+      "Pick up the hand",
+      "Put down the black marker",
       "Pick up the green marker",
       "Pick up the red marker",
       "Pick up the blue marker",
@@ -732,7 +748,8 @@ describe("StickyEditor thumb targets", () => {
     const binCorner = slot("bin")?.parentElement;
     expect(binCorner?.parentElement).toBe(row);
     const gap = binCorner?.previousElementSibling as HTMLElement | null;
-    expect(gap?.style.width).toContain("clamp(0px");
+    // zero at 420px and below, where the markers are already squeezing (#84)
+    expect(gap?.style.width).toContain("100vw - 420px");
   });
 
   it("closes the markers up as the tray narrows, and no further", () => {
@@ -853,7 +870,6 @@ describe("StickyEditor pointer gestures", () => {
 
   it("ignores a second finger while a stroke is live", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    pickUp(/pick up the black marker/i);
     const paper = paperSurface();
 
     down(paper, 100, 100);
@@ -1147,6 +1163,7 @@ describe("StickyEditor hand mode", () => {
 
   it("turns the note by the angle a drag sweeps", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    takeHand();
     const surface = paperSurface();
 
     down(surface, 6, 250); // out by the left edge
@@ -1158,6 +1175,7 @@ describe("StickyEditor hand mode", () => {
 
   it("holds the tilt to something the wall can wear", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    takeHand();
     const surface = paperSurface();
 
     down(surface, 6, 250);
@@ -1169,7 +1187,6 @@ describe("StickyEditor hand mode", () => {
 
   it("draws on the paper instead of turning it when a marker is in hand", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
-    pickUp(/pick up the black marker/i);
     const surface = paperSurface();
 
     down(surface, 6, 250);
@@ -1182,6 +1199,7 @@ describe("StickyEditor hand mode", () => {
 
   it("peels a bottom corner further, and back, with a drag", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    takeHand();
     const surface = paperSurface();
 
     down(surface, 496, 496); // the bottom-right corner
@@ -1199,6 +1217,7 @@ describe("StickyEditor hand mode", () => {
 
   it("lifts a corner under a hovering mouse, before it is pressed", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    takeHand();
     const surface = paperSurface();
     const hover = (x: number, y: number) =>
       fireEvent.pointerMove(surface, {
@@ -1219,6 +1238,7 @@ describe("StickyEditor hand mode", () => {
     render(
       <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
     );
+    takeHand();
     const surface = paperSurface();
 
     down(surface, 60, 80); // on "hi"
@@ -1234,6 +1254,7 @@ describe("StickyEditor hand mode", () => {
 
   it("holds the note still until a drag from near the centre leaves it", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    takeHand();
     const surface = paperSurface();
 
     down(surface, 250, 220); // 30 above the centre: inside the dead zone
@@ -1252,6 +1273,7 @@ describe("StickyEditor hand mode", () => {
     render(
       <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
     );
+    takeHand();
     const surface = paperSurface();
 
     down(surface, 60, 80);
@@ -1315,7 +1337,6 @@ describe("StickyEditor two fingers", () => {
 
   it("drops the stroke a second finger lands on, and turns the note instead", () => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
-    pickUp(/pick up the black marker/i);
     const surface = paperSurface();
 
     down(surface, 100, 100);
@@ -1503,7 +1524,6 @@ describe("StickyEditor placing", () => {
     // "Aa" only spares a text box, which it brings the samples back up for
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);
     paperSurface();
-    pickUp(/pick up the black marker/i);
     dragTo("⭐", 250, 250);
 
     press(/write with the marker/i);

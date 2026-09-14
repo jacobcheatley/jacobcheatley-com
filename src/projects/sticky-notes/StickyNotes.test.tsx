@@ -105,9 +105,9 @@ async function tearOff(colour: string) {
   await waitFor(() => expect(matPaper()).toHaveAttribute("aria-busy", "false"));
 }
 
-// a mark on the sheet, so there is content to come back with
+// a mark on the sheet, so there is content to come back with — a torn sheet
+// comes with the black marker already in hand (#84)
 function drawAStroke() {
-  tap(/pick up the black marker/i);
   const paper = matPaper() as HTMLElement;
   fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });
   fireEvent.pointerMove(paper, { pointerId: 1, clientX: 30, clientY: 20 });
@@ -377,7 +377,6 @@ describe("StickyNotes leaving the mat mid-placing", () => {
       <StickyNotes notes={[approved("sam")]} matUp />,
     );
     await tearOff("yellow");
-    tap(/pick up the black marker/i);
     tap(/write with the marker/i);
     const paper = matPaper() as HTMLElement;
     fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });

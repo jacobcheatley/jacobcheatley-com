@@ -105,6 +105,31 @@ describe("NoteRender", () => {
     expect(curled).toContain("feDropShadow");
   });
 
+  it("draws the fixed nib whatever pressure a point carries", () => {
+    // a marker has no pressure (#84): a mouse (0.5), a touch (0 or 1) and a
+    // pen (light force) all stored a number here, and all must render alike
+    const stroke = (pressure: number): NoteContent => ({
+      ...content,
+      elements: [
+        {
+          type: "stroke",
+          ink: "red",
+          size: 8,
+          points: [
+            [10, 10, pressure],
+            [20, 20, pressure],
+            [30, 10, pressure],
+          ],
+        },
+      ],
+    });
+    const d = (c: NoteContent) =>
+      render(c)
+        .match(/ d="([^"]*)"/g)
+        ?.join("") ?? "";
+    expect(d(stroke(0.1))).toBe(d(stroke(1)));
+  });
+
   it("is deterministic and needs no DOM", () => {
     expect(render(content)).toBe(render(content));
   });

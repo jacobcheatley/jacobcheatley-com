@@ -172,7 +172,9 @@ export default function StickyEditor({
   // The bin's slip is up, asking whether the note may go (#81).
   const [binSlipOpen, setBinSlipOpen] = useState(false);
 
-  const [held, setHeld] = useState<Held>("hand");
+  // A fresh sheet comes with the black marker in hand (#84); the hand is an
+  // object on the tray, picked up when something else is put down.
+  const [held, setHeld] = useState<Held>("black");
   const [mode, setMode] = useState<Mode>("draw");
   const [font, setFont] = useState<Font>("casual"); // the editor's default
   // The font samples pop up over the mat: opened by the "Aa" side of the
@@ -540,6 +542,7 @@ export default function StickyEditor({
     const note = { ...emptyNote(), colour };
     const from = pad.getBoundingClientRect();
     apply(note);
+    setHeld("black");
     setTearing(centreOffset(from, stage.current?.getBoundingClientRect()));
     setLanded(false);
     clearTimeout(landTimer.current);
@@ -590,11 +593,11 @@ export default function StickyEditor({
     binButton.current?.focus();
   }
 
-  // No note on the mat: back to the pad chooser. Every tool goes back down and
-  // nothing stays up, so the next sheet starts in hand mode like the first.
+  // No note on the mat: back to the pad chooser. Nothing stays up, and the
+  // marker is back in hand for the next sheet, as it is for the first.
   function clearMat() {
     apply(null);
-    setHeld("hand");
+    setHeld("black");
     setSheetOpen(false);
     setFontsOpen(false);
   }
@@ -644,9 +647,11 @@ export default function StickyEditor({
     return [clampCoord(x), clampCoord(y)];
   }
 
+  // The point's third number is pressure, kept in the schema and inert (#84):
+  // a marker has one nib, so what the pointer reports is never asked for.
   function toNote(e: ReactPointerEvent): [number, number, number] {
     const [x, y] = clientToNote(e.clientX, e.clientY);
-    return [x, y, e.pressure || 0.5];
+    return [x, y, 0.5];
   }
 
   // A sticker released off the sheet: dropped on the paper, it lands there to

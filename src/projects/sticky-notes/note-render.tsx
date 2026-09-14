@@ -53,8 +53,11 @@ export const INK: Record<Ink, string> = {
   blue: "#2563eb",
 };
 
+// A marker has no pressure (#84): `thinning: 0` ignores every point's stored
+// number, so a mouse, a touch and a pen lay down the same nib — and notes
+// drawn before this, whose points carry real pressures, get it too.
 const STROKE_OPTS = {
-  thinning: 0.6,
+  thinning: 0,
   smoothing: 0.5,
   streamline: 0.5,
   simulatePressure: false,

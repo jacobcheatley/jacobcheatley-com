@@ -24,9 +24,12 @@ test("a note drawn on the mat and pinned up shows on the wall as pending", async
     await expect(paper).toBeVisible({ timeout: 500 });
   }).toPass();
 
-  // One stroke with the black marker. Hovering waits for the sheet to finish
-  // flying off the pad, so the box measured is where it lies.
-  await page.getByRole("button", { name: "Pick up the black marker" }).click();
+  // One stroke with the black marker, which a torn sheet comes with (#84).
+  // Hovering waits for the sheet to finish flying off the pad, so the box
+  // measured is where it lies.
+  await expect(
+    page.getByRole("button", { name: "Put down the black marker" }),
+  ).toHaveAttribute("aria-pressed", "true");
   await paper.hover();
   const box = await paper.boundingBox();
   if (!box) throw new Error("the sheet has no box");

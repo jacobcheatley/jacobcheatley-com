@@ -74,12 +74,13 @@ export const TRAY_PAD = "max(0.75rem, env(safe-area-inset-bottom))";
 // targets, squiggle over Aa) is the tallest thing in it. The sticker sheet
 // sits on this line (#82), so it never covers the tray.
 export const TRAY_TOP = `calc(${2 * ROCKER_H}px + ${TRAY_PAD})`;
-// The room before the bin: up to 32px from the eraser on a wide screen, down to
-// the row's own gap on a phone. The spacer takes back the row gap on its far
-// side, so the gaps either side of it don't count twice; a shrinkable flex
-// item, it gives up its width before anything else has to.
+// The room before the bin: up to 32px from the eraser on a wide screen, and
+// nothing at all below 420px, where the markers are already squeezing (#84) —
+// no screen that tight has room to hold the bin off. The spacer takes back the
+// row gap on its far side, so the gaps either side of it don't count twice; a
+// shrinkable flex item, it gives up its width before anything else has to.
 export const BIN_SPACER: CSSProperties = {
-  width: `clamp(0px, 4vw, 32px - ${DESK_GAP})`,
+  width: `clamp(0px, (100vw - 420px) / 8, 32px - ${DESK_GAP})`,
   marginInlineEnd: `calc(-1 * ${DESK_GAP})`,
 };
 export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
