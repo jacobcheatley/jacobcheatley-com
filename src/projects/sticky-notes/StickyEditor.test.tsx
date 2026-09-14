@@ -40,7 +40,8 @@ const paper = () =>
 // on it is reachable by pointer, keyboard or screen reader.
 const chooser = () => slot("chooser");
 const tray = () => slot("tray");
-const held = () => screen.queryAllByRole("button", { name: /put down/i });
+// One tool is always held (#82): the hand, when nothing else is.
+const hand = () => screen.getByRole("button", { name: /the hand$/i });
 
 const HI: Element = {
   type: "text",
@@ -92,7 +93,7 @@ describe("StickyEditor pad chooser", () => {
     expect(
       screen.getByRole("button", { name: /pin it up/i }),
     ).toBeInTheDocument();
-    expect(held()).toEqual([]); // hand mode
+    expect(hand()).toHaveAttribute("aria-pressed", "true"); // hand mode
   });
 
   it("offers no way to change the paper once it is torn", () => {
@@ -215,7 +216,7 @@ describe("StickyEditor bin", () => {
     expect(pad("yellow")).toHaveFocus();
   });
 
-  it("bins a blank note at once, and the next sheet starts empty-handed", () => {
+  it("bins a blank note at once, and the next sheet starts with the hand", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     pickUp(/pick up the red marker/i);
     fireEvent.click(bin());
@@ -227,11 +228,42 @@ describe("StickyEditor bin", () => {
     expect(chooser()).not.toHaveAttribute("inert");
     fireEvent.click(pad("green"));
     expect(paper()).toBe("green");
-    expect(held()).toEqual([]);
+    expect(hand()).toHaveAttribute("aria-pressed", "true");
   });
 });
 
 describe("StickyEditor tools", () => {
+  it("holds the hand until a marker is picked up, and again once it is put down", () => {
+    render(<StickyEditor />);
+    fireEvent.click(pad("blue"));
+    expect(hand()).toHaveAccessibleName("Put down the hand");
+    expect(hand()).toHaveAttribute("aria-pressed", "true");
+
+    pickUp(/pick up the red marker/i);
+    expect(hand()).toHaveAccessibleName("Pick up the hand");
+    expect(hand()).toHaveAttribute("aria-pressed", "false");
+
+    pickUp(/put down the red marker/i);
+    expect(hand()).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("puts the eraser down when the hand is picked up", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/pick up the eraser/i);
+    pickUp(/pick up the hand/i);
+
+    expect(hand()).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: /pick up the eraser/i }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("keeps the hand when the hand is tapped again", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    pickUp(/put down the hand/i);
+    expect(hand()).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("picks a marker up and puts it down again", () => {
     render(<StickyEditor initialContent={seeded({})} />);
 
@@ -1367,6 +1399,7 @@ describe("StickyEditor placing", () => {
 
   it.each([
     ["another tool", /pick up the eraser/i],
+    ["the hand", /pick up the hand/i],
     ["the rocker's draw half", /draw with the marker/i],
     ["the bin", /bin this note/i],
     ["the sticker tab", /the sticker sheet/i],
@@ -1386,6 +1419,7 @@ describe("StickyEditor placing", () => {
     ["the bin", /bin this note/i],
     ["a marker", /pick up the black marker/i],
     ["the eraser", /pick up the eraser/i],
+    ["the hand", /pick up the hand/i],
     ["the sticker tab", /the sticker sheet/i],
   ])("fixes the open box when the keyboard presses %s", (_, name) => {
     render(<StickyEditor initialContent={seeded({ curl: flat })} />);

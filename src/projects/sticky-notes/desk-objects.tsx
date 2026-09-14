@@ -11,7 +11,7 @@ import {
 } from "./note-schema";
 
 // The things lying on the cutting mat, drawn: the pads on the chooser, the
-// markers, the eraser, the draw/write rocker, the bin and its slip. Props in,
+// hand, the markers, the eraser, the draw/write rocker, the bin and its slip. Props in,
 // CSS out — no model, no pointer handling, no state of their own. StickyEditor
 // owns all of that and wears these.
 
@@ -35,6 +35,8 @@ const MARKER_H = 72;
 const TOOL_H = 88;
 const ERASER_W = 40;
 const ERASER_H = 28;
+const HAND_W = 40;
+const HAND_H = 50;
 // The rocker stands upright — squiggle over Aa — so it costs one thumb target
 // of width beside the four markers instead of two.
 const ROCKER_W = TOUCH;
@@ -63,12 +65,13 @@ export const MARKER_SLOT: CSSProperties = {
   marginInline: SQUEEZE,
 };
 export const ERASER_SLOT: CSSProperties = { width: ERASER_W, height: TOOL_H };
+export const HAND_SLOT: CSSProperties = { width: HAND_W, height: TOOL_H };
 export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
 
 // How long the held tool shakes when the note is full and nothing more fits.
 export const SHAKE_MS = 200;
 
-// The draw/write control with nothing in your hand: inert stationery grey.
+// The draw/write control with no marker in hand: inert stationery grey.
 const GREY = "#8a8371";
 
 // Where the pointer sits inside the tool image that rides a mouse: the marker's
@@ -262,6 +265,56 @@ export function EraserBody({
   );
 }
 
+// The hand (#82): an open-hand cut-out lying in the tray, for holding nothing
+// but the note itself. It lifts like the eraser when it is the one held, and
+// further while it turns or peels the note.
+export function HandBody({
+  held = false,
+  using = false,
+}: {
+  held?: boolean;
+  using?: boolean;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      data-object="hand"
+      width={HAND_W}
+      height={HAND_H}
+      viewBox={`0 0 ${HAND_W} ${HAND_H}`}
+      // One fill for every part, so the shadow falls from the whole outline.
+      className={`pointer-events-none block ${STILL}`}
+      style={{
+        fill: "#e9dfcd",
+        filter: "drop-shadow(0 3px 3px rgba(0,0,0,.45))",
+        transform: !held
+          ? "none"
+          : using
+            ? "translateY(-26px) rotate(-13deg)"
+            : "translateY(-17px) rotate(-6deg)",
+        transition: `transform ${LIFT_MS}ms ${EASE_OUT}`,
+      }}
+    >
+      <title>hand</title>
+      <rect x="9" y="20" width="26" height="30" rx="9" />
+      <rect x="9" y="6" width="5.5" height="24" rx="2.75" />
+      <rect x="15.5" y="2" width="5.5" height="26" rx="2.75" />
+      <rect x="22" y="4" width="5.5" height="24" rx="2.75" />
+      <rect x="28.5" y="10" width="5.5" height="20" rx="2.75" />
+      {/* the thumb, splayed out from the heel of the palm */}
+      <rect
+        x="4"
+        y="22"
+        width="6"
+        height="20"
+        rx="3"
+        transform="rotate(-32 10 42)"
+      />
+    </svg>
+  );
+}
+
 // The tool in your hand, as the image that rides a fine pointer: where the
 // pointer sits inside it, the tilt around that point, and the object itself.
 export function heldTool(held: Ink | "eraser"): {
@@ -322,7 +375,8 @@ export function FontChip({
 }
 
 // Draw or write with the marker in your hand: one rocker, tinted with that
-// marker's ink so it reads as part of it, inert and grey with an empty hand.
+// marker's ink so it reads as part of it, inert and grey while the hand or the
+// eraser is held.
 // The "Aa" side opens the four font samples, each in its own face.
 export function ModeControl({
   ink,

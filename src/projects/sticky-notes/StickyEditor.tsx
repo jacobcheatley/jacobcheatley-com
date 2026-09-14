@@ -15,6 +15,8 @@ import {
   DESK_GAP,
   ERASER_SLOT,
   EraserBody,
+  HAND_SLOT,
+  HandBody,
   heldTool,
   MARKER_SLOT,
   MarkerBody,
@@ -93,9 +95,9 @@ import { SHEET_H, StickerSheet } from "./StickerSheet";
 // for SSR: its first render is identical on both sides.
 //
 // Tools are objects, not settings (#69): the marker IS the ink, so there are no
-// swatches, no size slider and no colour fan. One tool is held at a time;
-// holding nothing is hand mode. All model logic lives in note-editor — this
-// shell only maps pointers onto it.
+// swatches, no size slider and no colour fan. Exactly one tool is always held,
+// and the hand is the one held when nothing else is (#82). All model logic
+// lives in note-editor — this shell only maps pointers onto it.
 
 const TEAR_MS = 400;
 const CRUMPLE_MS = 400;
@@ -125,10 +127,10 @@ type PlacingDrag = {
 // Where a torn-off sheet starts: its pad's centre, seen from where it lands, in
 // px.
 type Tear = { dx: number; dy: number };
-// Nothing held is hand mode — the absence of a tool, not a tool of its own.
-type Held = Ink | "eraser" | null;
+// The hand is a tool like the others (#82): putting one down picks it up.
+type Held = Ink | "eraser" | "hand";
 
-const isInk = (held: Held): held is Ink => held !== null && held !== "eraser";
+const isInk = (held: Held): held is Ink => held !== "hand" && held !== "eraser";
 
 export default function StickyEditor({
   initialContent = null,
@@ -163,7 +165,7 @@ export default function StickyEditor({
   // The bin's slip is up, asking whether the note may go (#81).
   const [binSlipOpen, setBinSlipOpen] = useState(false);
 
-  const [held, setHeld] = useState<Held>(null);
+  const [held, setHeld] = useState<Held>("hand");
   const [mode, setMode] = useState<Mode>("draw");
   const [font, setFont] = useState<Font>("casual"); // the editor's default
   // The font samples pop up over the mat: opened by the "Aa" side of the
@@ -596,11 +598,11 @@ export default function StickyEditor({
     binButton.current?.focus();
   }
 
-  // No note on the mat: back to the pad chooser. Nothing stays in hand or up,
-  // so the next sheet starts in hand mode like the first.
+  // No note on the mat: back to the pad chooser. Every tool goes back down and
+  // nothing stays up, so the next sheet starts in hand mode like the first.
   function clearMat() {
     apply(null);
-    setHeld(null);
+    setHeld("hand");
     setSheetOpen(false);
     setFontsOpen(false);
   }
@@ -618,11 +620,11 @@ export default function StickyEditor({
     flyToLanding(from);
   }
 
-  // Tapping a tool picks it up; tapping the one in your hand (or any other
-  // tool) puts it down.
-  function pickUp(tool: Exclude<Held, null>) {
+  // Tapping a tool picks it up and puts down whatever was held; tapping the
+  // one already held puts it down for the hand (and the hand stays held).
+  function pickUp(tool: Held) {
     fixPlacing();
-    setHeld((h) => (h === tool ? null : tool));
+    setHeld((h) => (h === tool ? "hand" : tool));
     setFontsOpen(false);
     hideCursorTool();
   }
@@ -751,6 +753,9 @@ export default function StickyEditor({
     // Hand mode: a placed element is never taken hold of (#79), so a press is
     // only ever the paper's own — a bottom corner peels it, anywhere else on it
     // (over what is drawn there too) turns it.
+    // `using`: the hand is working, so it lifts in its slot and a mouse's
+    // cursor closes.
+    setUsing(true);
     const corner = curlCorner(live.curl, x, y);
     if (corner) {
       curlRef.current = { corner, start: live.curl[corner], from: [x, y] };
@@ -771,7 +776,10 @@ export default function StickyEditor({
     // Two fingers never twist what is being placed, nor turn the note out from
     // under a drag on it; and a held tool that isn't mid-stroke (the eraser, a
     // marker writing) keeps to one finger.
-    if (placingDragRef.current || (held !== null && draftRef.current === null))
+    if (
+      placingDragRef.current ||
+      (held !== "hand" && draftRef.current === null)
+    )
       return;
     endGesture();
     capturePointer(e);
@@ -856,7 +864,7 @@ export default function StickyEditor({
       // A mouse can hover, so a bottom corner lifts under it before it is
       // pressed (#69). A finger can't: its press shows the same mark. Not
       // while something is being placed: a press there would only fix it.
-      if (held === null && !placingRef.current && e.pointerType === "mouse") {
+      if (held === "hand" && !placingRef.current && e.pointerType === "mouse") {
         const [x, y] = toNote(e);
         setGripCorner(curlCorner(live.curl, x, y));
       }
@@ -1023,8 +1031,9 @@ export default function StickyEditor({
   }
 
   const draft = draftRef.current;
-  // The image of the tool in your hand, for a fine pointer to carry.
-  const tool = held ? heldTool(held) : null;
+  // The image of the tool in your hand, for a fine pointer to carry. The hand
+  // has none: a mouse's own grab cursor already is one.
+  const tool = held === "hand" ? null : heldTool(held);
   // The live stroke and the element being placed are elements like any other:
   // each joins the end of the note while it is being made.
   const shown = !content
@@ -1073,8 +1082,15 @@ export default function StickyEditor({
                 width: PAPER_SIDE,
                 aspectRatio: NOTE_PAPER_ASPECT_RATIO,
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
-                // the held tool IS the cursor over the paper
-                cursor: fine && held ? "none" : undefined,
+                // the held tool IS the cursor over the paper; the hand is the
+                // browser's own, closed while it turns or peels
+                cursor: !fine
+                  ? undefined
+                  : held !== "hand"
+                    ? "none"
+                    : using || turning
+                      ? "grabbing"
+                      : "grab",
                 ...noteMotion(tearing, crumpling, shown.rotation, turning),
               }}
             >
@@ -1183,6 +1199,14 @@ export default function StickyEditor({
           className="flex min-w-0 flex-1 items-end justify-center"
           style={{ gap: DESK_GAP }}
         >
+          <ToolSlot
+            label={`${held === "hand" ? "Put down" : "Pick up"} the hand`}
+            held={held === "hand"}
+            slot={HAND_SLOT}
+            onClick={() => pickUp("hand")}
+          >
+            <HandBody held={held === "hand"} using={using} />
+          </ToolSlot>
           {INKS.map((ink) => (
             <ToolSlot
               key={ink}
