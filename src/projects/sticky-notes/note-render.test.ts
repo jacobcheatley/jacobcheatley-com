@@ -127,6 +127,7 @@ describe("NoteRender", () => {
       render(c)
         .match(/ d="([^"]*)"/g)
         ?.join("") ?? "";
+    expect(d(stroke(0.1))).not.toBe("");
     expect(d(stroke(0.1))).toBe(d(stroke(1)));
   });
 

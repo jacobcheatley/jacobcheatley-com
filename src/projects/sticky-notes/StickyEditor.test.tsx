@@ -477,6 +477,35 @@ describe("StickyEditor drawing", () => {
     expect(drawn()[0]?.getAttribute("d")).toBe(expected);
   });
 
+  it("stores every point at pressure 0.5, whatever the pointer reported", () => {
+    // a marker has no pressure (#84): a touch (1) and a light pen (0.1) must
+    // leave the same numbers behind as a mouse
+    const onLanding = vi.fn();
+    render(<StickyEditor initialContent={seeded({})} onLanding={onLanding} />);
+    const paper = paperSurface();
+    fireEvent.pointerDown(paper, {
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+      pointerType: "touch",
+      pressure: 1,
+    });
+    fireEvent.pointerMove(paper, {
+      clientX: 140,
+      clientY: 160,
+      pointerId: 1,
+      pointerType: "pen",
+      pressure: 0.1,
+    });
+    up(paper);
+
+    const points = pinned(onLanding)?.flatMap((el: Element) =>
+      el.type === "stroke" ? el.points : [],
+    );
+    expect(points?.length).toBeGreaterThanOrEqual(2);
+    expect(points?.map((p: number[]) => p[2])).toEqual(points?.map(() => 0.5));
+  });
+
   it("draws nothing from a tap that never moves", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const paper = paperSurface();

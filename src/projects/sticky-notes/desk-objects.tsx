@@ -57,7 +57,9 @@ export const DESK_GAP = "clamp(0px, 1.5vw - 5px, 12px)";
 // a side is the ceiling — 8px of overlap between neighbours, which is where a
 // 30px marker still reads as a separate pen. If a narrower phone than 320
 // turns up, take the width off the bin and the sticker tab, not off this.
-const SQUEEZE = "clamp(-4px, (100vw - 420px) / 25, 0px)";
+// The width the markers start squeezing at; the bin gap (below) closes there too.
+const SQUEEZE_FROM = "100vw - 420px";
+const SQUEEZE = `clamp(-4px, (${SQUEEZE_FROM}) / 25, 0px)`;
 
 // The fixed boxes the tray's objects lie in.
 export const MARKER_SLOT: CSSProperties = {
@@ -80,7 +82,7 @@ export const TRAY_TOP = `calc(${2 * ROCKER_H}px + ${TRAY_PAD})`;
 // row gap on its far side, so the gaps either side of it don't count twice; a
 // shrinkable flex item, it gives up its width before anything else has to.
 export const BIN_SPACER: CSSProperties = {
-  width: `clamp(0px, (100vw - 420px) / 8, 32px - ${DESK_GAP})`,
+  width: `clamp(0px, (${SQUEEZE_FROM}) / 8, 32px - ${DESK_GAP})`,
   marginInlineEnd: `calc(-1 * ${DESK_GAP})`,
 };
 export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };

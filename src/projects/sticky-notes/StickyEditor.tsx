@@ -542,7 +542,6 @@ export default function StickyEditor({
     const note = { ...emptyNote(), colour };
     const from = pad.getBoundingClientRect();
     apply(note);
-    setHeld("black");
     setTearing(centreOffset(from, stage.current?.getBoundingClientRect()));
     setLanded(false);
     clearTimeout(landTimer.current);
