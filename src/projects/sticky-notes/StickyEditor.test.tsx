@@ -24,7 +24,7 @@ const pad = (colour: string) =>
   screen.getByRole("button", { name: new RegExp(`${colour} sheet`, "i") });
 const pads = () => screen.getAllByRole("button", { name: /tear off/i });
 const bin = () => screen.getByRole("button", { name: /bin this note/i });
-// the fixed boxes the strip's objects lie in, by the marker on each
+// the fixed boxes the tray's objects lie in, by the marker on each
 const slot = (name: string) =>
   document.querySelector<HTMLElement>(`[data-slot="${name}"]`);
 // The eraser and the sticker tab ARE their own boxes — no wrapper sets a
@@ -710,8 +710,7 @@ describe("StickyEditor thumb targets", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const row = tray() as HTMLElement;
 
-    // nothing may wrap, and nothing may be re-ordered onto another line
-    expect(row.className).toContain("justify-center");
+    // nothing may wrap onto another line
     expect(row.className).not.toContain("flex-wrap");
     expect(
       [...row.querySelectorAll("button")].map((b) =>
@@ -736,7 +735,7 @@ describe("StickyEditor thumb targets", () => {
     expect(gap?.style.width).toContain("clamp(0px");
   });
 
-  it("closes the markers up as the strip narrows, and no further", () => {
+  it("closes the markers up as the tray narrows, and no further", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const row = screen.getByRole("button", {
       name: /pick up the red marker/i,
@@ -790,7 +789,7 @@ describe("StickyEditor thumb targets", () => {
     expect(box()).toBe(before); // the box it lies in never moved
   });
 
-  it("pops the font samples over the mat instead of onto the strip", () => {
+  it("pops the font samples over the mat instead of onto the tray", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     pickUp(/pick up the red marker/i);
     const casual = () =>
@@ -949,13 +948,6 @@ describe("StickyEditor sticker sheet", () => {
 
   it("leaves the tab where it lies in the tray while the sheet is up, and the tray usable", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    // resting on the mat's bottom edge, where a tab riding the sheet would
-    // have had to climb
-    tabSlot().getBoundingClientRect = () => ({
-      ...PAPER_RECT,
-      top: window.innerHeight - 48,
-      bottom: window.innerHeight,
-    });
     const box = tabSlot().style.cssText;
 
     fireEvent.click(tab());

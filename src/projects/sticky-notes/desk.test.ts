@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { flightTransform } from "./desk";
+import { centreOffset, flightTransform } from "./desk";
+
+describe("centreOffset", () => {
+  const stage = { left: 100, top: 0, width: 300, height: 300 }; // centre 250, 150
+
+  it("measures from one box's centre to another's", () => {
+    const pad = { left: 0, top: 400, width: 100, height: 100 }; // centre 50, 450
+    expect(centreOffset(pad, stage)).toEqual({ dx: -200, dy: 300 });
+  });
+
+  it("is no move at all when a box isn't there to measure", () => {
+    expect(centreOffset(undefined, stage)).toEqual({ dx: 0, dy: 0 });
+    expect(centreOffset(stage, undefined)).toEqual({ dx: 0, dy: 0 });
+  });
+});
 
 // The pinned note's flight, as the numbers it starts from: the wall tile moved
 // and scaled so the sheet in it lies back where the sheet lay on the mat.

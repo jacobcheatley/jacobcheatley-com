@@ -23,8 +23,9 @@ export const PAPER_SIDE = "min(88vw, 60svh)";
 const CHOOSER_MS = 400; // the pads left behind sliding away, or back
 
 const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
+const PRESS_MS = 160; // a font chip or the sticker tab pressed in
 
-// Tool sizes. The strip is ONE row at every width (#74), so nothing on it may
+// Tool sizes. The tray is ONE row at every width (#74, #82), so nothing on it may
 // wrap, grow or shrink: each object lies in a box of a fixed size, and every
 // lift, tilt and cap-off inside that box is a transform, which cannot move its
 // neighbours. A marker's box is only as wide as the marker (they sit shoulder
@@ -48,9 +49,9 @@ const STICKER_TAB_H = 44;
 const BIN_W = TOUCH;
 const BIN_H = 56;
 
-// The space between the objects in a group: whatever room the screen has left,
+// The space between neighbours in the tray: whatever room the screen has left,
 // and none at all on a narrow phone. The markers "really don't need spacing"
-// (owner, #74) — closing up is what keeps the strip one row.
+// (owner, #74) — closing up is what keeps the tray one row.
 export const DESK_GAP = "clamp(0px, 1.5vw - 5px, 12px)";
 // Past zero the four markers lean on each other rather than wrap. ponytail: 4px
 // a side is the ceiling — 8px of overlap between neighbours, which is where a
@@ -58,7 +59,7 @@ export const DESK_GAP = "clamp(0px, 1.5vw - 5px, 12px)";
 // turns up, take the width off the bin and the sticker tab, not off this.
 const SQUEEZE = "clamp(-4px, (100vw - 420px) / 25, 0px)";
 
-// The fixed boxes the strip's objects lie in.
+// The fixed boxes the tray's objects lie in.
 export const MARKER_SLOT: CSSProperties = {
   width: MARKER_W,
   height: TOOL_H,
@@ -123,7 +124,7 @@ export function ToolSlot({
       aria-label={label}
       aria-pressed={held}
       onClick={onClick}
-      // z-10: where a tool's box meets its neighbour's on a narrow strip, the
+      // z-10: where a tool's box meets its neighbour's in a narrow tray, the
       // tool is the thing under the finger.
       className="relative z-10 flex shrink-0 items-end justify-center border-0 bg-transparent p-0 motion-reduce:animate-none!"
       style={{
@@ -237,6 +238,19 @@ export function MarkerBody({
   );
 }
 
+// How the eraser and the hand rise out of their slots: up when held, higher
+// and tipped further while they work.
+function lift(held: boolean, using: boolean): CSSProperties {
+  return {
+    transform: !held
+      ? "none"
+      : using
+        ? "translateY(-26px) rotate(-13deg)"
+        : "translateY(-17px) rotate(-6deg)",
+    transition: `transform ${LIFT_MS}ms ${EASE_OUT}`,
+  };
+}
+
 // A block eraser: cream rubber with a purple band. It lifts only when it is the
 // thing in your hand — `using` is the editor's "a tool is working" flag, and
 // reading it on its own is what made the eraser rise every time a marker drew
@@ -259,12 +273,7 @@ export function EraserBody({
         borderRadius: 3,
         background: "linear-gradient(180deg,#fbf6ee,#dbd0bf)",
         boxShadow: "0 3px 6px rgba(0,0,0,.45), inset 0 -4px 0 rgba(0,0,0,.07)",
-        transform: !held
-          ? "none"
-          : using
-            ? "translateY(-26px) rotate(-13deg)"
-            : "translateY(-17px) rotate(-6deg)",
-        transition: `transform ${LIFT_MS}ms ${EASE_OUT}`,
+        ...lift(held, using),
       }}
     >
       <span
@@ -303,15 +312,9 @@ export function HandBody({
       style={{
         fill: "#e9dfcd",
         filter: "drop-shadow(0 3px 3px rgba(0,0,0,.45))",
-        transform: !held
-          ? "none"
-          : using
-            ? "translateY(-26px) rotate(-13deg)"
-            : "translateY(-17px) rotate(-6deg)",
-        transition: `transform ${LIFT_MS}ms ${EASE_OUT}`,
+        ...lift(held, using),
       }}
     >
-      <title>hand</title>
       <rect x="9" y="20" width="26" height="30" rx="9" />
       <rect x="9" y="6" width="5.5" height="24" rx="2.75" />
       <rect x="15.5" y="2" width="5.5" height="26" rx="2.75" />
@@ -381,7 +384,7 @@ export function FontChip({
           ? `0 3px 5px rgba(0,0,0,.4), inset 0 0 0 2px ${tint}`
           : "0 3px 5px rgba(0,0,0,.4)",
         transform: active ? "translateY(-3px)" : "none",
-        transition: `transform 160ms ${EASE_OUT}`,
+        transition: `transform ${PRESS_MS}ms ${EASE_OUT}`,
       }}
     >
       Aa
@@ -405,7 +408,7 @@ export function ModeControl({
   ink: Ink | null;
   mode: Mode;
   font: Font;
-  // the samples are a pop-up over the mat, not a fifth object on the strip
+  // the samples are a pop-up over the mat, not more objects in the tray
   fontsOpen: boolean;
   onMode: (m: Mode) => void;
   onFont: (f: Font) => void;
@@ -595,7 +598,7 @@ export function PadChooser({
   );
 }
 
-// The bin at the right end of the strip: a tapered steel basket. Inert with no
+// The bin at the right end of the tray: a tapered steel basket. Inert with no
 // note on the mat — there is nothing to throw away.
 export function Bin({
   onClick,
@@ -749,7 +752,7 @@ export function StickerTab({
             ? "inset 0 2px 4px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.3)"
             : "0 -2px 8px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.3)",
           transform: open ? "translateY(3px)" : "none",
-          transition: `transform 160ms ${EASE_OUT}, background 160ms, box-shadow 160ms`,
+          transition: `transform ${PRESS_MS}ms ${EASE_OUT}, background ${PRESS_MS}ms, box-shadow ${PRESS_MS}ms`,
         }}
       >
         ⭐{/* the dog-eared corner that says "peel me" */}
@@ -769,7 +772,7 @@ export function StickerTab({
 // "pin it up" (#82) is loud tape hung just above the note, and the editor keeps
 // PIN_ROOM clear over the paper for it: one line of its text, its padding, the
 // gap it stands off the paper by, and the few px its tilt lifts one end (-2.2°
-// across ~210px of tape is ~8px, half of it above the middle). The label is
+// across ~180px of tape is ~7px, half of it above the middle). The label is
 // sized from these same numbers, so the room and the tape can't drift apart.
 const LOUD_TEXT = 38; // px, twice the quiet tape's
 const LOUD_LINE = 1.375; // Tailwind's leading-snug, as the quiet tape has

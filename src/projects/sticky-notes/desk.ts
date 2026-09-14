@@ -18,6 +18,23 @@ export const SLIDE_MS = 500;
 // object in a test.
 type Box = { left: number; top: number; width: number; height: number };
 
+// How far one box's centre is from another's, in px: where a torn-off sheet
+// starts (its pad, seen from where it lands), where a crumpled one goes (the
+// bin, seen from the sheet), and the move in the pinned note's flight. A box
+// that isn't there to measure is no move at all.
+export type Offset = { dx: number; dy: number };
+
+export function centreOffset(
+  from: Box | undefined,
+  to: Box | undefined,
+): Offset {
+  if (!from || !to) return { dx: 0, dy: 0 };
+  return {
+    dx: from.left + from.width / 2 - (to.left + to.width / 2),
+    dy: from.top + from.height / 2 - (to.top + to.height / 2),
+  };
+}
+
 // The pinned note's flight onto the wall (#77), as numbers: the translate and
 // scale that put its wall tile back over the sheet it lay as on the mat, for
 // the flight to let go of. The scale is about the tile's centre (CSS's default
@@ -33,15 +50,8 @@ export function flightTransform(
 ): { dx: number; dy: number; scale: number } {
   const scale = from.width / to.width;
   const headroom = to.height - to.width;
-  return {
-    dx: from.left + from.width / 2 - (to.left + to.width / 2),
-    dy:
-      from.top +
-      from.height / 2 -
-      (to.top + to.height / 2) -
-      (scale * headroom) / 2,
-    scale,
-  };
+  const { dx, dy } = centreOffset(from, to);
+  return { dx, dy: dy - (scale * headroom) / 2, scale };
 }
 
 // The sticker sheet's ride up from behind the tray (#75, #82), and the note's

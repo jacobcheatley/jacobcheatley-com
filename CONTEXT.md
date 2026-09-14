@@ -50,7 +50,7 @@ The cutting mat a Note is made on: a full-screen desk that slides up over the wa
 _Avoid_: editor page, modal, canvas
 
 **Tray**:
-The single centred row along the Mat's bottom edge where the objects lie, each in a fixed slot of its own, in this order: the Hand (see **Hand mode**), the four **Markers**, the draw/write rocker, the **Sticker sheet**'s tab, the **Eraser**, a small gap when there is room for one, and the bin. It never wraps, and it is away while a **Pad** is being chosen.
+The centred row along the Mat's bottom edge where the objects lie, in this order: the **Hand**, the four **Markers**, the draw/write rocker, the **Sticker sheet**'s tab, the **Eraser**, and the bin. It is away while a **Pad** is being chosen.
 _Avoid_: toolbar, palette
 
 **Pad**:
@@ -65,8 +65,11 @@ _Avoid_: pen, brush, colour swatch
 The rubber on the Tray. Held and rubbed across the Note, it removes each whole **Element** under it. It is the only delete: there is no undo, and an Element can't be dragged off the paper.
 _Avoid_: delete button
 
+**Hand**:
+The open hand lying on the Tray: the tool held whenever no **Marker** and not the **Eraser** is. Putting any other tool down picks it up.
+
 **Hand mode**:
-Holding the Hand, the Tray object that is held whenever no Marker and not the Eraser is. A drag on the Note turns it about its centre and its bottom corners set its **Curl** — nothing else: it never takes hold of an **Element**.
+Holding the **Hand**. A drag on the Note turns it about its centre and its bottom corners set its **Curl** — nothing else: it never takes hold of an **Element**.
 _Avoid_: tweezers, select tool, pointer
 
 **Draw mode**:
@@ -76,7 +79,7 @@ Using the held Marker to draw: a drag on the Note leaves a **Stroke** in that Ma
 Using the held Marker to write: a tap on the Note opens a **Text box** in that Marker's Ink and the chosen font. The font can be chosen before or while **Placing**, never after; the Ink is the Text box's for good.
 
 **Placing**:
-The time between an **Element** landing on the Note and the tap away that fixes it. While Placing, a Text box or Sticker can be moved and turned, and a Text box widened; afterwards it never changes, and the **Eraser** is the only way to remove it.
+The time between an **Element** landing on the Note and the tap away that fixes it. While Placing, a **Text box** or **Sticker** can be moved and turned, and a Text box widened; afterwards it never changes, and the **Eraser** is the only way to remove it.
 
 **Sticker sheet**:
 A sheet of printed emoji that rises from behind the Tray, sits above it, and goes away again at its tab, which stays in the Tray. A **Sticker** is peeled off it and dragged onto the Note; the sheet never runs out.

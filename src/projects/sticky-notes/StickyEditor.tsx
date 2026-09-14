@@ -8,7 +8,14 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { capturePointer, EASE_OUT, SHEET_MS, STILL } from "./desk";
+import {
+  capturePointer,
+  centreOffset,
+  EASE_OUT,
+  type Offset,
+  SHEET_MS,
+  STILL,
+} from "./desk";
 import {
   BIN_SPACER,
   Bin,
@@ -122,18 +129,6 @@ type PlacingDrag = {
   from: [number, number];
   start: Placing;
 };
-// How far one box's centre is from another's, in px: where a torn-off sheet
-// starts (its pad, seen from where it lands), or where a crumpled one goes
-// (the bin, seen from the sheet).
-type Offset = { dx: number; dy: number };
-
-function offset(from: DOMRect | undefined, to: DOMRect | undefined): Offset {
-  if (!from || !to) return { dx: 0, dy: 0 };
-  return {
-    dx: from.left + from.width / 2 - (to.left + to.width / 2),
-    dy: from.top + from.height / 2 - (to.top + to.height / 2),
-  };
-}
 // The hand is a tool like the others (#82): putting one down picks it up.
 type Held = Ink | "eraser" | "hand";
 
@@ -545,7 +540,7 @@ export default function StickyEditor({
     const note = { ...emptyNote(), colour };
     const from = pad.getBoundingClientRect();
     apply(note);
-    setTearing(offset(from, stage.current?.getBoundingClientRect()));
+    setTearing(centreOffset(from, stage.current?.getBoundingClientRect()));
     setLanded(false);
     clearTimeout(landTimer.current);
     landTimer.current = setTimeout(() => setLanded(true), TEAR_MS);
@@ -578,7 +573,7 @@ export default function StickyEditor({
     // sticker sheet shrinks, so with the sheet up the note falls a little short
     // of the bin — it is a speck by then. Divide by that scale if it shows.
     setCrumpling(
-      offset(
+      centreOffset(
         binButton.current?.getBoundingClientRect(),
         paperRef.current?.getBoundingClientRect(),
       ),
@@ -625,6 +620,10 @@ export default function StickyEditor({
     setFontsOpen(false);
     hideCursorTool();
   }
+
+  // A tool's name in the tray says what a tap on it would do.
+  const toolLabel = (tool: Held, name: string) =>
+    `${held === tool ? "Put down" : "Pick up"} the ${name}`;
 
   // --- the paper -----------------------------------------------------------
   // Client → note coordinates. NotePaper has no fastener headroom, so the
@@ -1160,7 +1159,10 @@ export default function StickyEditor({
             {/* "pin it up" (#82): taped just above the paper, in this frame
                 rather than on the paper, so it rides the sheet's shift with
                 the note but never turns with it. `w-max`: a box hung off the
-                middle would otherwise wrap in the half-width left to it. */}
+                middle would otherwise wrap in the half-width left to it.
+                `-translate-x-1/2` survives TAPE's inline `transform: rotate`
+                only because Tailwind v4 writes it to the separate CSS
+                `translate` property, which the browser applies alongside. */}
             <TapeLabel
               ref={pinButton}
               loud
@@ -1204,7 +1206,7 @@ export default function StickyEditor({
         }}
       >
         <ToolSlot
-          label={`${held === "hand" ? "Put down" : "Pick up"} the hand`}
+          label={toolLabel("hand", "hand")}
           held={held === "hand"}
           slot={HAND_SLOT}
           onClick={() => pickUp("hand")}
@@ -1214,7 +1216,7 @@ export default function StickyEditor({
         {INKS.map((ink) => (
           <ToolSlot
             key={ink}
-            label={`${held === ink ? "Put down" : "Pick up"} the ${ink} marker`}
+            label={toolLabel(ink, `${ink} marker`)}
             held={held === ink}
             shake={shaking && held === ink}
             slot={MARKER_SLOT}
@@ -1253,7 +1255,7 @@ export default function StickyEditor({
           }}
         />
         <ToolSlot
-          label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
+          label={toolLabel("eraser", "eraser")}
           held={held === "eraser"}
           slot={ERASER_SLOT}
           onClick={() => pickUp("eraser")}
