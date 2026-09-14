@@ -14,6 +14,7 @@
       "**/.devcontainer/**/*",
       "**/index.html",
       "**/server.ts",
+      "**/scripts/**/*",
       "**/*.config.ts",
       "!**/src/routeTree.gen.ts",
       "!**/src/styles.css"
