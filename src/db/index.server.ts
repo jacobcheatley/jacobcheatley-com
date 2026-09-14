@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import * as schema from "@/projects/guestbook/schema";
+import * as schema from "@/projects/sticky-notes/schema";
 
 // The only runtime reader of DATABASE_URL. (drizzle-kit's config and the Vitest
 // bootstrap read it too, but those run outside the app process.)
