@@ -61,6 +61,26 @@ describe("Spotlight", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
+  it("presses the fastener on again each time one is chosen", () => {
+    const { rerender } = render(
+      <Spotlight content={content} label="Pin it up" />,
+    );
+    // the note arrives unfastened, and arriving is not a press
+    expect(note().querySelector("[data-press]")).toBeNull();
+
+    const pinned = { ...content, fastener: "pin-red" } as NoteContent;
+    rerender(<Spotlight content={pinned} label="Pin it up" />);
+    const first = note().querySelector("[data-press]");
+    expect(first).toHaveAttribute("data-press", "pin-red");
+
+    // pinning hands over a new note each choice, even of the same fastener
+    rerender(<Spotlight content={{ ...pinned }} label="Pin it up" />);
+    const again = note().querySelector("[data-press]");
+    expect(again).toHaveAttribute("data-press", "pin-red");
+    // a fresh node, so its CSS animation starts over
+    expect(again).not.toBe(first);
+  });
+
   it("offers no way out when the caller provides its own", () => {
     render(<Spotlight content={content} label="Pinning a note" />);
 

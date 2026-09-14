@@ -12,6 +12,7 @@ import {
   capturePointer,
   centreOffset,
   EASE_OUT,
+  flyTo,
   type Offset,
   SHEET_MS,
   STILL,
@@ -90,7 +91,7 @@ import {
   type NoteContent,
   type PaperColour,
 } from "./note-schema";
-import { flyToLanding, PinUp } from "./pin-up";
+import { PinUp } from "./pin-up";
 import { SHEET_H, StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74, #81): the pad chooser while there is
@@ -142,18 +143,18 @@ const isInk = (held: Held): held is Ink => held !== "hand" && held !== "eraser";
 export default function StickyEditor({
   initialContent = null,
   up = true,
-  landing,
-  onLanding,
+  pinning,
+  onPinning,
 }: {
   // Tests seed a half-built note; the UI always starts from a torn-off sheet.
   initialContent?: NoteContent | null;
   // Whether the mat is up. The island stays mounted under a mat that has gone
   // down, and must not keep listening to the wall's presses and keys.
   up?: boolean;
-  // The pinning phase (#77): the note as it lies on the wall, while it does.
-  // The page owns it (the wall shows it); this island puts it there.
-  landing?: NoteContent;
-  onLanding?: (note: NoteContent | undefined) => void;
+  // The pinning phase (#88): the note as it hangs in the Spotlight, while it
+  // does. The page owns it (it takes the mat down); this island puts it there.
+  pinning?: NoteContent;
+  onPinning?: (note: NoteContent | undefined) => void;
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
   // A pointermove's state update has not necessarily landed by the time the
@@ -604,17 +605,17 @@ export default function StickyEditor({
     setFontsOpen(false);
   }
 
-  // "pin it up": the note leaves the mat for its slot on the wall. It goes as it
-  // is, bare paper — the fastener is chosen once it has landed.
+  // "pin it up": the note leaves the mat for the Spotlight over the wall. It
+  // goes as it is, bare paper — the fastener is chosen once it is up there.
   function pinUp() {
     fixPlacing(); // what is being placed goes up with it
     const live = contentRef.current;
     if (!live || crumpling) return;
     const from = paperRef.current?.getBoundingClientRect();
-    // The wall has to lay the landed note out before there is anywhere to fly
-    // it to, so this render happens now rather than after the handler.
-    flushSync(() => onLanding?.({ ...live, fastener: "none" }));
-    flyToLanding(from);
+    // The Spotlight has to be there before there is anywhere to fly to, so
+    // this render happens now rather than after the handler.
+    flushSync(() => onPinning?.({ ...live, fastener: "none" }));
+    flyTo(from, document.querySelector("[data-spotlight]"));
   }
 
   // Tapping a tool picks it up and puts down whatever was held; tapping the
@@ -1082,9 +1083,9 @@ export default function StickyEditor({
           <div
             className="relative"
             style={{
-              // Pinned up, the note is on the wall: the mat slides away bare,
-              // and comes back up with it lying where it was.
-              visibility: landing ? "hidden" : undefined,
+              // Pinned up, the note is in the Spotlight: the mat slides away
+              // bare, and comes back up with it lying where it was.
+              visibility: pinning ? "hidden" : undefined,
             }}
           >
             <div
@@ -1330,16 +1331,16 @@ export default function StickyEditor({
         onClose={() => setSheetOpen(false)}
       />
 
-      {landing && onLanding && (
+      {pinning && onPinning && (
         <PinUp
-          content={landing}
-          onChange={onLanding}
-          // The page stops holding a landed note, so the mat slides back up;
-          // the note on it never had the fastener, so it comes back without.
-          // Rendered now rather than after the handler: the mat is inert until
-          // it is up again, and focus can't land on anything inside it.
+          content={pinning}
+          onChange={onPinning}
+          // The page stops holding a note being pinned up, so the mat slides
+          // back up; the note on it never had the fastener, so it comes back
+          // without. Rendered now rather than after the handler: the mat is
+          // inert until it is up again, and focus can't reach anything in it.
           onBack={() => {
-            flushSync(() => onLanding(undefined));
+            flushSync(() => onPinning(undefined));
             pinButton.current?.focus();
           }}
           // sent: the mat is bare again for the next note

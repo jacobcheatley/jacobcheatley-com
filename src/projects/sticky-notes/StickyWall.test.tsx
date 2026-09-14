@@ -132,61 +132,58 @@ describe("StickyWall", () => {
     expect(screen.getAllByText(/pending/i)).toHaveLength(2);
   });
 
-  it("lands a pinned note in the newest slot, right after the invite, marked pending", async () => {
+  it("puts nothing in the newest slot while a note is being pinned up", async () => {
     storePending(pending("ada", 2));
-    // the wall is up before anything lands on it
+    // the wall is up before anything is pinned up over it
     const notes = [note(1, "sam")];
     const { rerender } = render(<StickyWall notes={notes} />);
-    rerender(
-      <StickyWall notes={notes} landing={content({ colour: "pink" })} />,
+    await waitFor(() =>
+      expect(screen.getAllByRole("listitem")).toHaveLength(3),
     );
 
-    // invite, then the landed note, then the pending and approved ones
-    await waitFor(() =>
-      expect(screen.getAllByRole("listitem")).toHaveLength(4),
+    rerender(
+      <StickyWall notes={notes} pinning={content({ colour: "pink" })} />,
     );
+
+    // invite, the pending note, the approved one — the note being pinned up is
+    // in the Spotlight over the top, not on the board
     const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(3);
     expect(items[0]).toContainElement(
       screen.getByRole("link", { name: /pin a note/i }),
     );
-    expect(items[1]).toHaveAttribute("data-landing");
-    expect(items[1]).toHaveTextContent(/pending/i);
-    expect(items[2]).toContainElement(
+    expect(items[1]).toContainElement(
       screen.getByRole("button", { name: /zoom note by ada/i }),
     );
   });
 
-  it("presses the fastener on again when the same one is chosen again", () => {
-    const { rerender } = render(
-      <StickyWall notes={[]} landing={content({ fastener: "pin-red" })} />,
-    );
-    const first = document.querySelector("[data-press]");
-    // the drawer hands over a new note each choice, even of the same fastener
-    rerender(
-      <StickyWall notes={[]} landing={content({ fastener: "pin-red" })} />,
-    );
+  it("marks the newest pending tile as the slot a note flies home into", async () => {
+    storePending(pending("ada", 2), pending("lee", 1));
+    render(<StickyWall notes={[note(1, "sam")]} />);
 
-    const again = document.querySelector("[data-press]");
-    expect(again).toHaveAttribute("data-press", "pin-red");
-    // a fresh node, so its CSS animation starts over
-    expect(again).not.toBe(first);
+    await waitFor(() =>
+      expect(document.querySelectorAll("[data-newest]")).toHaveLength(1),
+    );
+    expect(document.querySelector("[data-newest]")).toContainElement(
+      screen.getByRole("button", { name: /zoom note by ada/i }),
+    );
   });
 
-  it("keeps the small invite, not the empty wall's, while a note lands on an empty wall", () => {
-    render(<StickyWall notes={[]} landing={content()} />);
+  it("keeps the small invite, not the empty wall's, while a note is pinned up over it", () => {
+    render(<StickyWall notes={[]} pinning={content()} />);
     // "+ pin a note" is the tile-sized one; the empty wall's asks for the first
     expect(screen.getByRole("link", { name: /pin a note/i })).toHaveTextContent(
       "+ pin",
     );
   });
 
-  it("shows the note that just landed as pending once it has been submitted", () => {
-    // the same list both times: nothing but the landing going re-reads it
+  it("shows the note just sent as pending once the pinning has ended", () => {
+    // the same list both times: nothing but the pinning going re-reads it
     const notes = [note(1, "sam")];
     const { rerender } = render(
-      <StickyWall notes={notes} landing={content()} />,
+      <StickyWall notes={notes} pinning={content()} />,
     );
-    // the submit writes the pending list, then the landed note goes
+    // the submit writes the pending list, then the Spotlight goes
     storePending(pending("ada", 2));
     rerender(<StickyWall notes={notes} />);
 

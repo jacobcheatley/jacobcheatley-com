@@ -12,11 +12,11 @@ import { SHAKE_MS } from "./desk-objects";
 import type { NoteContent } from "./note-schema";
 import { StickyNotes } from "./StickyNotes";
 
-// The whole page (#77): the wall, the mat over it, and pinning a note up from
-// one onto the other. The route's only contribution is `matUp` (whether the URL
-// is /sticky-notes/new), so the tests drive that prop the way Back and the
-// invite drive the URL. Motion is CSS and FLIP; these assert the state it
-// carries, never the flight.
+// The whole page (#88): the wall, the mat over it, and pinning a note up from
+// one into the Spotlight over the other. The route's only contribution is
+// `matUp` (whether the URL is /sticky-notes/new), so the tests drive that prop
+// the way Back and the invite drive the URL. Motion is CSS and FLIP; these
+// assert the state it carries, never the flight.
 
 // The router and the write server fn don't belong in jsdom: stub them at the
 // seams, as the phase-1 editor tests did. The note and its contract run for
@@ -61,26 +61,27 @@ const approved = (author: string) => ({
 // The mat is the surface the "← the wall" link is stuck to.
 const mat = () =>
   screen.getByRole("link", { name: /the wall/i }).parentElement as HTMLElement;
-// the note being pinned up, as the wall lays it out
-const landing = () => document.querySelector<HTMLElement>("[data-landing]");
+// the scene a note is pinned up in, and the note lifted into it
+const scene = () => screen.queryByRole("dialog", { name: /pin it up/i });
+const lifted = () => document.querySelector<HTMLElement>("[data-spotlight]");
 // the sheet lying on the mat, as opposed to any note on the wall
 const matPaper = () => document.querySelector<HTMLElement>("[data-colour]");
 const marksOnTheMat = () =>
   matPaper()?.querySelector("[data-elements]")?.childElementCount ?? 0;
-const drawer = () => screen.queryByRole("region", { name: /fastener drawer/i });
-const drawerTab = () =>
-  screen.queryByRole("button", { name: /open the fastener drawer/i });
-// the nine fasteners in the drawer, a red pin first
+// the nine fasteners under the lifted note, a red pin first
 const choices = () =>
-  within(drawer() as HTMLElement).getAllByRole("button", {
+  within(scene() as HTMLElement).getAllByRole("button", {
     name: /^fasten it with/i,
   });
-// what the landed note is fastened with, as the wall wears it
+// what the lifted note is fastened with, as it wears it
 const fastenedWith = () =>
-  landing()?.querySelector("[data-press]")?.getAttribute("data-press") ??
-  "none";
+  lifted()?.querySelector("[data-press]")?.getAttribute("data-press") ?? "none";
 const nameTag = () => screen.queryByRole("textbox", { name: /your name/i });
+// the tag itself: the paper the field is written on
+const tag = () => nameTag()?.parentElement as HTMLElement;
 const tick = () => screen.getByRole("button", { name: /sign the tag/i });
+const backTape = () =>
+  screen.getByRole("button", { name: /back to the desk/i });
 // what the one POST carried
 const posted = () => addNote.mock.calls[0]?.[0]?.data;
 const storedPending = () =>
@@ -93,7 +94,6 @@ const backToTheWall = { to: "/sticky-notes", replace: true };
 const tap = (name: RegExp) =>
   fireEvent.click(screen.getByRole("button", { name }));
 const pinItUp = () => tap(/pin it up/i);
-const putTheDrawerAway = () => tap(/put the drawer away/i);
 
 // The island is lazy, so wait for its pad chooser, then tear a sheet off and
 // wait for it to land: a sheet still flying off its pad is busy, and takes no
@@ -122,7 +122,7 @@ async function pinnedUp({ colour = "yellow", marked = false }: Sheet = {}) {
   if (marked) drawAStroke();
   pinItUp();
 }
-// ...then fastened with a red pin, so the tag is out.
+// ...then fastened with a red pin.
 async function fastened(sheet?: Sheet) {
   await pinnedUp(sheet);
   tap(/with a red pin/i);
@@ -159,96 +159,94 @@ describe("StickyNotes pin it up", () => {
     expect(screen.queryByRole("button", { name: /pin it up/i })).toBeNull();
   });
 
-  it("slides the mat down and lands the note on the wall, at the top of the page", async () => {
+  it("slides the mat down and lifts the note into the Spotlight, at the top of the page", async () => {
     render(<StickyNotes notes={[approved("sam")]} matUp />);
     await tearOff("yellow");
-    expect(landing()).toBeNull();
+    expect(scene()).toBeNull();
 
     pinItUp();
 
     expect(mat()).toHaveStyle({ transform: "translateY(100%)" });
-    const note = landing();
-    expect(note).not.toBeNull();
     expect(
-      within(note as HTMLElement).getByRole("img", { name: /sticky note/i }),
+      within(lifted() as HTMLElement).getByRole("img", {
+        name: /sticky note/i,
+      }),
     ).toBeInTheDocument();
-    // the wall is live again under the note
-    expect(note?.closest("[inert]")).toBeNull();
+    // the wall is live again under it
+    expect(lifted()?.closest("[inert]")).toBeNull();
     expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
     // it flew off the mat: there is no second copy of it left lying there
     expect(matPaper()).not.toBeVisible();
+    // and nothing of it is put in the wall's newest slot: the board still
+    // holds the invite and sam's note, and nothing else
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("shows the note, the nine fasteners and the tag all at once", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await pinnedUp();
+
+    const pinning = scene() as HTMLElement;
+    expect(pinning).toContainElement(lifted());
+    expect(choices()).toHaveLength(9);
+    expect(pinning).toContainElement(nameTag());
+    expect(pinning).toContainElement(backTape());
+    // nothing rises or collapses: no box of stationery, no tab to open it
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^fasteners$/i })).toBeNull();
   });
 });
 
-describe("StickyNotes fastener drawer", () => {
-  it("rises over the wall with the nine fasteners in it", async () => {
-    render(<StickyNotes notes={[]} matUp />);
-    await pinnedUp();
-    expect(drawer()).not.toHaveAttribute("inert");
-    expect(choices()).toHaveLength(9);
-    expect(drawerTab()).toBeNull();
-  });
-
-  it("fastens the landed note with the one chosen, and folds away to a tab", async () => {
+describe("StickyNotes fasteners", () => {
+  it("presses the one chosen onto the note, and swaps it for another", async () => {
     render(<StickyNotes notes={[]} matUp />);
     await fastened();
 
     expect(fastenedWith()).toBe("pin-red");
-    expect(drawer()).toHaveAttribute("inert");
-    expect(drawerTab()).toBeInTheDocument();
-  });
+    expect(choices()[0]).toHaveAttribute("aria-pressed", "true");
 
-  it("opens again from its tab, and takes another choice", async () => {
-    render(<StickyNotes notes={[]} matUp />);
-    await fastened();
-    fireEvent.click(drawerTab() as HTMLElement);
-
-    expect(drawer()).not.toHaveAttribute("inert");
-    expect(drawerTab()).toBeNull();
     tap(/with two staples/i);
     expect(fastenedWith()).toBe("staples");
+    expect(choices()[0]).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("leaves the note with no fastener when put away without a choice", async () => {
+  it("leaves the note holding on by itself when none is chosen", async () => {
+    const user = userEvent.setup();
     render(<StickyNotes notes={[]} matUp />);
     await pinnedUp();
-    putTheDrawerAway();
-
     expect(fastenedWith()).toBe("none");
-    expect(drawer()).toHaveAttribute("inert");
-    expect(drawerTab()).toBeInTheDocument();
+
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+
+    await waitFor(() => expect(addNote).toHaveBeenCalledTimes(1));
+    expect(posted()).toMatchObject({ content: { fastener: "none" } });
   });
 });
 
 describe("StickyNotes tag", () => {
-  it("hangs a name tag under the landed note once the drawer folds away", async () => {
+  it("hangs under the fasteners with nothing for a password manager to fill", async () => {
     render(<StickyNotes notes={[]} matUp />);
     await pinnedUp();
-    expect(nameTag()).toBeNull(); // the drawer is still up
 
-    putTheDrawerAway();
-    const input = nameTag();
-    expect(landing()).toContainElement(input);
+    const input = nameTag() as HTMLElement;
+    // not a form: a lone field in one is what a manager reads as a login
+    expect(input.closest("form")).toBeNull();
+    expect(input).not.toHaveAttribute("name");
+    expect(input).not.toHaveAttribute("id");
     // a name, not a sentence: no browser second-guessing what is typed
     expect(input).toHaveAttribute("autocomplete", "off");
     expect(input).toHaveAttribute("autocapitalize", "none");
     expect(input).toHaveAttribute("spellcheck", "false");
     expect(input).toHaveAttribute("maxlength", "50");
-    expect(input).toHaveAttribute("placeholder", "your name");
+    expect(input).toHaveAttribute("placeholder", "sign here");
+    // and the managers' own opt-outs, one per manager
+    expect(input).toHaveAttribute("data-1p-ignore");
+    expect(input).toHaveAttribute("data-lpignore", "true");
+    expect(input).toHaveAttribute("data-bwignore");
+    expect(input).toHaveAttribute("data-form-type", "other");
     // a class on purpose: #77 asks for CSS text-transform, so the name shows
     // lowercase as it is typed (the schema lowercases what is stored)
     expect(input).toHaveClass("lowercase");
-  });
-
-  it("keeps what was typed on the tag while the drawer is open again", async () => {
-    const user = userEvent.setup();
-    render(<StickyNotes notes={[]} matUp />);
-    await fastened();
-    await user.type(nameTag() as HTMLElement, "ada");
-    fireEvent.click(drawerTab() as HTMLElement);
-    putTheDrawerAway();
-
-    expect(nameTag()).toHaveValue("ada");
   });
 
   it("pins the note up under the name on Enter, lowercased, fastener and all", async () => {
@@ -282,51 +280,42 @@ describe("StickyNotes tag", () => {
     await user.type(nameTag() as HTMLElement, "   ");
     await user.click(tick());
 
-    expect(nameTag()?.closest("form")).toHaveAttribute("data-shake");
+    expect(tag()).toHaveAttribute("data-shake");
     expect(addNote).not.toHaveBeenCalled();
   });
 
   it("stops shaking on the clock, so a second blank signing shakes again", async () => {
     render(<StickyNotes notes={[]} matUp />);
     await fastened();
-    const tag = nameTag()?.closest("form");
     // the clock, not animationend: reduced motion has no animation to end
     vi.useFakeTimers();
     fireEvent.click(tick());
-    expect(tag).toHaveAttribute("data-shake");
+    expect(tag()).toHaveAttribute("data-shake");
     wait(SHAKE_MS);
-    expect(tag).not.toHaveAttribute("data-shake");
+    expect(tag()).not.toHaveAttribute("data-shake");
 
     fireEvent.click(tick());
-    expect(tag).toHaveAttribute("data-shake");
+    expect(tag()).toHaveAttribute("data-shake");
   });
 });
 
 describe("StickyNotes focus", () => {
-  it("starts in the drawer, not on the button the mat took away", async () => {
+  it("starts on the way back, not on the button the mat took away", async () => {
     render(<StickyNotes notes={[]} matUp />);
     await pinnedUp();
-    expect(choices()[0]).toHaveFocus();
+
+    expect(backTape()).toHaveFocus();
+    expect(scene()).toContainElement(document.activeElement as HTMLElement);
   });
 
-  it("goes back into the drawer when it opens again from its tab", async () => {
-    render(<StickyNotes notes={[]} matUp />);
-    await fastened();
-    fireEvent.click(drawerTab() as HTMLElement);
-    expect(choices()[0]).toHaveFocus();
-  });
-
-  it("moves to the name tag once a fastener is chosen", async () => {
-    render(<StickyNotes notes={[]} matUp />);
-    await fastened();
-    expect(nameTag()).toHaveFocus();
-  });
-
-  it("moves to the name tag when the drawer is put away", async () => {
+  it("leaves the tag alone: no keyboard comes up for it", async () => {
     render(<StickyNotes notes={[]} matUp />);
     await pinnedUp();
-    putTheDrawerAway();
-    expect(nameTag()).toHaveFocus();
+    expect(nameTag()).not.toHaveFocus();
+
+    // nor when a fastener is chosen — the keyboard stays on the choice made
+    tap(/with a red pin/i);
+    expect(nameTag()).not.toHaveFocus();
   });
 
   it("goes back to pin it up when the note goes back to the desk", async () => {
@@ -345,14 +334,33 @@ describe("StickyNotes abandoning a pin", () => {
     tap(/back to the desk/i);
 
     expect(mat()).toHaveStyle({ transform: "translateY(0)" });
-    expect(landing()).toBeNull();
-    expect(drawer()).toBeNull();
+    expect(scene()).toBeNull();
     expect(matPaper()).toBeVisible();
     expect(matPaper()).toHaveAttribute("data-colour", "pink");
     expect(marksOnTheMat()).toBe(1);
-    // pinned up again, it lands as it left the mat: no fastener yet
+    // pinned up again, it goes as it left the mat: no fastener yet
     pinItUp();
     expect(fastenedWith()).toBe("none");
+  });
+
+  it("takes Escape as the same way back", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await fastened();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(scene()).toBeNull();
+    expect(mat()).toHaveStyle({ transform: "translateY(0)" });
+  });
+
+  it("stays put when the darkened wall itself is tapped", async () => {
+    render(<StickyNotes notes={[]} matUp />);
+    await pinnedUp();
+
+    // no × and no way out on the scrim: pinning brings its own
+    expect(screen.queryByRole("button", { name: /close note/i })).toBeNull();
+    fireEvent.click(scene() as HTMLElement);
+    expect(scene()).not.toBeNull();
   });
 
   it("keeps the draft in memory when Back leaves mid-pin, for the next time the mat comes up", async () => {
@@ -360,8 +368,7 @@ describe("StickyNotes abandoning a pin", () => {
     await pinnedUp({ colour: "pink", marked: true });
 
     rerender(<StickyNotes notes={[]} matUp={false} />); // Back
-    expect(landing()).toBeNull();
-    expect(drawer()).toBeNull();
+    expect(scene()).toBeNull();
 
     rerender(<StickyNotes notes={[]} matUp />); // the invite again
     expect(mat()).toHaveStyle({ transform: "translateY(0)" });
@@ -403,7 +410,7 @@ describe("StickyNotes leaving the mat mid-placing", () => {
 describe("StickyNotes submit", () => {
   it("keeps the note as pending and goes back to the wall in place of the editor's URL", async () => {
     const user = userEvent.setup();
-    render(<StickyNotes notes={[]} matUp />);
+    const { rerender } = render(<StickyNotes notes={[]} matUp />);
     await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
 
@@ -411,6 +418,26 @@ describe("StickyNotes submit", () => {
     expect(storedPending()).toMatchObject([
       { author: "ada", content: { fastener: "pin-red" } },
     ]);
+
+    rerender(<StickyNotes notes={[]} matUp={false} />); // the navigation lands
+    expect(scene()).toBeNull();
+    // the slot it flies home into, newest-first under the invite
+    expect(document.querySelector("[data-newest]")).toContainElement(
+      screen.getByRole("button", { name: /zoom note by ada/i }),
+    );
+  });
+
+  it("shows the tag sending, and holds the fasteners, while the note is on its way", async () => {
+    holdThePost(); // and never let it arrive
+    const user = userEvent.setup();
+    render(<StickyNotes notes={[]} matUp />);
+    await fastened();
+    await user.type(nameTag() as HTMLElement, "ada{Enter}");
+
+    expect(tag()).toHaveAttribute("aria-busy", "true");
+    expect(tick()).toBeDisabled();
+    // what was posted is what lands: no changing the fastener under it now
+    for (const choice of choices()) expect(choice).toBeDisabled();
   });
 
   it("posts once, however often the tag is signed while the note is on its way", async () => {
@@ -419,24 +446,11 @@ describe("StickyNotes submit", () => {
     render(<StickyNotes notes={[]} matUp />);
     await fastened();
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
-    await user.click(tick());
     await user.type(nameTag() as HTMLElement, "{Enter}");
 
     expect(addNote).toHaveBeenCalledTimes(1);
     await act(async () => arrive());
     await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
-  });
-
-  it("keeps the fasteners shut while the note is on its way", async () => {
-    holdThePost(); // and never let it arrive
-    const user = userEvent.setup();
-    render(<StickyNotes notes={[]} matUp />);
-    await fastened();
-    await user.type(nameTag() as HTMLElement, "ada{Enter}");
-
-    // what was posted is what lands: no changing the fastener under it now
-    expect(drawerTab()).toBeDisabled();
-    for (const choice of choices()) expect(choice).toBeDisabled();
   });
 
   it("leaves the mat alone when a post from a pin that has since ended arrives", async () => {
@@ -459,7 +473,7 @@ describe("StickyNotes submit", () => {
     expect(marksOnTheMat()).toBe(1);
   });
 
-  it("says so on the tag when the post fails, leaves the note where it landed, and lets it go again", async () => {
+  it("says so on the tag when the post fails, leaves the note in the Spotlight, and lets it go again", async () => {
     addNote.mockRejectedValueOnce(new Error("offline"));
     const user = userEvent.setup();
     render(<StickyNotes notes={[]} matUp />);
@@ -467,7 +481,7 @@ describe("StickyNotes submit", () => {
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
 
     const message = await screen.findByRole("alert");
-    expect(landing()).toContainElement(message);
+    expect(scene()).toContainElement(message);
     expect(navigate).not.toHaveBeenCalled();
     expect(storedPending()).toEqual([]);
 

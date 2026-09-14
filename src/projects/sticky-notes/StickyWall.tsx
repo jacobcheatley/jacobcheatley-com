@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useState } from "react";
-import { STILL } from "./desk";
+import { flightHome, flyTo } from "./desk";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 import {
@@ -44,6 +44,15 @@ const tileStyle = (content: NoteContent): CSSProperties => ({
   filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
 });
 
+// A note sent from the Spotlight flies home into the newest pending tile (#88),
+// which is the first thing to exist where it is going — so the tile starts the
+// flight itself as it mounts, with the rect the pinning left behind. Any other
+// tile finds none waiting and stays where it is. Module scope, so the ref is
+// the same function every render and React never re-attaches it.
+function flyHome(tile: HTMLLIElement | null) {
+  if (tile) flyTo(flightHome(), tile);
+}
+
 const PendingBadge = () => (
   <span className="absolute -top-1 right-1 rounded-sm bg-black/70 px-1.5 py-0.5 font-sans text-[0.6rem] font-semibold tracking-wide text-white uppercase">
     Pending
@@ -62,44 +71,6 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
       <NoteRender content={note.content} />
       {note.pending && <PendingBadge />}
     </button>
-  );
-}
-
-// The note being pinned up (#77), in the slot it will hold once submitted: the
-// same tile and badge a pending note wears, so the submit swaps one for the
-// other without anything moving. Not a zoom button — it has no author yet, and
-// it is still being fastened. The pinning UI finds it by `data-landing` (to fly
-// it in) and hangs the name tag in `data-landing-tag`.
-function LandingTile({ content }: { content: NoteContent }) {
-  // Every choice in the drawer hands over a new note, even the same fastener
-  // again: count them, so each choice can mount the press afresh. Setting state
-  // while rendering is how to follow a prop without an effect (StickyNotes
-  // does the same).
-  const [press, setPress] = useState({ content, n: 0 });
-  if (press.content !== content) setPress({ content, n: press.n + 1 });
-
-  return (
-    // z-45: the note flies in over the mat (z-40) as the mat slides away.
-    <li data-landing="" className={`relative z-45 ${STILL}`}>
-      <div className="relative w-32 select-none" style={tileStyle(content)}>
-        {/* Keyed by the choice, so each one mounts afresh and the press-on
-            (styles.css, on `data-press`) plays again. */}
-        <div
-          key={press.n}
-          data-press={
-            content.fastener === "none" ? undefined : content.fastener
-          }
-          className="h-full"
-        >
-          <NoteRender content={content} />
-        </div>
-        <PendingBadge />
-      </div>
-      <div
-        data-landing-tag=""
-        className="absolute inset-x-0 top-full flex justify-center"
-      />
-    </li>
   );
 }
 
@@ -157,24 +128,26 @@ function AddNote({ empty }: { empty: boolean }) {
 
 export function StickyWall({
   notes,
-  landing,
+  pinning,
 }: {
   notes: WallNote[];
-  // the note being pinned up, while it is (#77)
-  landing?: NoteContent;
+  // the note being pinned up, while it is (#88): the wall shows nothing of it
+  // — it is lifted into the Spotlight over the top — but it must not re-read
+  // its pending notes under a note that has not been sent yet.
+  pinning?: NoteContent;
 }) {
   const [zoomed, setZoomed] = useState<DisplayNote | null>(null);
   const [pending, setPending] = useState<PendingNote[]>([]);
 
   // Own pending notes live only in this browser, so read them after mount (SSR
   // has no localStorage); each drops the moment it shows up approved. Read
-  // again when a landed note goes: a submit has just added it to the list. A
-  // layout effect, so the pending tile takes the landed one's slot before the
-  // browser paints the gap between them.
+  // again when a pinning ends: a submit has just added one to the list. A
+  // layout effect, so the tile the note flies home into is laid out before the
+  // browser paints the wall it is coming back to.
   useLayoutEffect(() => {
-    if (landing) return;
+    if (pinning) return;
     setPending(reconcilePending(readPending(), notes));
-  }, [notes, landing]);
+  }, [notes, pinning]);
 
   // Esc closes the Spotlight (tap-out is handled on the scrim itself).
   useEffect(() => {
@@ -186,7 +159,7 @@ export function StickyWall({
     return () => window.removeEventListener("keydown", onKey);
   }, [zoomed]);
 
-  const empty = notes.length === 0 && pending.length === 0 && !landing;
+  const empty = notes.length === 0 && pending.length === 0 && !pinning;
 
   return (
     <div
@@ -200,11 +173,16 @@ export function StickyWall({
         <li>
           <AddNote empty={empty} />
         </li>
-        {landing && <LandingTile content={landing} />}
-        {pending.map((p) => {
+        {pending.map((p, i) => {
           const tile = { ...p, pending: true };
           return (
-            <li key={`${p.submittedAt}-${p.author}`}>
+            // The newest of them holds the slot a note just sent flies home
+            // into; it is the first tile after the invite.
+            <li
+              key={`${p.submittedAt}-${p.author}`}
+              ref={i === 0 ? flyHome : undefined}
+              data-newest={i === 0 ? "" : undefined}
+            >
               <NoteTile note={tile} onOpen={() => setZoomed(tile)} />
             </li>
           );

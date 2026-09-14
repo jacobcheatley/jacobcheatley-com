@@ -1,31 +1,27 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { EASE_OUT, flightTransform, SLIDE_MS, STILL } from "./desk";
+import { flyingFrom } from "./desk";
 import { SHAKE_MS, TapeLabel } from "./desk-objects";
 import { FONT_FAMILIES } from "./note-fonts";
 import { FastenerPreview } from "./note-render";
-import {
-  FASTENERS,
-  type Fastener,
-  type NoteContent,
-  noteSchema,
-  type PaperColour,
-} from "./note-schema";
+import { FASTENERS, type NoteContent, noteSchema } from "./note-schema";
 import { savePending } from "./pending-note";
+import { Spotlight } from "./Spotlight";
 import { addNoteFn } from "./sticky-notes.fn";
 
-// Pinning a note up (#77): what happens between the mat and the wall. The
-// editor keeps the note and decides when; this file is the pieces it wears —
-// the tape labels, the note's flight onto the wall, and the pinning phase over
-// the wall: the fastener drawer.
+// Pinning a note up (#88): what happens between the mat and the wall. The
+// editor keeps the note and decides when; this file is the one scene it goes
+// through — the note lifted into a Spotlight over the darkened wall, the nine
+// fasteners in a row beneath it, the tag beneath those — and the two flights,
+// off the mat into the Spotlight and out of it into the wall's newest slot.
 
 // Everything but `none`, which is what you get by not choosing. TS reads the
 // `!== "none"` test as narrowing the list's type, so no cast is needed.
 const CHOICES = FASTENERS.filter((f) => f !== "none");
 
-// What a fastener is called out loud: the drawer's buttons, for a screen reader.
+// What a fastener is called out loud: its button, for a screen reader.
 const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
   "pin-red": "a red pin",
   "pin-green": "a green pin",
@@ -38,22 +34,9 @@ const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
   stick: "sticky tack",
 };
 
-// A cardboard box of stationery; each fastener lies in a compartment of its own.
-const DRAWER_BOX: CSSProperties = {
-  background: "linear-gradient(180deg, #dcc394, #c3a26b)",
-  boxShadow:
-    "0 -12px 30px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.35)",
-};
-const COMPARTMENT: CSSProperties = {
-  background: "#a9864f",
-  boxShadow: "inset 0 3px 6px rgba(0,0,0,.4)",
-};
-
-// The pinning phase, over the wall. Portalled out of the editor: the editor
+// The pinning scene, over the wall. Portalled out of the editor: the editor
 // lives inside the mat, which is off-screen and inert by now, and whose
-// transform would make `fixed` mean "fixed to the mat". The drawer goes to the
-// body; the tag hangs in the slot the wall leaves under the landed note, so it
-// sits under it wherever the wall's layout puts it.
+// transform would make the Spotlight's `fixed` mean "fixed to the mat".
 export function PinUp({
   content,
   onChange,
@@ -68,7 +51,6 @@ export function PinUp({
   onPinned: () => void;
 }) {
   const navigate = useNavigate();
-  const [drawerOpen, setDrawerOpen] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // A ref for the guard: a second Enter can arrive before a re-render would
   // have told it the first one is already on its way. `posting` is the same
@@ -76,7 +58,7 @@ export function PinUp({
   const sending = useRef(false);
   const [posting, setPosting] = useState(false);
   // Whether this pin is still the one going on. A POST can outlive it — Back,
-  // "back to the desk" or anything else that ends the landing unmounts this —
+  // "back to the desk" or anything else that ends the pinning unmounts this —
   // and what arrives then must leave the mat and the URL to whatever came
   // next. Set in the effect rather than the ref's first value, so StrictMode's
   // rehearsal unmount and remount leaves it true.
@@ -87,21 +69,32 @@ export function PinUp({
       live.current = false;
     };
   }, []);
-  // Held here rather than on the tag, which is put away while the drawer is
-  // open again: a name half typed survives choosing another fastener.
+  // Held here rather than on the tag, so nothing in the scene can drop a name
+  // half typed.
   const [name, setName] = useState("");
   // `useServerFn` wraps the server fn for a component: the same call, run
   // through the router, so a redirect from the server would be followed.
   const addNote = useServerFn(addNoteFn);
-  // The wall renders the slot in the same commit this mounts in, so it is
-  // there to be found once that commit has landed.
-  // ponytail: found once, on mount — stale if the wall ever remounts that slot
-  // mid-pin. Upgrade: the wall hands the slot up through a callback ref, or the
-  // page passes a portal target down to both.
-  const [tagSlot, setTagSlot] = useState<Element | null>(null);
+
+  // The Spotlight puts the keyboard nowhere of its own when it has no × (#87),
+  // so the way back takes it: it is the scene's first control, and where focus
+  // has to go as the mat slides out from under it.
+  const back = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    setTagSlot(document.querySelector("[data-landing-tag]"));
+    back.current?.focus();
   }, []);
+
+  // Escape is the tape label by another name; the browser's Back ends the
+  // pinning by the route instead.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Not once the note is on its way: it is as good as sent, and going back
+      // would leave it both pending and on the mat to be pinned up twice.
+      if (e.key === "Escape" && !sending.current) onBack();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onBack]);
 
   // Sign the tag: the one POST. Returns false when there is no name to sign
   // with, so the tag can shake — the name is the only half being typed here.
@@ -124,12 +117,21 @@ export function PinUp({
     setError(null);
     addNote({ data: note.data }).then(
       () => {
-        // Pending first, then the wall: its pending tile is already written
-        // when the landed note goes, so it takes the same slot in one frame.
-        // It is on the server whether or not this pin is still going on, so
-        // it is pending either way.
+        // Where the note is flying home from, taken while it still hangs in
+        // the Spotlight.
+        const from = document
+          .querySelector("[data-spotlight]")
+          ?.getBoundingClientRect();
+        // Pending first, then the wall: the tile is already written when the
+        // Spotlight goes, so there is a slot to fly into. It is on the server
+        // whether or not this pin is still going on, so it is pending either
+        // way.
         savePending({ ...note.data, submittedAt: Date.now() });
         if (!live.current) return;
+        // The tile it flies home into is laid out by the wall, a navigation
+        // and a commit from here, so the wall flies it: this leaves it the
+        // measurement it cannot take for itself.
+        flyingFrom(from);
         onPinned();
         // replace: Back from the wall shouldn't reopen a note that was sent
         navigate({ to: "/sticky-notes", replace: true });
@@ -143,57 +145,69 @@ export function PinUp({
     return true;
   }
 
-  return (
-    <>
-      {createPortal(
-        <>
-          {/* Stuck across from "← the wall". Not once the note is on its way:
-              it is as good as sent, and going back would leave it both
-              pending and on the mat to be pinned up twice. */}
-          <TapeLabel
-            onClick={() => {
-              if (!sending.current) onBack();
-            }}
-            className="fixed top-3 right-3 z-50"
+  return createPortal(
+    <Spotlight content={content} label="Pin it up">
+      {/* Back to the desk, where "pin it up" sits on the mat: above the note.
+          `order-first` rather than a box hung off the paper — the Spotlight
+          stacks what hangs under the note, and this is the one thing that
+          hangs over it, so it takes the same gap and cannot overlap. Every
+          child needs `relative z-10` to sit above the scrim, as the note
+          does. */}
+      <TapeLabel
+        ref={back}
+        onClick={() => {
+          if (!sending.current) onBack();
+        }}
+        className="relative z-10 order-first"
+      >
+        back to the desk
+      </TapeLabel>
+      {/* The nine fasteners, as they will look on this very paper: one row on
+          a desktop, two on a phone. */}
+      <div className="relative z-10 flex flex-wrap justify-center gap-2">
+        {CHOICES.map((fastener) => (
+          <button
+            key={fastener}
+            type="button"
+            // the note is on its way: what was posted is what stays on it
+            disabled={posting}
+            aria-pressed={content.fastener === fastener}
+            aria-label={`Fasten it with ${FASTENER_NAMES[fastener]}`}
+            onClick={() => onChange({ ...content, fastener })}
+            className="h-12 w-14 border-0 bg-transparent p-0 outline-offset-2 aria-pressed:outline-2 aria-pressed:outline-white sm:w-24"
           >
-            back to the desk
-          </TapeLabel>
-          <FastenerDrawer
-            open={drawerOpen}
-            locked={posting}
-            colour={content.colour}
-            onChoose={(fastener) => {
-              onChange({ ...content, fastener });
-              setDrawerOpen(false);
-            }}
-            onClose={() => setDrawerOpen(false)}
-            onOpen={() => setDrawerOpen(true)}
-          />
-        </>,
-        document.body,
-      )}
-      {tagSlot &&
-        !drawerOpen &&
-        createPortal(
-          <NameTag name={name} error={error} onName={setName} onSign={sign} />,
-          tagSlot,
-        )}
-    </>
+            <FastenerPreview fastener={fastener} colour={content.colour} />
+          </button>
+        ))}
+      </div>
+      <NameTag
+        name={name}
+        error={error}
+        sending={posting}
+        onName={setName}
+        onSign={sign}
+      />
+    </Spotlight>,
+    document.body,
   );
 }
 
-// The paper tag under the landed note: whoever pinned it writes their name, and
-// that is the submit. A form, so Enter in the field and the tick (for a thumb,
-// which has no Enter to hand) are the same native submit.
+// The paper tag under the note in the Spotlight: whoever pinned it writes their
+// name, and that is the submit. Not a form, and the tick is a plain button: a
+// lone field in a form is what a password manager reads as a login, and this
+// is a tag on a note. Enter in the field signs it just the same.
 function NameTag({
   name,
   error,
+  sending,
   onName,
   onSign,
 }: {
   name: string;
   // why the last signing didn't take, written on the tag itself
   error: string | null;
+  // the note is on its way: nothing more to sign
+  sending: boolean;
   onName: (name: string) => void;
   onSign: () => boolean;
 }) {
@@ -202,26 +216,22 @@ function NameTag({
   // to end, so waiting for `animationend` left it shaking for good.
   const [shake, setShake] = useState(false);
   const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // The tag comes out as the drawer folds away, and the keyboard goes onto it.
-  const input = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    input.current?.focus();
-    return () => clearTimeout(shakeTimer.current);
-  }, []);
+  useEffect(() => () => clearTimeout(shakeTimer.current), []);
+
+  function signIt() {
+    if (onSign()) return;
+    setShake(true);
+    clearTimeout(shakeTimer.current);
+    shakeTimer.current = setTimeout(() => setShake(false), SHAKE_MS);
+  }
 
   return (
-    <form
+    <div
       data-shake={shake || undefined}
-      onSubmit={(e) => {
-        e.preventDefault(); // a real submit would reload the page
-        if (onSign()) return;
-        setShake(true);
-        clearTimeout(shakeTimer.current);
-        shakeTimer.current = setTimeout(() => setShake(false), SHAKE_MS);
-      }}
-      // shrink-0: the slot is only as wide as the tile, and a tag squeezed to
-      // it wraps the tick under the field; it hangs out either side instead
-      className="relative mt-3 flex max-w-56 shrink-0 flex-wrap items-center gap-x-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
+      aria-busy={sending || undefined}
+      // shrink-0: squeezed to the scene's width the tag wraps the tick under
+      // the field; it keeps its own width instead
+      className="relative z-10 flex max-w-56 shrink-0 flex-wrap items-center gap-x-1 rounded-sm py-1 pr-1 pl-3 motion-reduce:animate-none!"
       style={{
         background: "linear-gradient(180deg, #fffdf6, #efe6d2)",
         boxShadow: "0 3px 6px rgba(0,0,0,.35)",
@@ -231,23 +241,34 @@ function NameTag({
       }}
     >
       <input
-        ref={input}
         aria-label="Your name"
-        placeholder="your name"
+        placeholder="sign here"
         value={name}
         onChange={(e) => onName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") signIt();
+        }}
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}
         maxLength={50}
+        // No name, no id, and one opt-out per password manager: nothing here
+        // is an identity field, and an autofill bubble over the tag on a phone
+        // would cover the note it hangs from.
+        data-1p-ignore=""
+        data-lpignore="true"
+        data-bwignore=""
+        data-form-type="other"
         // 18px: under 16 and iOS zooms the page in on focus
         className="w-32 border-0 border-[#c9bda3] border-b bg-transparent p-0 text-[#3a3226] text-lg lowercase outline-none placeholder:text-[#a89c84]"
         style={{ fontFamily: FONT_FAMILIES.casual }}
       />
       <button
-        type="submit"
+        type="button"
+        disabled={sending}
         aria-label="Sign the tag"
-        className="h-10 w-10 shrink-0 border-0 bg-transparent p-0 text-[#28714a] text-xl"
+        onClick={signIt}
+        className="h-10 w-10 shrink-0 border-0 bg-transparent p-0 text-[#28714a] text-xl disabled:opacity-40"
       >
         ✓
       </button>
@@ -260,113 +281,6 @@ function NameTag({
           {error}
         </p>
       )}
-    </form>
+    </div>
   );
-}
-
-// The fastener drawer: rises from the bottom as the note lands, shows the nine
-// fasteners as they will look on this very paper, and folds away to a tab once
-// one is chosen — or when it is put away without one, which leaves `none`.
-function FastenerDrawer({
-  open,
-  locked,
-  colour,
-  onChoose,
-  onClose,
-  onOpen,
-}: {
-  open: boolean;
-  // the note is on its way: what was posted is what stays on it
-  locked: boolean;
-  colour: PaperColour;
-  onChoose: (fastener: Fastener) => void;
-  onClose: () => void;
-  onOpen: () => void;
-}) {
-  // The keyboard goes where the drawer is: rising, it takes the focus from
-  // whatever just went out from under it — "pin it up" on the mat sliding away,
-  // or the tab it replaces. The same move the pad chooser makes (StickyEditor).
-  const firstChoice = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (open) firstChoice.current?.focus();
-  }, [open]);
-
-  return (
-    <>
-      <section
-        aria-label="Fastener drawer"
-        // folded away, its compartments are out of reach as well as sight
-        inert={!open}
-        // `starting:` is CSS @starting-style: the drawer's first frame is below
-        // the screen, so it rises into place instead of just being there.
-        className={`fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md px-3 starting:translate-y-full ${open ? "translate-y-0" : "translate-y-full"} ${STILL}`}
-        style={{ transition: `translate ${SLIDE_MS}ms ${EASE_OUT}` }}
-      >
-        <div
-          className="rounded-t-md px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
-          style={DRAWER_BOX}
-        >
-          <div className="flex justify-end">
-            <button
-              type="button"
-              aria-label="Put the drawer away"
-              onClick={onClose}
-              className="h-10 w-10 border-0 bg-transparent p-0 font-sans text-2xl text-[#5c4523] leading-none"
-            >
-              ×
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {CHOICES.map((fastener, i) => (
-              <button
-                key={fastener}
-                ref={i === 0 ? firstChoice : undefined}
-                type="button"
-                disabled={locked}
-                aria-label={`Fasten it with ${FASTENER_NAMES[fastener]}`}
-                onClick={() => onChoose(fastener)}
-                className="block rounded-sm border-0 px-1 pt-3 pb-1"
-                style={COMPARTMENT}
-              >
-                <FastenerPreview fastener={fastener} colour={colour} />
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-      {!open && (
-        <button
-          type="button"
-          aria-label="Open the fastener drawer"
-          disabled={locked}
-          onClick={onOpen}
-          className="-translate-x-1/2 fixed bottom-0 left-1/2 z-50 min-h-11 rounded-t-md border-0 px-5 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-[#5c4523] text-lg"
-          style={{ ...DRAWER_BOX, fontFamily: FONT_FAMILIES.casual }}
-        >
-          fasteners
-        </button>
-      )}
-    </>
-  );
-}
-
-// The note's flight from the mat into its slot on the wall: a FLIP. The wall
-// has already laid the landed note out where it belongs (Last); it is put back
-// over where the sheet lay on the mat (First, measured before the wall
-// changed) by an inverse transform (Invert), which is then let go under a
-// transition (Play). No animation library (#69).
-export function flyToLanding(from: DOMRect | undefined): void {
-  // The newest slot is at the top of the wall, so that is where to look.
-  window.scrollTo(0, 0);
-  const tile = document.querySelector<HTMLElement>("[data-landing]");
-  const to = tile?.getBoundingClientRect();
-  if (!tile || !from || !to?.width) return; // nothing laid out (jsdom)
-  const { dx, dy, scale } = flightTransform(from, to);
-  tile.style.transition = "none";
-  tile.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
-  // Reading layout here makes the browser take the start position before the
-  // end one, or the two collapse into no motion at all.
-  tile.getBoundingClientRect();
-  tile.style.transition = `transform ${SLIDE_MS}ms ${EASE_OUT}`;
-  tile.style.transform = "";
 }

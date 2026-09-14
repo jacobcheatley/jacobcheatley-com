@@ -35,23 +35,68 @@ export function centreOffset(
   };
 }
 
-// The pinned note's flight onto the wall (#77), as numbers: the translate and
-// scale that put its wall tile back over the sheet it lay as on the mat, for
-// the flight to let go of. The scale is about the tile's centre (CSS's default
-// origin). A wall tile is taller than its paper by the fastener's headroom,
-// all of it above the sheet, so the sheet's centre sits half that headroom
-// below the tile's — and that offset grows with the scale.
+// A pinned note's flight (#88), as numbers: the translate and scale that put
+// the box it is flying to back over the box it is flying from, for the flight
+// to let go of. The scale is about the target's centre (CSS's default origin).
+// What has to line up is the paper, not the box: a composed note is taller
+// than its square of paper by the fastener's headroom, all of it above, and
+// the sheet on the mat has none — so the correction is whatever headroom the
+// two boxes differ by, in the flight's own scale. Between two boxes of the
+// same shape (the Spotlight and a wall tile) that is nothing.
 // ponytail: centres off the rotated bounding boxes, which is out by a pixel
-// or two at the steepest tilt; unrotate the boxes if the landing ever shows
-// a nudge.
+// or two at the steepest tilt; unrotate the boxes if a flight ever shows a
+// nudge.
 export function flightTransform(
   from: Box,
   to: Box,
 ): { dx: number; dy: number; scale: number } {
   const scale = from.width / to.width;
-  const headroom = to.height - to.width;
+  const headroom = scale * (to.height - to.width) - (from.height - from.width);
   const { dx, dy } = centreOffset(from, to);
-  return { dx, dy: dy - (scale * headroom) / 2, scale };
+  return { dx, dy: dy - headroom / 2, scale };
+}
+
+// A note's flight from where it was into where it is going: a FLIP. The target
+// is already laid out where it belongs (Last); it is put back over the box the
+// note came from (First, measured before anything changed) by an inverse
+// transform (Invert), which is then let go under a transition (Play). No
+// animation library (#69).
+export function flyTo(
+  from: DOMRect | undefined,
+  target: HTMLElement | null,
+): void {
+  if (!target || !from) return; // nothing to fly, or nowhere to fly it
+  // Both flights end at the top of the page: the Spotlight is fixed to the
+  // viewport, and the wall's newest slot leads its first row. After the guard
+  // above, so a tile that mounts with no flight waiting doesn't scroll anyone.
+  window.scrollTo(0, 0);
+  const to = target.getBoundingClientRect();
+  if (!to.width) return; // nothing laid out (jsdom)
+  const { dx, dy, scale } = flightTransform(from, to);
+  target.style.transition = "none";
+  target.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  // Reading layout here makes the browser take the start position before the
+  // end one, or the two collapse into no motion at all.
+  target.getBoundingClientRect();
+  target.style.transition = `transform ${SLIDE_MS}ms ${EASE_OUT}`;
+  target.style.transform = "";
+}
+
+// The submit's flight (#88) crosses a navigation: the note is measured while it
+// still hangs in the Spotlight, and the tile it flies home into is only laid
+// out afterwards, by the wall the navigation lands on. The rect waits here in
+// between — the two sides share this module and nothing else.
+let leftBehind: DOMRect | undefined;
+
+export function flyingFrom(rect: DOMRect | undefined): void {
+  leftBehind = rect;
+}
+
+// Taken once: a tile that mounts for any other reason finds no flight waiting.
+export function flightHome(): DOMRect | undefined {
+  const from = leftBehind;
+  leftBehind = undefined;
+  return from;
 }
 
 // The sticker sheet's ride up from behind the tray (#75, #82), and the note's

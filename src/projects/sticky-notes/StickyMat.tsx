@@ -5,7 +5,7 @@ import type { NoteContent } from "./note-schema";
 
 // The cutting mat: a full-viewport surface that slides up over the cork wall and
 // back down (#69). It is up on `/sticky-notes/new`, except while a note is
-// being pinned up (StickyNotes: `up = matUp && !landing`); either way the wall
+// being pinned up (StickyNotes: `up = matUp && !pinning`); either way the wall
 // never unmounts, the mat just covers it.
 //
 // This module is the mat *surface* only, and it SSRs: a direct load of
@@ -17,15 +17,15 @@ const StickyEditor = lazy(() => import("./StickyEditor"));
 
 export function StickyMat({
   up,
-  landing,
-  onLanding,
+  pinning,
+  onPinning,
 }: {
   up: boolean;
-  // The pinning phase (#77), passed straight through to the island: the note
-  // that has left the mat for the wall, and how the island moves it there and
-  // back. The page owns it, because the wall shows it too.
-  landing?: NoteContent;
-  onLanding?: (note: NoteContent | undefined) => void;
+  // The pinning phase (#88), passed straight through to the island: the note
+  // that has left the mat for the Spotlight over the wall, and how the island
+  // moves it there and back. The page owns it, because it takes the mat down.
+  pinning?: NoteContent;
+  onPinning?: (note: NoteContent | undefined) => void;
 }) {
   // Latch: once the mat has been up, the island stays mounted under it.
   // A direct /sticky-notes/new load starts latched, so the island SSRs too.
@@ -94,7 +94,7 @@ export function StickyMat({
 
       {everUp && (
         <Suspense fallback={null}>
-          <StickyEditor up={up} landing={landing} onLanding={onLanding} />
+          <StickyEditor up={up} pinning={pinning} onPinning={onPinning} />
         </Suspense>
       )}
     </div>

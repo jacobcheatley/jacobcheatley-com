@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 
@@ -33,6 +33,15 @@ export function Spotlight({
   useEffect(() => {
     closeRef.current?.focus();
   }, []);
+
+  // The fastener going on (#88): pinning hands over a new note for every
+  // choice, even the same fastener twice over, so the paper is keyed by how
+  // many have been made and each one mounts afresh for the press-on keyframes
+  // (styles.css, on `data-press`) to play again. The note the Spotlight opens
+  // on is the one that flew in, not a press.
+  const [press, setPress] = useState({ content, n: 0 });
+  if (press.content !== content) setPress({ content, n: press.n + 1 });
+  const pressing = press.n > 0 && content.fastener !== "none";
 
   // With a way back the scrim is a real button (the tap-out target); the note
   // and whatever hangs below it sit layered above it, so clicking them never
@@ -71,7 +80,13 @@ export function Spotlight({
         className="relative z-10 w-[min(85vmin,520px)] select-none"
         style={noteStyle}
       >
-        <NoteRender content={content} />
+        <div
+          key={press.n}
+          data-press={pressing ? content.fastener : undefined}
+          className="h-full"
+        >
+          <NoteRender content={content} />
+        </div>
       </div>
       {children}
     </div>

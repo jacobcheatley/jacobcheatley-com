@@ -475,10 +475,10 @@ const tapAway = () => {
 // What the note holds, read the way the editor hands it over: pinned up. A
 // click with no pointer-down, so it is "pin it up" itself that fixes what is
 // being placed.
-const pinned = (onLanding: ReturnType<typeof vi.fn>) => {
+const pinned = (onPinning: ReturnType<typeof vi.fn>) => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   fireEvent.click(screen.getByRole("button", { name: /pin it up/i }));
-  return onLanding.mock.calls.at(-1)?.[0]?.elements;
+  return onPinning.mock.calls.at(-1)?.[0]?.elements;
 };
 
 // two text boxes that overlap around (60, 80) — B (last) draws on top of A
@@ -524,8 +524,8 @@ describe("StickyEditor drawing", () => {
   it("stores every point at pressure 0.5, whatever the pointer reported", () => {
     // a marker has no pressure (#84): a touch (1) and a light pen (0.1) must
     // leave the same numbers behind as a mouse
-    const onLanding = vi.fn();
-    render(<StickyEditor initialContent={seeded({})} onLanding={onLanding} />);
+    const onPinning = vi.fn();
+    render(<StickyEditor initialContent={seeded({})} onPinning={onPinning} />);
     const paper = paperSurface();
     fireEvent.pointerDown(paper, {
       clientX: 100,
@@ -543,7 +543,7 @@ describe("StickyEditor drawing", () => {
     });
     up(paper);
 
-    const points = pinned(onLanding)?.flatMap((el: Element) =>
+    const points = pinned(onPinning)?.flatMap((el: Element) =>
       el.type === "stroke" ? el.points : [],
     );
     expect(points?.length).toBeGreaterThanOrEqual(2);
@@ -1559,11 +1559,11 @@ describe("StickyEditor placing", () => {
   };
 
   it("moves, turns and widens a new text box, then fixes it with a tap that opens nothing", () => {
-    const onLanding = vi.fn();
+    const onPinning = vi.fn();
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat })}
-        onLanding={onLanding}
+        onPinning={onPinning}
       />,
     );
     const surface = openBox();
@@ -1588,7 +1588,7 @@ describe("StickyEditor placing", () => {
     up(surface);
     expect(box()).toBeNull();
     expect(placingOutline()).toBeNull();
-    expect(pinned(onLanding)).toEqual([
+    expect(pinned(onPinning)).toEqual([
       {
         type: "text",
         x: 110,
@@ -1695,25 +1695,25 @@ describe("StickyEditor placing", () => {
   });
 
   it("fixes the open box when the note is pinned up", () => {
-    const onLanding = vi.fn();
+    const onPinning = vi.fn();
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat })}
-        onLanding={onLanding}
+        onPinning={onPinning}
       />,
     );
     openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
-    expect(pinned(onLanding)).toMatchObject([{ type: "text", text: "hi" }]);
+    expect(pinned(onPinning)).toMatchObject([{ type: "text", text: "hi" }]);
   });
 
   it("places a dropped sticker: moved, turned by its corner, fixed by a press away that turns nothing", () => {
-    const onLanding = vi.fn();
+    const onPinning = vi.fn();
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat })}
-        onLanding={onLanding}
+        onPinning={onPinning}
       />,
     );
     const surface = paperSurface();
@@ -1729,17 +1729,17 @@ describe("StickyEditor placing", () => {
     drag(surface, [450, 60], [450, 160]); // away: fixes it, turns nothing
     expect(surface.style.transform).toContain("rotate(0deg)");
     expect(placingOutline()).toBeNull();
-    expect(pinned(onLanding)).toEqual([
+    expect(pinned(onPinning)).toEqual([
       { type: "sticker", x: 200, y: 220, emoji: "⭐", scale: 1, rotation: 90 },
     ]);
   });
 
   it("sends a placing sticker back to the sheet on Escape, and keeps the sheet up", () => {
-    const onLanding = vi.fn();
+    const onPinning = vi.fn();
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat })}
-        onLanding={onLanding}
+        onPinning={onPinning}
       />,
     );
     paperSurface();
@@ -1749,15 +1749,15 @@ describe("StickyEditor placing", () => {
     expect(placingOutline()).toBeNull();
     expect(drawn()).toHaveLength(0);
     expect(tab()).toHaveAttribute("aria-expanded", "true");
-    expect(pinned(onLanding)).toEqual([]);
+    expect(pinned(onPinning)).toEqual([]);
   });
 
   it("sends a placing sticker back to the sheet when it is dragged off the paper", () => {
-    const onLanding = vi.fn();
+    const onPinning = vi.fn();
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat })}
-        onLanding={onLanding}
+        onPinning={onPinning}
       />,
     );
     const surface = paperSurface();
@@ -1766,15 +1766,15 @@ describe("StickyEditor placing", () => {
     drag(surface, [250, 250], [-40, 250]); // 24 wide a side: wholly off
     expect(placingOutline()).toBeNull();
     expect(drawn()).toHaveLength(0);
-    expect(pinned(onLanding)).toEqual([]);
+    expect(pinned(onPinning)).toEqual([]);
   });
 
   it("fixes a placing sticker when the next one is peeled", () => {
-    const onLanding = vi.fn();
+    const onPinning = vi.fn();
     render(
       <StickyEditor
         initialContent={seeded({ curl: flat })}
-        onLanding={onLanding}
+        onPinning={onPinning}
       />,
     );
     paperSurface();
@@ -1792,7 +1792,7 @@ describe("StickyEditor placing", () => {
 
     // the flame is the one being placed now: its box starts 24 left of 400
     expect(placingOutline()?.getAttribute("x")).toBe("376");
-    expect(pinned(onLanding)).toMatchObject([
+    expect(pinned(onPinning)).toMatchObject([
       { emoji: "⭐", x: 100 },
       { emoji: "🔥", x: 400 },
     ]);

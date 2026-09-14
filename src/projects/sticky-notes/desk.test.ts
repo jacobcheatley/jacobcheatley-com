@@ -41,4 +41,16 @@ describe("flightTransform", () => {
     // sheet's centre: 10px of headroom below the tile's, doubled
     expect(tile.top + tile.height / 2 + (scale * 20) / 2 + dy).toBe(100);
   });
+
+  it("corrects nothing between two boxes of the same shape", () => {
+    // the Spotlight and a wall tile are both the composed note, headroom and
+    // all, so their box centres already put their paper in the same place
+    const lifted = { left: 0, top: 0, width: 200, height: 216 };
+    const tile = { left: 300, top: 400, width: 100, height: 108 };
+
+    expect(flightTransform(lifted, tile)).toEqual({
+      ...centreOffset(lifted, tile),
+      scale: 2,
+    });
+  });
 });
