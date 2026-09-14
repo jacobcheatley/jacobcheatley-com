@@ -22,7 +22,7 @@ _Avoid_: card, post, message, sticky (bare)
 
 **Element**:
 One item placed on a Note — a **Stroke**, **Text box**, or **Sticker**. Elements are an ordered list; that order *is* the z-order (later element draws on top). No stable id — position in the list is identity.
-_Avoid_: object, shape, item, layer
+_Avoid_: object, shape, item, layer, select, edit, resize
 
 **Stroke**:
 A freehand marker mark on a Note. Stores the raw input points the pointer produced, not the rendered outline (the outline is regenerated at render time), plus its **Ink** and a base size.
@@ -50,11 +50,11 @@ The cutting mat a Note is made on: a full-screen desk that slides up over the wa
 _Avoid_: editor page, modal, canvas
 
 **Tray**:
-The single row along the Mat's bottom edge where the objects lie, each in a fixed slot of its own — the **Pads** at the left, the **Markers** in the middle, the **Sticker sheet**'s tab, the **Eraser** and the bin at the right.
+The single centred row along the Mat's bottom edge where the objects lie, each in a fixed slot of its own, in this order: the Hand (see **Hand mode**), the four **Markers**, the draw/write rocker, the **Sticker sheet**'s tab, the **Eraser**, a small gap when there is room for one, and the bin. It never wraps, and it is away while a **Pad** is being chosen.
 _Avoid_: toolbar, palette
 
 **Pad**:
-One of six stacked pads of sticky notes on the Tray, one per paper colour. The first tap fans the stack out; tapping a Pad then tears a fresh sheet off it to start a Note, or, with a Note already on the Mat, swaps the paper under it.
+One of six pads of sticky notes, one per paper colour, that fill the whole Mat whenever there is no Note on it — the pad chooser, on first opening, after the bin and after a Note is sent. Tapping a Pad tears a sheet off it to start a Note. The paper colour is fixed once torn; the bin is the way back to the Pads for another.
 _Avoid_: swatch, colour picker
 
 **Marker**:
@@ -62,21 +62,24 @@ One of four pens on the Tray, one per **Ink**. The Marker *is* the colour: picki
 _Avoid_: pen, brush, colour swatch
 
 **Eraser**:
-The rubber on the Tray. Held and rubbed across the Note, it removes each whole **Element** under it. There is no undo; the Eraser and dragging an Element off the paper are the only deletes.
+The rubber on the Tray. Held and rubbed across the Note, it removes each whole **Element** under it. It is the only delete: there is no undo, and an Element can't be dragged off the paper.
 _Avoid_: delete button
 
 **Hand mode**:
-Holding nothing. A tap selects an **Element** (tapping the same spot again reaches the one beneath), a drag moves it, and its handle scales and turns it; the Note's edge turns the Note and its bottom corners set its **Curl**.
+Holding the Hand, the Tray object that is held whenever no Marker and not the Eraser is. A drag on the Note turns it about its centre and its bottom corners set its **Curl** — nothing else: it never takes hold of an **Element**.
 _Avoid_: tweezers, select tool, pointer
 
 **Draw mode**:
 Using the held Marker to draw: a drag on the Note leaves a **Stroke** in that Marker's Ink.
 
 **Write mode**:
-Using the held Marker to write: a tap on the Note opens a **Text box** in that Marker's Ink and the chosen font. The Text box keeps that Ink for good; its font can change.
+Using the held Marker to write: a tap on the Note opens a **Text box** in that Marker's Ink and the chosen font. The font can be chosen before or while **Placing**, never after; the Ink is the Text box's for good.
+
+**Placing**:
+The time between an **Element** landing on the Note and the tap away that fixes it. While Placing, a Text box or Sticker can be moved and turned, and a Text box widened; afterwards it never changes, and the **Eraser** is the only way to remove it.
 
 **Sticker sheet**:
-A sheet of printed emoji that pulls up from its tab on the Tray. A **Sticker** is peeled off it and dragged onto the Note; the sheet never runs out.
+A sheet of printed emoji that rises from behind the Tray, sits above it, and goes away again at its tab, which stays in the Tray. A **Sticker** is peeled off it and dragged onto the Note; the sheet never runs out.
 _Avoid_: emoji picker
 
 **Landing**:
