@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import { capturePointer, EASE_OUT, SHEET_MS, STILL } from "./desk";
+import { TRAY_TOP } from "./desk-objects";
 import { STICKER_EMOJI } from "./note-schema";
 
 // The sticker sheet (#75): a pull-up sheet of printed stickers that the visitor
@@ -14,7 +15,9 @@ import { STICKER_EMOJI } from "./note-schema";
 // the note, the held tool and whatever is being placed out of this file.
 //
 // The sheet is sized to its 24 stickers, never to a fraction of the viewport
-// (the T0 verdict, #70): six 48px cells across, four rows down.
+// (the T0 verdict, #70): six 48px cells across, four rows down. It rises from
+// behind the tray and sits on top of it (#82), so every object in the tray
+// stays in reach while it is up.
 
 type StickerEmoji = (typeof STICKER_EMOJI)[number];
 
@@ -24,13 +27,8 @@ const COLS = 6;
 const PAD_X = 12;
 const PAD_B = 12;
 const HANDLE_H = 26;
-const ROWS = Math.ceil(STICKER_EMOJI.length / COLS);
 
-export const SHEET_W = COLS * CELL + (COLS - 1) * GAP + PAD_X * 2;
-// ponytail: the height is the cell maths, not a measurement — so a phone whose
-// safe-area inset is deeper than PAD_B makes the real sheet a touch taller than
-// this. Measure it (a ref + ResizeObserver) if that gap ever shows.
-export const SHEET_H = HANDLE_H + ROWS * CELL + (ROWS - 1) * GAP + PAD_B;
+const SHEET_W = COLS * CELL + (COLS - 1) * GAP + PAD_X * 2;
 
 const SWIPE = 40; // how far down the handle travels before the sheet drops
 const BACK_MS = 250; // a missed sticker's flight home
@@ -142,17 +140,24 @@ export function StickerSheet({
         // sheet out of the tab order, the screen-reader tree and the pointer's
         // way in one go, which is what the mat itself does when it slides off.
         inert={!open}
-        className={`${STILL} absolute inset-x-0 bottom-0 z-40 mx-auto`}
+        // z-30: under the tray (z-40), so it comes up from behind it, and a
+        // lifted marker or the font samples still show over its bottom edge.
+        className={`${STILL} absolute inset-x-0 z-30 mx-auto`}
         style={{
+          bottom: TRAY_TOP,
           width: `min(${SHEET_W}px, 100vw)`,
           paddingLeft: PAD_X,
           paddingRight: PAD_X,
-          paddingBottom: `max(${PAD_B}px, env(safe-area-inset-bottom))`,
+          paddingBottom: PAD_B,
           background: "linear-gradient(180deg,#ffffff,#f7f4ea)",
           borderRadius: "10px 10px 0 0",
           boxShadow:
             "0 -10px 24px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.06)",
-          transform: open ? "translateY(0)" : "translateY(100%)",
+          // Away, it is its own height plus the tray's below where it sits:
+          // wholly off the mat, not showing between the tray's objects.
+          transform: open
+            ? "translateY(0)"
+            : `translateY(calc(100% + ${TRAY_TOP}))`,
           transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
         }}
       >

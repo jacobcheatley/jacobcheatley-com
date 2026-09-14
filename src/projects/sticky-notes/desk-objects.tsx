@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode, type Ref, useId } from "react";
-import { EASE_OUT, SHEET_MS, STILL, TAPE } from "./desk";
+import { EASE_OUT, STILL, TAPE } from "./desk";
 import { FONT_FAMILIES } from "./note-fonts";
 import { INK, PAPER } from "./note-render";
 import {
@@ -66,6 +66,16 @@ export const MARKER_SLOT: CSSProperties = {
 };
 export const ERASER_SLOT: CSSProperties = { width: ERASER_W, height: TOOL_H };
 export const HAND_SLOT: CSSProperties = { width: HAND_W, height: TOOL_H };
+
+// The tray's lip under the objects, clear of a phone's home indicator.
+export const TRAY_PAD = "max(0.75rem, env(safe-area-inset-bottom))";
+// How high the tray stands off the mat's bottom edge: the rocker (two thumb
+// targets, squiggle over Aa) is the tallest thing in it. The sticker sheet
+// sits on this line (#82), so it never covers the tray.
+export const TRAY_TOP = `calc(${2 * ROCKER_H}px + ${TRAY_PAD})`;
+// The room left before the bin: a little on a wide screen, none on a phone.
+// A shrinkable flex item, so it gives up its width before anything else has to.
+export const BIN_GAP = "clamp(0px, 4vw, 32px)";
 export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
 
 // How long the held tool shakes when the note is full and nothing more fits.
@@ -484,11 +494,11 @@ export function ModeControl({
         )}
       </div>
 
-      {/* the samples ARE the choice: each label in its own face. Hung off the
-          rocker's right edge, not centred on it: centred, the row runs off a
-          320px strip, since the rocker sits at the strip's right end. */}
+      {/* the samples ARE the choice: each label in its own face. Centred on
+          the rocker, which sits near the middle of the centred tray (#82):
+          hung off either edge, the row runs off a 360px mat. */}
       {ink && fontsOpen && (
-        <div className="absolute right-0 bottom-[calc(100%+10px)] z-30 flex gap-1.5">
+        <div className="-translate-x-1/2 absolute bottom-[calc(100%+10px)] left-1/2 z-30 flex gap-1.5">
           {FONTS.map((f) => (
             <FontChip
               key={f}
@@ -697,38 +707,28 @@ export function BinSlip({
   );
 }
 
-// The sticker sheet's tab (#75): the corner of a sheet of stickers peeking over
-// the mat's bottom edge. Open, it rides up with the sheet and perches on its
-// top-right corner, so it is still the thing you tap to put the sheet away.
+// The sticker sheet's tab (#75): the corner of a sheet of stickers lying in
+// the tray. It stays there while the sheet is up (#82), pressed in, and is
+// still the thing you tap to put the sheet away.
 export function StickerTab({
   open,
-  lift,
   onClick,
-  ref,
 }: {
   open: boolean;
-  // how far up the sheet's corner is, measured by whoever knows the strip
-  lift: number;
   onClick: () => void;
-  ref?: Ref<HTMLButtonElement>;
 }) {
   return (
     <button
-      ref={ref}
       type="button"
       aria-label={`${open ? "Close" : "Open"} the sticker sheet`}
       aria-expanded={open}
       onClick={onClick}
-      className={`relative flex shrink-0 items-end justify-center border-0 bg-transparent p-0 ${STILL}`}
-      style={{
-        ...TAB_SLOT,
-        transform: lift ? `translateY(${-lift}px)` : "none",
-        transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
-      }}
+      className="relative flex shrink-0 items-end justify-center border-0 bg-transparent p-0"
+      style={TAB_SLOT}
     >
       <span
         aria-hidden="true"
-        className="relative flex items-start justify-center"
+        className={`relative flex items-start justify-center ${STILL}`}
         style={{
           width: STICKER_TAB_W,
           height: STICKER_TAB_H,
@@ -736,8 +736,15 @@ export function StickerTab({
           borderRadius: "4px 4px 1px 1px",
           fontSize: 17,
           lineHeight: 1,
-          background: "linear-gradient(180deg,#ffffff,#ece8de)",
-          boxShadow: "0 -2px 8px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.3)",
+          // pressed: pushed down into the tray, shaded, its shadow tucked in
+          background: open
+            ? "linear-gradient(180deg,#e4dfd2,#d3ccbc)"
+            : "linear-gradient(180deg,#ffffff,#ece8de)",
+          boxShadow: open
+            ? "inset 0 2px 4px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.3)"
+            : "0 -2px 8px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.3)",
+          transform: open ? "translateY(3px)" : "none",
+          transition: `transform 160ms ${EASE_OUT}, background 160ms, box-shadow 160ms`,
         }}
       >
         ⭐{/* the dog-eared corner that says "peel me" */}

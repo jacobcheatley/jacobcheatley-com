@@ -44,18 +44,9 @@ export function flightTransform(
   };
 }
 
-// The sticker sheet's ride up off the mat's bottom edge (#75). Here rather
-// than in StickerSheet because the tab that rides up with it is drawn by
-// desk-objects, which is presentational and may not import a stateful
-// component.
+// The sticker sheet's ride up from behind the tray (#75, #82), and the note's
+// move out of its way, which keeps time with it.
 export const SHEET_MS = 500;
-// The tab perches on the open sheet's top-right corner, clear of the grid —
-// otherwise, on a phone narrow enough for the sheet to reach the mat's right
-// edge, it would cover a sticker. This is how far its bottom edge ends up
-// BELOW the sheet's top edge, so it overlaps like a real tab; how far that is
-// from where the tab rests is the editor's measurement, since the strip
-// decides where it rests.
-export const TAB_PERCH = 10;
 
 // Keep a gesture with the pointer that started it, wherever that pointer
 // wanders. The guard is for jsdom (no pointer capture at all) and for a

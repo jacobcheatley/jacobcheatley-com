@@ -669,33 +669,44 @@ describe("StickyEditor thumb targets", () => {
     expect(draw.parentElement?.className).toContain("flex-col");
   });
 
-  it("keeps the strip one row at every width, corners in the corners", () => {
+  it("lays the tray out as one centred row: hand, markers, draw/write, sticker tab, eraser, bin", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    const centre = screen.getByRole("button", {
-      name: /pick up the red marker/i,
-    }).parentElement;
-    const strip = centre?.parentElement;
+    const row = tray() as HTMLElement;
 
     // nothing may wrap, and nothing may be re-ordered onto another line
-    expect(strip?.className).not.toContain("flex-wrap");
-    for (const el of [strip, centre])
-      expect(el?.className).not.toMatch(/max-sm:/);
-
-    // centre, right — direct children of the one row, in that order
-    expect([...(strip?.children ?? [])]).toEqual([
-      centre,
-      eraserSlot().parentElement,
+    expect(row.className).toContain("justify-center");
+    expect(row.className).not.toContain("flex-wrap");
+    expect(
+      [...row.querySelectorAll("button")].map((b) =>
+        b.getAttribute("aria-label"),
+      ),
+    ).toEqual([
+      "Put down the hand",
+      "Pick up the black marker",
+      "Pick up the green marker",
+      "Pick up the red marker",
+      "Pick up the blue marker",
+      "Draw with the marker",
+      "Write with the marker",
+      "Open the sticker sheet",
+      "Pick up the eraser",
+      "Bin this note",
     ]);
+    // the gap before the bin: some room when there is any, none when there isn't
+    const binCorner = slot("bin")?.parentElement;
+    expect(binCorner?.parentElement).toBe(row);
+    const gap = binCorner?.previousElementSibling as HTMLElement | null;
+    expect(gap?.style.width).toContain("clamp(0px");
   });
 
   it("closes the markers up as the strip narrows, and no further", () => {
     render(<StickyEditor initialContent={seeded({})} />);
-    const centre = screen.getByRole("button", {
+    const row = screen.getByRole("button", {
       name: /pick up the red marker/i,
     }).parentElement;
 
-    // the gap between the objects in the centre is the room there is for it
-    expect(centre?.style.gap).toContain("clamp(0px");
+    // the gap between the objects is the room there is for it
+    expect(row?.style.gap).toContain("clamp(0px");
     // and past zero they lean on each other, by a capped overlap
     const marker = screen.getByRole("button", {
       name: /pick up the red marker/i,
@@ -894,7 +905,34 @@ describe("StickyEditor sticker sheet", () => {
     expect(stage()?.style.transform).toBe("none");
 
     fireEvent.click(tab());
-    expect(stage()?.style.transform).toContain("translateY(-12%)");
+    expect(stage()?.style.transform).toContain("scale(");
+    fireEvent.click(tab());
+    expect(stage()?.style.transform).toBe("none");
+  });
+
+  it("leaves the tab where it lies in the tray while the sheet is up, and the tray usable", () => {
+    render(<StickyEditor initialContent={seeded({})} />);
+    // resting on the mat's bottom edge, where a tab riding the sheet would
+    // have had to climb
+    tabSlot().getBoundingClientRect = () => ({
+      ...PAPER_RECT,
+      top: window.innerHeight - 48,
+      bottom: window.innerHeight,
+    });
+    const box = tabSlot().style.cssText;
+
+    fireEvent.click(tab());
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
+    expect(tabSlot().style.cssText).toBe(box); // no lift onto the sheet
+    expect(tray()).toContainElement(tab());
+    expect(tray()).not.toHaveAttribute("inert");
+
+    pickUp(/pick up the red marker/i);
+    expect(
+      screen.getByRole("button", { name: /put down the red marker/i }),
+    ).toBeEnabled();
+    expect(bin()).toBeEnabled();
+    expect(tab()).toHaveAttribute("aria-expanded", "true");
   });
 
   it("sticks a peeled sticker where it was dropped on the paper", () => {

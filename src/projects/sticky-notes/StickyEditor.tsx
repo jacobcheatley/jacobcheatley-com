@@ -8,8 +8,9 @@ import {
   useState,
 } from "react";
 import { flushSync } from "react-dom";
-import { capturePointer, EASE_OUT, SHEET_MS, STILL, TAB_PERCH } from "./desk";
+import { capturePointer, EASE_OUT, SHEET_MS, STILL } from "./desk";
 import {
+  BIN_GAP,
   Bin,
   BinSlip,
   DESK_GAP,
@@ -28,6 +29,7 @@ import {
   StickerTab,
   TapeLabel,
   ToolSlot,
+  TRAY_PAD,
 } from "./desk-objects";
 import {
   addElement,
@@ -81,7 +83,7 @@ import {
   type PaperColour,
 } from "./note-schema";
 import { flyToLanding, PinUp } from "./pin-up";
-import { SHEET_H, StickerSheet } from "./StickerSheet";
+import { StickerSheet } from "./StickerSheet";
 
 // What lies on the cutting mat (#73, #74, #81): the pad chooser while there is
 // no note, the sheet torn off a pad, the bin, and the stationery — four
@@ -107,11 +109,6 @@ const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
 const TEXT_SIZE = 30;
 const TEXT_W = 240;
 
-// ponytail: the crumple flies to a fixed viewport-relative point (the bin's
-// corner) rather than the bin's measured box. Measure it if the bin ever moves
-// off the strip's right end. The tear-off is measured: it starts on its pad.
-const CRUMPLE_TO = "translate(34vw, 38vh) rotate(260deg) scale(.06)";
-
 type StrokeEl = Extract<NoteElement, { type: "stroke" }>;
 type TextEl = Extract<NoteElement, { type: "text" }>;
 type StickerEl = Extract<NoteElement, { type: "sticker" }>;
@@ -124,9 +121,18 @@ type PlacingDrag = {
   from: [number, number];
   start: Placing;
 };
-// Where a torn-off sheet starts: its pad's centre, seen from where it lands, in
-// px.
-type Tear = { dx: number; dy: number };
+// How far one box's centre is from another's, in px: where a torn-off sheet
+// starts (its pad, seen from where it lands), or where a crumpled one goes
+// (the bin, seen from the sheet).
+type Offset = { dx: number; dy: number };
+
+function offset(from: DOMRect | undefined, to: DOMRect | undefined): Offset {
+  if (!from || !to) return { dx: 0, dy: 0 };
+  return {
+    dx: from.left + from.width / 2 - (to.left + to.width / 2),
+    dy: from.top + from.height / 2 - (to.top + to.height / 2),
+  };
+}
 // The hand is a tool like the others (#82): putting one down picks it up.
 type Held = Ink | "eraser" | "hand";
 
@@ -160,8 +166,8 @@ export default function StickyEditor({
   // parked there for a frame, and dropping it lets the transition carry the
   // sheet to the middle of the mat. `crumpling` is the same trick in reverse,
   // into the bin.
-  const [tearing, setTearing] = useState<Tear | null>(null);
-  const [crumpling, setCrumpling] = useState(false);
+  const [tearing, setTearing] = useState<Offset | null>(null);
+  const [crumpling, setCrumpling] = useState<Offset | null>(null);
   // The bin's slip is up, asking whether the note may go (#81).
   const [binSlipOpen, setBinSlipOpen] = useState(false);
 
@@ -212,14 +218,8 @@ export default function StickyEditor({
   // else.
   const [caretTick, setCaretTick] = useState(0);
 
-  // How far the sticker tab has to rise to perch on the open sheet's corner.
-  // Measured rather than assumed: where the tab rests is the strip's business,
-  // and the strip's layout changes with the viewport.
-  const [tabLift, setTabLift] = useState(0);
-
   // "pin it up": where the keyboard comes back to when the note does
   const pinButton = useRef<HTMLButtonElement>(null);
-  const stickerTab = useRef<HTMLButtonElement>(null);
   const rocker = useRef<HTMLDivElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
   const binButton = useRef<HTMLButtonElement>(null);
@@ -395,33 +395,14 @@ export default function StickyEditor({
   }, [fontsOpen, up]);
 
   // The sheet's other way out (the tab and a swipe down its handle are the two
-  // on the mat itself), and the tab's ride up with it.
+  // on the mat itself). A mat that has gone down leaves Escape to the wall.
   useEffect(() => {
-    if (!sheetOpen) {
-      setTabLift(0);
-      return;
-    }
-    // `rect.bottom` is already lifted by whatever is applied, so add it back to
-    // get where the tab rests: re-measuring on a resize then can't compound.
-    const measure = () => {
-      const rect = stickerTab.current?.getBoundingClientRect();
-      if (!rect) return;
-      const perch = window.innerHeight - SHEET_H + TAB_PERCH;
-      setTabLift((lift) => Math.max(0, rect.bottom + lift - perch));
-    };
-    measure();
-    // A mat that has gone down leaves Escape to the wall; it measures again on
-    // its way back up.
-    if (!up) return;
+    if (!sheetOpen || !up) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSheetOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", measure);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", measure);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [sheetOpen, up]);
 
   // The fade's second half: flip to transparent one PAINTED frame after the
@@ -556,11 +537,8 @@ export default function StickyEditor({
     if (content) return;
     const note = { ...emptyNote(), colour };
     const from = pad.getBoundingClientRect();
-    const to = stage.current?.getBoundingClientRect();
-    const dx = to ? from.left + from.width / 2 - (to.left + to.width / 2) : 0;
-    const dy = to ? from.top + from.height / 2 - (to.top + to.height / 2) : 0;
     apply(note);
-    setTearing({ dx, dy });
+    setTearing(offset(from, stage.current?.getBoundingClientRect()));
   }
 
   // The bin (#81): a note with anything on it asks first, a blank one goes
@@ -585,10 +563,19 @@ export default function StickyEditor({
   function crumple() {
     if (crumpleTimer.current !== undefined) return;
     setBinSlipOpen(false);
-    setCrumpling(true);
+    // Into the bin wherever the centred tray puts it (#82).
+    // ponytail: measured in screen px, but applied inside the frame the open
+    // sticker sheet shrinks, so with the sheet up the note falls a little short
+    // of the bin — it is a speck by then. Divide by that scale if it shows.
+    setCrumpling(
+      offset(
+        binButton.current?.getBoundingClientRect(),
+        paperRef.current?.getBoundingClientRect(),
+      ),
+    );
     crumpleTimer.current = setTimeout(() => {
       crumpleTimer.current = undefined;
-      setCrumpling(false);
+      setCrumpling(null);
       clearMat();
     }, CRUMPLE_MS);
   }
@@ -1053,14 +1040,15 @@ export default function StickyEditor({
       >
         {shown && (
           <div
-            // The sticker sheet takes the bottom of the mat, so the note moves
-            // up out of its way and stays whole.
-            // ponytail: one fixed shrink, not a measurement — measured in
-            // Chrome to clear the sheet and its tab from 320x568 up, without
-            // reaching the mat's tape label. Measure if the sheet ever grows.
+            // The sticker sheet sits on the tray, so the note moves up out of
+            // its way and stays whole.
+            // ponytail: one fixed shift and shrink, not a measurement — checked
+            // in Chromium at 360x740 and 1280x800. A phone shorter than about
+            // 640px tall loses the note's bottom edge under the sheet; measure
+            // the room above the sheet if that matters.
             className={STILL}
             style={{
-              transform: sheetOpen ? "translateY(-12%) scale(.72)" : "none",
+              transform: sheetOpen ? "translateY(-18%) scale(.7)" : "none",
               transition: `transform ${SHEET_MS}ms ${EASE_OUT}`,
               // Pinned up, the note is on the wall: the mat slides away bare,
               // and comes back up with it lying where it was.
@@ -1071,7 +1059,7 @@ export default function StickyEditor({
               ref={paperRef}
               data-colour={shown.colour}
               // in flight onto the mat or into the bin: it takes no marks
-              aria-busy={tearing !== null || crumpling}
+              aria-busy={tearing !== null || crumpling !== null}
               className={`${STILL} pointer-events-auto relative touch-none`}
               onPointerDown={onPaperDown}
               onPointerMove={onPaperMove}
@@ -1173,122 +1161,109 @@ export default function StickyEditor({
         onTear={takeSheet}
       />
 
-      {/* the desk strip: the mat's bottom edge, where the objects lie. ONE row
-          at every width (#74) — two groups on the same edge: centre, the
-          markers and the draw/write control; right, the sticker tab, the
-          eraser, then the bin. Nothing wraps and nothing moves up: the room a
-          narrow screen takes comes out of the space BETWEEN the markers, never
-          out of the corner. While a pad is being chosen the strip is away
-          below the mat's edge, and out of reach. */}
+      {/* The tray (#82): the mat's bottom edge, where the objects lie. ONE
+          centred row at every width — hand, markers, draw/write, sticker tab,
+          eraser, a gap, bin. Nothing wraps: the room a narrow screen takes
+          comes out of the gap before the bin, then out of the space BETWEEN
+          the markers (the SQUEEZE in MARKER_SLOT leans them on each other).
+          z-40: the sticker sheet rises from behind it. While a pad is being
+          chosen the tray is away below the mat's edge, and out of reach. */}
       <div
         data-slot="tray"
         inert={choosing}
-        className={`absolute inset-x-0 bottom-0 flex items-end justify-between pb-[max(0.75rem,env(safe-area-inset-bottom))] ${STILL}`}
+        // `justify-center-safe`: centred while the row fits; on a screen too
+        // narrow for it, it overflows off the right end only, where plain
+        // centring would push the hand off the left edge out of reach.
+        className={`absolute inset-x-0 bottom-0 z-40 flex items-end justify-center-safe ${STILL}`}
         style={{
+          gap: DESK_GAP,
           paddingInline: DESK_GAP,
+          paddingBottom: TRAY_PAD,
           transform: choosing ? "translateY(110%)" : "none",
           transition: `transform ${TEAR_MS}ms ${EASE_OUT}`,
         }}
       >
-        {/* The markers close up as the screen narrows: the gap is whatever room
-            is left over, and at zero the SQUEEZE in MARKER_SLOT leans them on
-            each other. The group keeps the middle of the strip either way. */}
-        <div
-          // min-w-0: on a screen narrower than the objects, the markers lean
-          // further over each other rather than push the corners off the mat.
-          className="flex min-w-0 flex-1 items-end justify-center"
-          style={{ gap: DESK_GAP }}
+        <ToolSlot
+          label={`${held === "hand" ? "Put down" : "Pick up"} the hand`}
+          held={held === "hand"}
+          slot={HAND_SLOT}
+          onClick={() => pickUp("hand")}
         >
+          <HandBody held={held === "hand"} using={using} />
+        </ToolSlot>
+        {INKS.map((ink) => (
           <ToolSlot
-            label={`${held === "hand" ? "Put down" : "Pick up"} the hand`}
-            held={held === "hand"}
-            slot={HAND_SLOT}
-            onClick={() => pickUp("hand")}
+            key={ink}
+            label={`${held === ink ? "Put down" : "Pick up"} the ${ink} marker`}
+            held={held === ink}
+            shake={shaking && held === ink}
+            slot={MARKER_SLOT}
+            onClick={() => pickUp(ink)}
           >
-            <HandBody held={held === "hand"} using={using} />
+            <MarkerBody ink={ink} held={held === ink} using={using} />
           </ToolSlot>
-          {INKS.map((ink) => (
-            <ToolSlot
-              key={ink}
-              label={`${held === ink ? "Put down" : "Pick up"} the ${ink} marker`}
-              held={held === ink}
-              shake={shaking && held === ink}
-              slot={MARKER_SLOT}
-              onClick={() => pickUp(ink)}
-            >
-              <MarkerBody ink={ink} held={held === ink} using={using} />
-            </ToolSlot>
-          ))}
-          <ModeControl
-            ref={rocker}
-            ink={isInk(held) ? held : null}
-            mode={mode}
-            font={font}
-            fontsOpen={fontsOpen}
-            onMode={(m) => {
-              // An ordinary tool press, so it fixes what is being placed —
-              // except "Aa" on a text box, which only brings its samples back.
-              if (m === "draw" || placingRef.current?.type !== "text")
-                fixPlacing();
-              setMode(m);
-              setFontsOpen(m === "write");
-            }}
-            onFont={(f) => {
-              setFont(f);
-              setFontsOpen(false);
-              // a box still being placed takes the new face at once
-              const live = placingRef.current;
-              if (live?.type === "text") applyPlacing({ ...live, font: f });
-            }}
+        ))}
+        <ModeControl
+          ref={rocker}
+          ink={isInk(held) ? held : null}
+          mode={mode}
+          font={font}
+          fontsOpen={fontsOpen}
+          onMode={(m) => {
+            // An ordinary tool press, so it fixes what is being placed —
+            // except "Aa" on a text box, which only brings its samples back.
+            if (m === "draw" || placingRef.current?.type !== "text")
+              fixPlacing();
+            setMode(m);
+            setFontsOpen(m === "write");
+          }}
+          onFont={(f) => {
+            setFont(f);
+            setFontsOpen(false);
+            // a box still being placed takes the new face at once
+            const live = placingRef.current;
+            if (live?.type === "text") applyPlacing({ ...live, font: f });
+          }}
+        />
+        <StickerTab
+          open={sheetOpen}
+          onClick={() => {
+            fixPlacing();
+            setSheetOpen((open) => !open);
+          }}
+        />
+        <ToolSlot
+          label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
+          held={held === "eraser"}
+          slot={ERASER_SLOT}
+          onClick={() => pickUp("eraser")}
+        >
+          {/* `using` is "some tool is working"; EraserBody lifts for it only
+              when the eraser is the tool in hand (#74) */}
+          <EraserBody held={held === "eraser"} using={using} />
+        </ToolSlot>
+        <span aria-hidden="true" className="block" style={{ width: BIN_GAP }} />
+        {/* A press on the bin or its slip takes no focus, as on the rocker:
+            otherwise a tap on the bin while the slip asks moves focus out of
+            the slip, which closes it, and the bin's click asks again. */}
+        <div
+          ref={binCorner}
+          className="relative shrink-0"
+          onPointerDown={(e) => e.preventDefault()}
+        >
+          <Bin
+            ref={binButton}
+            onClick={binIt}
+            disabled={!content || crumpling !== null}
           />
-        </div>
-
-        <div className="flex shrink-0 items-end" style={{ gap: DESK_GAP }}>
-          {/* the tab rides above the sheet it pulls up (z), so it is still the
-              way to put it away */}
-          <div data-slot="sticker-tab" className="relative z-50 shrink-0">
-            <StickerTab
-              ref={stickerTab}
-              open={sheetOpen}
-              lift={tabLift}
-              onClick={() => {
-                fixPlacing();
-                setSheetOpen((open) => !open);
-              }}
+          {binSlipOpen && (
+            <BinSlip
+              ref={binYes}
+              onBin={crumple}
+              onKeep={keepIt}
+              onLeave={() => setBinSlipOpen(false)}
             />
-          </div>
-          <ToolSlot
-            label={`${held === "eraser" ? "Put down" : "Pick up"} the eraser`}
-            held={held === "eraser"}
-            slot={ERASER_SLOT}
-            onClick={() => pickUp("eraser")}
-          >
-            {/* `using` is "some tool is working"; EraserBody lifts for it only
-                when the eraser is the tool in hand (#74) */}
-            <EraserBody held={held === "eraser"} using={using} />
-          </ToolSlot>
-          {/* A press on the bin or its slip takes no focus, as on the rocker:
-              otherwise a tap on the bin while the slip asks moves focus out
-              of the slip, which closes it, and the bin's click asks again. */}
-          <div
-            ref={binCorner}
-            className="relative shrink-0"
-            onPointerDown={(e) => e.preventDefault()}
-          >
-            <Bin
-              ref={binButton}
-              onClick={binIt}
-              disabled={!content || crumpling}
-            />
-            {binSlipOpen && (
-              <BinSlip
-                ref={binYes}
-                onBin={crumple}
-                onKeep={keepIt}
-                onLeave={() => setBinSlipOpen(false)}
-              />
-            )}
-          </div>
+          )}
         </div>
       </div>
 
@@ -1340,15 +1315,16 @@ export default function StickyEditor({
 // mapping reads that same centre back off the box.
 function noteMotion(
   // where a sheet being torn off starts, for its first frame
-  tearing: Tear | null,
-  crumpling: boolean,
+  tearing: Offset | null,
+  // where the bin is, for a sheet on its way in
+  crumpling: Offset | null,
   rotation: number,
   turning: boolean,
 ): CSSProperties {
   const tilt = `rotate(${rotation}deg)`;
   if (crumpling)
     return {
-      transform: `${CRUMPLE_TO} ${tilt}`,
+      transform: `translate(${crumpling.dx}px, ${crumpling.dy}px) rotate(260deg) scale(.06) ${tilt}`,
       opacity: 0,
       transition: `transform ${CRUMPLE_MS}ms cubic-bezier(.5,0,.8,.35), opacity ${CRUMPLE_MS}ms ease-in`,
     };
