@@ -28,6 +28,7 @@ Single-context repo. One feature folder per Project plus a thin route file; fold
 │   ├── db/index.server.ts the only reader of DATABASE_URL
 │   └── test/              Vitest global setup and helpers
 ├── e2e/                   Playwright smoke
+├── scripts/               owner CLIs run with `bun run <name>` (sticky-notes approval)
 └── server.ts              Bun.serve wrapper (canonical host, assets, future WebSocket seam)
 ```
 
