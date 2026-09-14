@@ -39,8 +39,8 @@ The marker colour palette — `black`, `green`, `red`, `blue`. The only colours 
 _Avoid_: colour (for strokes/text — "colour" alone is the Note's background)
 
 **Fastener**:
-The decorative attachment that fixes a Note to the wall — a coloured pin (`pin-red`, `pin-green`, `pin-yellow`, `pin-blue`), cream masking tape (`tape-masking`) or clear tape (`tape-clear`), a single `staple` or two corner `staples`, a blob of sticky tack behind the Note (`stick`), or `none` (it holds on its own). Chosen from the **Fastener drawer** once the Note is pinned up; signing the **Tag**, not choosing a Fastener, is what submits the Note.
-_Avoid_: pin (as the general term — a pin is one kind of Fastener)
+The decorative attachment that fixes a Note to the wall — a coloured pin (`pin-red`, `pin-green`, `pin-yellow`, `pin-blue`), cream masking tape (`tape-masking`) or clear tape (`tape-clear`), a single `staple` or two corner `staples`, a blob of sticky tack behind the Note (`stick`), or `none` (it holds on its own). Chosen from the row of all nine laid beneath the Note in the **Spotlight**; signing the **Tag**, not choosing a Fastener, is what submits the Note.
+_Avoid_: pin (as the general term — a pin is one kind of Fastener), drawer
 
 **Curl**:
 How much each of a Note's two bottom corners peels off the wall — a per-corner intensity (`bl`, `br`), seeded per Note and lightly adjustable. The renderer folds the corner up visually.
@@ -54,11 +54,11 @@ The centred row along the Mat's bottom edge where the objects lie, in this order
 _Avoid_: toolbar, palette
 
 **Pad**:
-One of six pads of sticky notes, one per paper colour, that fill the whole Mat whenever there is no Note on it — the pad chooser, on first opening, after the bin and after a Note is sent. Tapping a Pad tears a sheet off it to start a Note. The paper colour is fixed once torn; the bin is the way back to the Pads for another.
+One of six pads of sticky notes, one per paper colour, that fill the whole Mat whenever there is no Note on it — the pad chooser, on first opening, after the bin and after a Note is sent. They lie in one to three columns of overlapping stacks, each pad a little askew. Tapping a Pad tears a sheet off it to start a Note. The paper colour is fixed once torn; the bin is the way back to the Pads for another.
 _Avoid_: swatch, colour picker
 
 **Marker**:
-One of four pens on the Tray, one per **Ink**. The Marker *is* the colour: picking one up is how an Ink is chosen, and there are no swatches. One fixed nib.
+One of four pens on the Tray, one per **Ink**. The Marker *is* the colour: picking one up is how an Ink is chosen, and there are no swatches. One fixed nib: a **Stroke** is the same width however hard it is pressed.
 _Avoid_: pen, brush, colour swatch
 
 **Eraser**:
@@ -66,7 +66,7 @@ The rubber on the Tray. Held and rubbed across the Note, it removes each whole *
 _Avoid_: delete button
 
 **Hand**:
-The open hand lying on the Tray: the tool held whenever no **Marker** and not the **Eraser** is. Putting any other tool down picks it up.
+The open hand lying on the Tray: the tool held whenever no **Marker** and not the **Eraser** is. Putting any other tool down picks it up. It is an object on the Tray like the rest, not the tool a Note starts with — tearing a sheet off a **Pad** puts the black Marker in hand.
 
 **Hand mode**:
 Holding the **Hand**. A drag on the Note turns it about its centre and its bottom corners set its **Curl** — nothing else: it never takes hold of an **Element**.
@@ -82,16 +82,13 @@ Using the held Marker to write: a tap on the Note opens a **Text box** in that M
 The time between an **Element** landing on the Note and the tap away that fixes it. While Placing, a **Text box** or **Sticker** can be moved and turned, and a Text box widened; afterwards it never changes, and the **Eraser** is the only way to remove it.
 
 **Sticker sheet**:
-A sheet of printed emoji that rises from behind the Tray, sits above it, and goes away again at its tab, which stays in the Tray. A **Sticker** is peeled off it and dragged onto the Note; the sheet never runs out.
+A sheet of printed emoji that rises over the **Tray** and covers it, leaving the Tray dim and out of reach beneath. While it is up the sheet is what is held: nothing acts on the Note but **Placing** the peeled **Sticker**. A Sticker is peeled off it and dragged onto the Note; the sheet never runs out. It goes away at its folded corner, with a swipe down or with Escape, handing back whatever was held before; its tab stays in the Tray.
 _Avoid_: emoji picker
 
-**Landing**:
-A Note pinned up off the **Mat** and lying in the wall's newest slot until its **Tag** is signed — the pinning phase. The Mat slides away from under it; on the wall it takes its **Fastener** and hangs as it will once submitted, marked pending. Back to the desk (or Back) returns it to the Mat as it left, with no Fastener.
-_Avoid_: preview, draft (for the Note on the wall)
-
-**Fastener drawer**:
-The box of the nine **Fasteners** that rises over the wall once a Note is pinned up, each shown as it will look on that Note. Choosing one presses it on, and the drawer folds to a tab that opens it again until the Tag is signed. Put away without a choice, the Note keeps `none`.
-
 **Tag**:
-The paper name tag hanging under a Note pinned up on the wall. Writing a name on it and signing it (Enter, or its tick) submits the Note — its one write — with that name, lowercased, as the **author**.
+The paper name tag hanging under a Note held in the **Spotlight** to be pinned up, below the row of **Fasteners**. Writing a name on it and signing it (Enter, or its tick) submits the Note — its one write — with that name, lowercased, as the **author**.
 _Avoid_: author field, form, submit button
+
+**Spotlight**:
+The wall darkened with one Note lifted out of it, straight and large. Zooming in on an approved Note is a Spotlight; pinning a new one up is a Spotlight with the nine **Fasteners** laid in a row beneath the Note, the **Tag** below those, and the way back to the desk taped above it.
+_Avoid_: lightbox, landing, preview, modal
