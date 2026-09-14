@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PAD_JITTER } from "./desk-objects";
 import { type Element, emptyNote } from "./note-editor";
 import { MAX_ELEMENTS, type NoteContent, STICKER_EMOJI } from "./note-schema";
 import StickyEditor from "./StickyEditor";
@@ -23,6 +24,10 @@ const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 const pad = (colour: string) =>
   screen.getByRole("button", { name: new RegExp(`${colour} sheet`, "i") });
 const pads = () => screen.getAllByRole("button", { name: /tear off/i });
+// the torn pad is hidden, so out of the role query: ask the DOM for all six
+const allPads = () => [
+  ...document.querySelectorAll<HTMLElement>('[data-slot="chooser"] button'),
+];
 const bin = () => screen.getByRole("button", { name: /bin this note/i });
 // the fixed boxes the tray's objects lie in, by the marker on each
 const slot = (name: string) =>
@@ -85,6 +90,35 @@ describe("StickyEditor pad chooser", () => {
   it("puts the keyboard on the first pad", () => {
     render(<StickyEditor />);
     expect(pad("yellow")).toHaveFocus();
+  });
+
+  it("lies every pad a little askew, the same way on every render", () => {
+    const { rerender } = render(<StickyEditor />);
+    const turned = () => pads().map((p) => p.style.transform);
+
+    expect(turned()).toHaveLength(6);
+    PAD_JITTER.forEach(([deg, dx, dy], i) => {
+      expect(turned()[i]).toContain(`rotate(${deg}deg)`);
+      expect(turned()[i]).toContain(`translate(${dx}px, ${dy}px)`);
+    });
+
+    const before = turned();
+    rerender(<StickyEditor />);
+    expect(turned()).toEqual(before);
+  });
+
+  it("puts the chooser away without straightening the pads, and takes only the torn colour", () => {
+    render(<StickyEditor />);
+    fireEvent.click(pad("blue"));
+
+    // the blue pad went with the sheet torn off it; the other five slide off
+    expect(pads()).toHaveLength(5); // the hidden one is out of reach
+    for (const p of allPads()) {
+      expect(p.style.transform).toContain("12vh"); // the slide off the mat
+      expect(p.style.transform).toContain("rotate("); // still askew under it
+    }
+    expect(allPads()[2]?.style.visibility).toBe("hidden"); // blue
+    expect(allPads()[0]?.style.visibility).toBe("");
   });
 
   it("tears a sheet off the pad tapped, and puts the chooser away for the tray", () => {

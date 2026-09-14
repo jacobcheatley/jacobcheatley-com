@@ -525,22 +525,33 @@ export function ModeControl({
   );
 }
 
-// How much of each pad in the chooser's stack shows above the next (#81): the
-// height left once the top pad lies whole, shared by the five under it, and
-// never less than a thumb — past that the stack scrolls. `cqh` is a percent of
-// the chooser's own height (it is a size container), so the fit is CSS, with
-// nothing measured.
-const PEEK = `max(${TOUCH}px, (100cqh - ${PAPER_SIDE}) / 5)`;
+// How each pad lies in the chooser (#85): a turn and a nudge, keyed by the
+// pad's place in the row of colours, so the same pad always lies the same way
+// and nothing flickers between renders. Within ±3° and ±6px — enough to read
+// as tossed down, not as a mistake.
+export const PAD_JITTER = [
+  [-2, 3, -4],
+  [1.5, -5, 2],
+  [3, 2, 5],
+  [-1, -3, -2],
+  [2.5, 6, -1],
+  [-3, -2, 3],
+] as const;
 
-// The pad chooser (#81): with no note on the mat, the mat is six pads at the
-// note's real size, square to the screen, stacked down it so each shows a
-// strip and the last lies whole on top. Put away, the pads slide off and fade
-// — all but the one torn from, which has just become the sheet.
-// ponytail: no grid. #81 wants one wherever all six fit at real size; two pads
-// do sit side by side in landscape at desktop sizes, but six never fit at
-// PAPER_SIDE — a 2×3 or 3×2 grid needs two rows (≈120svh) or two columns
-// (≈176vw). So the stack is the only layout that rule can pick. Upgrade: a
-// grid under a container query, if the paper ever shrinks enough for six.
+// that lie as a transform, the turn about the pad's own centre. The fallback
+// is for the type only: the table has a row per paper colour.
+const lie = (i: number) => {
+  const [deg, dx, dy] = PAD_JITTER[i] ?? [0, 0, 0];
+  return `translate(${dx}px, ${dy}px) rotate(${deg}deg)`;
+};
+
+// The pad chooser (#81, #85): with no note on the mat, the mat is six pads at
+// the note's real size, square to the screen, in as many columns as fit across
+// — one, two or three — each column a stack where every pad shows a strip and
+// the last lies whole on top. The columns and the peek are `.pad-stacks` in
+// styles.css: they need container queries, which no inline style can hold. Put
+// away, the pads slide off and fade — all but the one torn from, which has just
+// become the sheet.
 export function PadChooser({
   putAway,
   torn,
@@ -565,7 +576,7 @@ export function PadChooser({
         containerType: "size",
       }}
     >
-      <div className="flex flex-col items-center">
+      <div className="pad-stacks">
         {PAPER_COLOURS.map((colour, i) => (
           <button
             key={colour}
@@ -577,11 +588,10 @@ export function PadChooser({
             // pad's ring pokes out from under the pads stacked over it. `!`
             // because the site-wide focus ring is unlayered CSS, which beats
             // any utility that isn't important.
-            className={`focus-visible:-outline-offset-4! shrink-0 rounded-[3px] border-0 p-0 ${STILL}`}
+            className={`focus-visible:-outline-offset-4! rounded-[3px] border-0 p-0 ${STILL}`}
             style={{
               width: PAPER_SIDE,
               height: PAPER_SIDE,
-              marginTop: i ? `calc(${PEEK} - ${PAPER_SIDE})` : 0,
               backgroundColor: PAPER[colour],
               backgroundImage:
                 "linear-gradient(170deg, rgba(255,255,255,.4), rgba(255,255,255,0) 45%)",
@@ -591,7 +601,9 @@ export function PadChooser({
                 "inset 0 -7px 0 rgba(0,0,0,.08), 0 -3px 8px rgba(0,0,0,.25), 0 6px 12px rgba(0,0,0,.4)",
               visibility: torn === colour ? "hidden" : undefined,
               opacity: putAway ? 0 : 1,
-              transform: putAway ? "translateY(12vh)" : "none",
+              // the slide off the mat rides in front of the pad's own jitter,
+              // so putting the chooser away never straightens it
+              transform: `translateY(${putAway ? "12vh" : "0px"}) ${lie(i)}`,
               transition: `transform ${CHOOSER_MS}ms ${EASE_OUT}, opacity ${CHOOSER_MS}ms`,
             }}
           />

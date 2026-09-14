@@ -111,3 +111,43 @@ body {
     opacity: 0;
   }
 }
+
+/* The pad chooser (#85): the six pads in as many columns as fit across the mat
+   at the pad's real size — one, two or three — split evenly between them, each
+   column a stack. A column's rows are the peek each pad shows above the next,
+   with the last row a whole pad: the peek is the height left over once the top
+   pad lies whole, shared by the pads under it, and never less than a thumb —
+   past that the chooser scrolls. `cqh` is the chooser's own height (it is a
+   size container), so the fit is CSS, with nothing measured. The 20px comes
+   off the top of that: the room the pads' jitter leans into, so a stack that
+   fits does not scroll by the few pixels a turned pad hangs past its row. The
+   pad's side and the thumb are PAPER_SIDE and TOUCH in desk-objects.tsx,
+   written out again here because a container query takes no var(). */
+.pad-stacks {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min(88vw, 60svh);
+  justify-content: center;
+  column-gap: 24px;
+  grid-template-rows: repeat(
+      5,
+      max(48px, (100cqh - min(88vw, 60svh) - 20px) / 5)
+    )
+    min(88vw, 60svh);
+}
+
+@container (min-width: calc(2 * min(88vw, 60svh) + 24px)) {
+  .pad-stacks {
+    grid-template-rows:
+      repeat(2, max(48px, (100cqh - min(88vw, 60svh) - 20px) / 2))
+      min(88vw, 60svh);
+  }
+}
+
+@container (min-width: calc(3 * min(88vw, 60svh) + 48px)) {
+  .pad-stacks {
+    grid-template-rows:
+      max(48px, 100cqh - min(88vw, 60svh) - 20px)
+      min(88vw, 60svh);
+  }
+}
