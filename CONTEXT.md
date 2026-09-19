@@ -12,6 +12,10 @@ _Avoid_: toy, experiment, tool, mini-app, thing
 The landing page and pages that present the owner and point at their Projects.
 _Avoid_: about page, showcase, homepage
 
+**Cover**:
+The piece of artwork that stands for a Project on the Portfolio: the Project's name baked in, styled as the Project itself. It is the only thing the Portfolio shows of a Project, and the only place bold colour appears there.
+_Avoid_: card, thumbnail, tile
+
 ### Sticky Notes
 
 The diegetic note-wall Project (`/sticky-notes`). A submitted **Note**'s visual content is a versioned JSON blob; its **author** and timestamps are separate storage, not part of that blob.
