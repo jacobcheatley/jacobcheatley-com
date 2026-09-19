@@ -19,3 +19,8 @@ Branches are `type/ticket#-short-name` (throwaway `prototype`/`research` may dro
 ### Domain docs
 
 Single-context: `CONTEXT.md` (glossary) and `docs/adr/` at the repo root. Layout and conventions: see `docs/agents/domain.md`.
+
+### Coding standards
+
+@docs/agents/coding-standards.md
+@docs/agents/code-comments.md
