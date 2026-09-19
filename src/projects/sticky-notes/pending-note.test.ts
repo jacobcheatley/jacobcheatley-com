@@ -30,7 +30,7 @@ describe("isApproved", () => {
   const pending: PendingNote = {
     author: "sam",
     content: noteContent(),
-    submittedAt: 1,
+    submittedAtMs: 1,
   };
 
   it("matches an approved note with the same author and content", () => {
@@ -80,7 +80,7 @@ describe("isApproved", () => {
 const pendingNote = (author: string, at: number): PendingNote => ({
   author,
   content: noteContent(),
-  submittedAt: at,
+  submittedAtMs: at,
 });
 
 describe("the pending list", () => {
@@ -98,7 +98,7 @@ describe("the pending list", () => {
     for (let i = 0; i < MAX_PENDING + 5; i++) savePending(pendingNote("a", i));
     const list = readPending();
     expect(list).toHaveLength(MAX_PENDING);
-    expect(list[0]?.submittedAt).toBe(MAX_PENDING + 4); // newest kept
+    expect(list[0]?.submittedAtMs).toBe(MAX_PENDING + 4); // newest kept
   });
 
   it("reads a legacy single note as a one-element list", () => {
@@ -136,10 +136,10 @@ describe("the pending list", () => {
     expect(readPending().map((p) => p.author)).toEqual(["ada"]);
   });
 
-  it("reads a legacy entry with no submittedAt", () => {
-    const { submittedAt: _, ...legacy } = pendingNote("lee", 7);
-    localStorage.setItem(KEY, JSON.stringify([legacy]));
-    expect(readPending()).toEqual([{ ...legacy, submittedAt: 0 }]);
+  it("reads a legacy entry with no submittedAtMs, unstamped", () => {
+    const { submittedAtMs: _, ...legacy } = pendingNote("lee", 7);
+    localStorage.setItem(KEY, JSON.stringify([{ ...legacy, submittedAt: 7 }]));
+    expect(readPending()).toEqual([{ ...legacy, submittedAtMs: 0 }]);
   });
 });
 

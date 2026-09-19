@@ -34,7 +34,7 @@ const note = (id: number, author: string, over?: Partial<NoteContent>) => ({
 const pending = (author: string, at: number): PendingNote => ({
   author,
   content: noteContent(),
-  submittedAt: at,
+  submittedAtMs: at,
 });
 
 // savePending prepends, so the oldest goes in first
@@ -220,7 +220,7 @@ describe("StickyWall fonts", () => {
     });
     storePending({
       author: "pat",
-      submittedAt: 1,
+      submittedAtMs: 1,
       content: noteContent({ elements: [text("marker")] }),
     });
     render(

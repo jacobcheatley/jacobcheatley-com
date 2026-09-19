@@ -12,7 +12,7 @@ const KEY = "sticky-notes:pending";
 // older build wrote may carry keys this one has no use for; the timestamp is
 // for debugging and never shown, so an entry without one still reads.
 const pendingNoteSchema = noteSchema
-  .extend({ submittedAt: z.number().catch(0) })
+  .extend({ submittedAtMs: z.number().catch(0) })
   .strip();
 
 export type PendingNote = z.infer<typeof pendingNoteSchema>;

@@ -172,7 +172,7 @@ export function StickyWall({
           return (
             // The newest holds the slot a sent note flies home into.
             <li
-              key={`${p.submittedAt}-${p.author}`}
+              key={`${p.submittedAtMs}-${p.author}`}
               ref={i === 0 ? flyHome : undefined}
               data-newest={i === 0 ? "" : undefined}
             >
