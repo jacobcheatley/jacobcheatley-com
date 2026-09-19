@@ -94,48 +94,33 @@ import {
 import { PinUp } from "./pin-up";
 import { SHEET_H, StickerSheet } from "./StickerSheet";
 
-// What lies on the cutting mat (#73, #74, #81): the pad chooser while there is
-// no note, the sheet torn off a pad, the bin, and the stationery — four
-// markers, the draw/write control and the eraser. The mat surface itself is
-// StickyMat; this is the island it lazy-loads, and the file the later tickets
-// grow into: T5 hangs the sticker sheet off the reserved tab slot, T6 rotates
-// the note and adds on-note handles, T7 the pinning phase.
-//
-// The mat starts bare — no note, no prompt copy — so nothing random runs until
-// the visitor tears a sheet off. That is why the island needs no mounted-gate
-// for SSR: its first render is identical on both sides.
-//
-// Tools are objects, not settings (#69): the marker IS the ink, so there are no
-// swatches, no size slider and no colour fan. Exactly one tool is always held,
-// and the hand is the one held when nothing else is (#82). All model logic
-// lives in note-editor — this shell only maps pointers onto it.
+// The mat starts bare, so the island's first render is identical on the server
+// and the client: no mounted gate needed. All model logic lives in note-editor;
+// this shell only maps pointers onto it.
 
 const TEAR_MS = 400;
 const CRUMPLE_MS = 400;
-const GHOST_MS = 200; // how long a rubbed-out element lingers as a fade
+const GHOST_MS = 200;
 
-// The room the tray takes along the mat's bottom edge, which the note stands
-// clear of — a little over the rocker, the tallest thing in it, so a lifted
-// marker never meets the paper.
+// Clears the rocker, the tallest thing in the tray, so a lifted marker never
+// meets the paper.
 const TRAY_ROOM = "8rem";
 
-const NIB = 8; // the editor's one fixed marker size (#69: no size slider)
+const NIB = 8; // the editor's one fixed marker size
 const TEXT_SIZE = 30;
 const TEXT_W = 240;
 
 type StrokeEl = Extract<NoteElement, { type: "stroke" }>;
 type TextEl = Extract<NoteElement, { type: "text" }>;
 type StickerEl = Extract<NoteElement, { type: "sticker" }>;
-// What can be placed (#80): a stroke is drawn where it lies, never placed.
 type Placing = TextEl | StickerEl;
-// A drag on the element being placed: the part taken hold of, where, and the
-// element as it was then — every move is measured from there.
+// A drag on the element being placed: every move is measured from `start`, the
+// element as it was when the drag began.
 type PlacingDrag = {
   grip: PlacingGrip;
   from: [number, number];
   start: Placing;
 };
-// The hand is a tool like the others (#82): putting one down picks it up.
 type Held = Ink | "eraser" | "hand";
 
 const isInk = (held: Held): held is Ink => held !== "hand" && held !== "eraser";
@@ -146,71 +131,45 @@ export default function StickyEditor({
   pinning,
   onPinning,
 }: {
-  // Tests seed a half-built note; the UI always starts from a torn-off sheet.
   initialContent?: NoteContent | null;
-  // Whether the mat is up. The island stays mounted under a mat that has gone
-  // down, and must not keep listening to the wall's presses and keys.
+  // The island stays mounted under a mat that has gone down, so it must stop
+  // listening to the wall's presses and keys.
   up?: boolean;
-  // The pinning phase (#88): the note as it hangs in the Spotlight, while it
-  // does. The page owns it (it takes the mat down); this island puts it there.
   pinning?: NoteContent;
   onPinning?: (note: NoteContent | undefined) => void;
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
-  // A pointermove's state update has not necessarily landed by the time the
-  // next pointer event runs, and a drag has to read back what the previous
-  // move wrote: settle-or-delete on release needs the moved element, and a rub
-  // needs the elements the last rub left. This ref is the live note; `apply`
-  // is the only way content changes, so the two can't drift.
+  // The live note: a pointer event has to read back what the previous move
+  // wrote, before that state update has landed. `apply` is the only way content
+  // changes, so the ref and the state can't drift.
   const contentRef = useRef(content);
   contentRef.current = content;
-  // `tearing` is where a fresh sheet starts, over the pad it came off: it is
-  // parked there for a frame, and dropping it lets the transition carry the
-  // sheet to the middle of the mat. `crumpling` is the same trick in reverse,
-  // into the bin.
+  // Where a flight starts, parked for a frame; dropping it to null is what
+  // sends the sheet, so the transition carries it.
   const [tearing, setTearing] = useState<Offset | null>(null);
   const [crumpling, setCrumpling] = useState<Offset | null>(null);
-  // A torn-off sheet has finished its flight onto the mat. "pin it up" hangs
-  // beside the paper, not on it, so neither flight carries it: it waits for
-  // this, and goes down again for a crumple.
   const [landed, setLanded] = useState(true);
   const landTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // The bin's slip is up, asking whether the note may go (#81).
   const [binSlipOpen, setBinSlipOpen] = useState(false);
 
-  // A fresh sheet comes with the black marker in hand (#84); the hand is an
-  // object on the tray, picked up when something else is put down.
   const [held, setHeld] = useState<Held>("black");
   const [mode, setMode] = useState<Mode>("draw");
-  const [font, setFont] = useState<Font>("casual"); // the editor's default
-  // The font samples pop up over the mat: opened by the "Aa" side of the
-  // rocker, closed by a tap elsewhere, Escape or a choice.
+  const [font, setFont] = useState<Font>("casual");
   const [fontsOpen, setFontsOpen] = useState(false);
-  // The sticker sheet is independent of what is in your hand: opening it neither
-  // puts a marker down nor picks anything up.
   const [sheetOpen, setSheetOpen] = useState(false);
-  // Placing (#80): a new text box or sticker, on the note but not yet part of
-  // it — it can be moved, turned and (text) widened until a press anywhere
-  // else fixes it. The ref is the live one, for the same reason as contentRef.
+  // The element on the note but not yet part of it. The ref is the live one,
+  // for the same reason as contentRef.
   const [placing, setPlacing] = useState<Placing | null>(null);
   const placingRef = useRef(placing);
   placingRef.current = placing;
-  // A finger leaves the tool docked on the mat, so the dock has to show the
-  // stroke happening; a mouse carries the tool itself.
   const [using, setUsing] = useState(false);
-  // While the note is being turned its tilt has to sit under the finger, so
-  // the tilt's own transition (the tear-off flight) is off for the gesture.
   const [turning, setTurning] = useState(false);
-  // The bottom corner being peeled, or the one a mouse is hovering over: it
-  // shows its grip on the sheet.
   const [gripCorner, setGripCorner] = useState<Corner | null>(null);
   const [fine, setFine] = useState(false);
-  // The note is full: the docked tool rocks so a dead pointer-down says why.
   const [shaking, setShaking] = useState(false);
   // Elements have no id, so a removed one can't fade in place: its ghost is
-  // re-drawn on an overlay that fades out and unmounts. `out` travels with the
-  // ghost, and `id` keys the overlay, so rubbing again mid-fade mounts a fresh
-  // node at full opacity instead of reversing the one that is fading.
+  // re-drawn on an overlay that fades out and unmounts. `id` keys that overlay,
+  // so rubbing again mid-fade mounts a fresh node instead of reversing the fade.
   // ponytail: one ghost at a time, the newest wins. Rubbing out a pile fades
   // only the last of them; keep a list if that ever reads wrong.
   const [ghost, setGhost] = useState<{
@@ -219,23 +178,16 @@ export default function StickyEditor({
     id: number;
   } | null>(null);
 
-  // Where the next glyph would land, in note units. Without a caret there is
-  // no telling where you are typing (#74) — and it is measured off the glyphs
-  // the renderer drew, so it cannot drift from the text it follows.
+  // Where the next glyph would land, in note units.
   const [caret, setCaret] = useState<{ x: number; y: number } | null>(null);
-  // Bumped when the placing box's webfont lands: one more measurement, nothing
-  // else.
   const [caretTick, setCaretTick] = useState(0);
 
-  // "pin it up": where the keyboard comes back to when the note does
   const pinButton = useRef<HTMLButtonElement>(null);
   const rocker = useRef<HTMLDivElement>(null);
   const firstPad = useRef<HTMLButtonElement>(null);
   const binButton = useRef<HTMLButtonElement>(null);
   const binYes = useRef<HTMLButtonElement>(null);
-  // the bin and its slip together: a press in here is not a press elsewhere
   const binCorner = useRef<HTMLDivElement>(null);
-  // the box the sheet is centred in, so where a torn-off sheet lands
   const stage = useRef<HTMLDivElement>(null);
   const crumpleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const paperRef = useRef<HTMLDivElement>(null);
@@ -245,42 +197,38 @@ export default function StickyEditor({
   // stroke uses forceRender so the note grows as you draw.
   const draftRef = useRef<StrokeEl | null>(null);
   const rubbingRef = useRef(false);
-  // Turning the note (#76, #79). The angle is taken in CLIENT space about the
-  // paper's centre: taken in note units it would be measured through the very
-  // rotation it is setting, and the paper would chase its own tail at half
-  // speed. `start` stays null while a press near the centre has no angle yet.
+  // Turning the note. The angle is taken in CLIENT space about the paper's
+  // centre: in note units it would be measured through the very rotation it is
+  // setting. `start` stays null while a press near the centre has no angle yet.
   const spinRef = useRef<{
     centre: [number, number];
     from: number;
     start: number | null;
   } | null>(null);
-  // Peeling a corner: which, the curl it had and where it was taken hold of —
-  // the pull is read from there, so grabbing the flap doesn't move the fold.
+  // The pull is read from where the corner was taken hold of, so grabbing the
+  // flap doesn't move the fold.
   const curlRef = useRef<{
     corner: Corner;
     start: number;
     from: [number, number];
   } | null>(null);
-  // Two fingers turn the note, whatever lies under them. `from` is where the
-  // second finger landed, seen from the first; `rotation` is the note's then.
+  // `from` is where the second finger landed, seen from the first; `rotation` is
+  // the note's when it did.
   const pinchRef = useRef<{
     a: number;
     b: number;
     from: [number, number];
     rotation: number;
   } | null>(null);
-  // Where every pointer that came down on the paper is now, in client
-  // coordinates: a two-finger gesture is the only thing that needs to know
-  // about a pointer other than its own.
+  // Every pointer that came down on the paper, in client coordinates.
   const points = useRef(new Map<number, [number, number]>());
   const ghostTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const ghostId = useRef(0);
   const placingDragRef = useRef<PlacingDrag | null>(null);
-  // One gesture at a time: while a stroke, rub, turn, peel or placing drag is
-  // live, moves from any other pointer are ignored rather than allowed to steal
-  // it. A second finger coming DOWN is the exception: it takes over
-  // (startPinch).
+  // One gesture at a time: while one is live, moves from any other pointer are
+  // ignored rather than allowed to steal it. A second finger coming DOWN is the
+  // exception: it takes over (startPinch).
   const activeId = useRef<number | null>(null);
   const busy = () =>
     draftRef.current !== null ||
@@ -317,19 +265,13 @@ export default function StickyEditor({
     };
   }, [tearing]);
 
-  // No note: the whole mat is the pad chooser, so the keyboard starts on it —
-  // once the mat is up, since nothing on a mat that has gone down takes focus.
   const choosing = content === null;
   useEffect(() => {
     if (choosing && up) firstPad.current?.focus();
   }, [choosing, up]);
 
-  // The bin's question: the tick has the keyboard; the cross, Escape or a
-  // press anywhere else keeps the note, and that press still does its own job.
-  // A press on the bin itself is left to the bin's click (binIt), so the one
-  // tap is one answer. Escape is caught first, like placing's, so it doesn't
-  // also put the sticker sheet away. A mat taken down mid-question just drops
-  // it.
+  // A press on the bin itself is left to the bin's click (binIt), so one tap is
+  // one answer. Escape is caught in the capture phase, before the sheet's.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keepIt reads only a ref and a state setter, so the copy from the render that armed this is as good as the latest.
   useEffect(() => {
     if (!binSlipOpen) return;
@@ -376,18 +318,12 @@ export default function StickyEditor({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  // Warm the write font so the first text box paints in the right family, and
-  // every sample's own face the moment the samples are on screen.
   const writing = isInk(held) && mode === "write";
   useEffect(() => {
     loadFont(font);
     if (writing) for (const f of FONTS) loadFont(f);
   }, [font, writing]);
 
-  // The samples close on Escape, or on a press anywhere but the rocker — and
-  // that press goes on to do its own job. A backdrop that closed them by
-  // swallowing the press cost a whole tap: you picked a font, tapped the paper,
-  // and nothing was placed (#74).
   useEffect(() => {
     if (!fontsOpen || !up) return;
     const onKey = (e: KeyboardEvent) => {
@@ -404,9 +340,6 @@ export default function StickyEditor({
     };
   }, [fontsOpen, up]);
 
-  // The sheet's other way out (its folded corner and a swipe down its handle
-  // are the two on the sheet itself; the tab is under it, in the tray it
-  // covers). A mat that has gone down leaves Escape to the wall.
   useEffect(() => {
     if (!sheetOpen || !up) return;
     const onKey = (e: KeyboardEvent) => {
@@ -444,7 +377,7 @@ export default function StickyEditor({
       if (live) setCaretTick((n) => n + 1);
     });
     return () => {
-      live = false; // the box was fixed (or thrown away) before the font landed
+      live = false;
     };
   }, [boxFont]);
 
@@ -456,7 +389,6 @@ export default function StickyEditor({
       setCaret(null);
       return;
     }
-    // where the box sits in the note the renderer just drew
     setCaret(
       caretAt(
         paperRef.current,
@@ -465,25 +397,14 @@ export default function StickyEditor({
       ),
     );
     // The caret only ever sits at the end, so the textarea's own cursor goes
-    // there too — otherwise Home or a tap inside the box types somewhere the
-    // caret isn't. ponytail: end of text only, so a box can only be typed into
-    // at its end. Upgrade: draw the caret at `selectionStart` (one more
-    // `getEndPositionOfChar`, on the tspan holding it) and stop pinning the
-    // selection here.
+    // there too — otherwise Home or a tap inside the box types where the caret
+    // isn't.
+    // ponytail: end of text only. Upgrade: draw the caret at `selectionStart`
+    // and stop pinning the selection here.
     const box = textRef.current;
     box?.setSelectionRange(box.value.length, box.value.length);
   }, [placing, caretTick]);
 
-  // While something is being placed, a press anywhere off the paper fixes it
-  // first: the mat, the sheet, or a tray object before its own click does (the
-  // keyboard has no press, so each of those handlers fixes it too). The paper
-  // judges its own presses by geometry (onPaperDown). Spared, for a text box
-  // only: the rocker, whose samples change the box, whose "Aa" brings them
-  // back up, and whose draw half fixes the box by its own click. Escape throws
-  // it away — in the capture phase, so it is not also the Escape that puts the
-  // sticker sheet or the samples away. None of this outlives the mat: taken
-  // down (Back) mid-placing, the element is kept like the rest of the note, and
-  // the wall has its keys back.
   const isPlacing = placing !== null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: fixPlacing and applyPlacing read only refs and state setters, so the copies from the render that armed this are as good as the latest.
   useEffect(() => {
@@ -506,7 +427,8 @@ export default function StickyEditor({
       applyPlacing(null);
     };
     document.addEventListener("pointerdown", away);
-    // `true`: listen in the capture phase, before any other keydown listener
+    // capture phase: this Escape must not also be the one that puts the sticker
+    // sheet or the font samples away
     window.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("pointerdown", away);
@@ -514,7 +436,6 @@ export default function StickyEditor({
     };
   }, [isPlacing, up]);
 
-  // Leave the element where it was, fading, after it has gone from the note.
   function showGhost(el: NoteElement) {
     clearTimeout(ghostTimer.current);
     ghostId.current += 1;
@@ -522,8 +443,6 @@ export default function StickyEditor({
     ghostTimer.current = setTimeout(() => setGhost(null), GHOST_MS + 80);
   }
 
-  // Nothing more fits on the note: rock the tool in its slot for a moment, so
-  // the pointer-down that drew nothing is not silence.
   function shakeTool() {
     setShaking(true);
     clearTimeout(shakeTimer.current);
@@ -540,10 +459,6 @@ export default function StickyEditor({
     setPlacing(next);
   }
 
-  // A pad on the chooser tears a fresh sheet off (#81), and that colour is the
-  // note's for good. The sheet starts square over the pad it came off — a pad
-  // is the paper's own size, so only the move is measured — and lands with
-  // its tilt.
   function takeSheet(colour: PaperColour, pad: HTMLElement) {
     if (content) return;
     const note = { ...emptyNote(), colour };
@@ -555,9 +470,6 @@ export default function StickyEditor({
     landTimer.current = setTimeout(() => setLanded(true), TEAR_MS);
   }
 
-  // The bin (#81): a note with anything on it asks first, a blank one goes
-  // straight in. What is being placed is fixed first, so it counts. Tapped
-  // again while it asks, the bin is the answer "keep".
   function binIt() {
     if (binSlipOpen) {
       keepIt();
@@ -570,14 +482,12 @@ export default function StickyEditor({
     else crumple();
   }
 
-  // One crumple at a time: a second "Bin it" in the same breath (before a
-  // re-render has taken the tick away) would start a second timer, and only the
-  // last is cleared if the editor unmounts. The ref, not `crumpling`: state read
-  // here can be a render behind.
+  // One crumple at a time: a second "Bin it" in the same breath would start a
+  // second timer, and only the last is cleared on unmount. The ref, not
+  // `crumpling`: state read here can be a render behind.
   function crumple() {
     if (crumpleTimer.current !== undefined) return;
     setBinSlipOpen(false);
-    // Into the bin wherever the centred tray puts it (#82).
     setCrumpling(
       centreOffset(
         binButton.current?.getBoundingClientRect(),
@@ -596,8 +506,6 @@ export default function StickyEditor({
     binButton.current?.focus();
   }
 
-  // No note on the mat: back to the pad chooser. Nothing stays up, and the
-  // marker is back in hand for the next sheet, as it is for the first.
   function clearMat() {
     apply(null);
     setHeld("black");
@@ -605,8 +513,6 @@ export default function StickyEditor({
     setFontsOpen(false);
   }
 
-  // "pin it up": the note leaves the mat for the Spotlight over the wall. It
-  // goes as it is, bare paper — the fastener is chosen once it is up there.
   function pinUp() {
     fixPlacing(); // what is being placed goes up with it
     const live = contentRef.current;
@@ -618,8 +524,6 @@ export default function StickyEditor({
     flyTo(from, document.querySelector("[data-spotlight]"));
   }
 
-  // Tapping a tool picks it up and puts down whatever was held; tapping the
-  // one already held puts it down for the hand (and the hand stays held).
   function pickUp(tool: Held) {
     fixPlacing();
     setHeld((h) => (h === tool ? "hand" : tool));
@@ -627,16 +531,12 @@ export default function StickyEditor({
     hideCursorTool();
   }
 
-  // A tool's name in the tray says what a tap on it would do.
   const toolLabel = (tool: Held, name: string) =>
     `${held === tool ? "Put down" : "Pick up"} the ${name}`;
 
-  // --- the paper -----------------------------------------------------------
   // Client → note coordinates. NotePaper has no fastener headroom, so the
-  // paper's box IS 0..CANVAS on both axes. The one mapping in the editor: the
-  // paper's own gestures come through `toNote`, a peeled sticker lands through
-  // `dropSticker`. The note renders tilted (#76), so every pointer comes back
-  // through that rotation here — the maths itself is pure, in note-editor.
+  // paper's box IS 0..CANVAS on both axes. The note renders tilted, so every
+  // pointer comes back through that rotation here; the maths is in note-editor.
   function clientToNote(clientX: number, clientY: number): [number, number] {
     const rect = paperRef.current?.getBoundingClientRect();
     if (!rect?.width || !rect.height) return [0, 0];
@@ -650,17 +550,13 @@ export default function StickyEditor({
     return [clampCoord(x), clampCoord(y)];
   }
 
-  // The point's third number is pressure, kept in the schema and inert (#84):
-  // a marker has one nib, so what the pointer reports is never asked for.
+  // The point's third number is pressure, kept in the schema and inert: a marker
+  // has one nib, so what the pointer reports is never asked for.
   function toNote(e: ReactPointerEvent): [number, number, number] {
     const [x, y] = clientToNote(e.clientX, e.clientY);
     return [x, y, 0.5];
   }
 
-  // A sticker released off the sheet: dropped on the paper, it lands there to
-  // be placed (#80) — moved and turned until a press elsewhere sticks it.
-  // Nothing else about the editor moves — the held tool and the mode are
-  // somebody else's gesture.
   function dropSticker(
     emoji: StickerEl["emoji"],
     clientX: number,
@@ -673,9 +569,8 @@ export default function StickyEditor({
     // mat, not paper.
     const [x, y] = clientToNote(clientX, clientY);
     if (x < 0 || x > CANVAS || y < 0 || y > CANVAS) return false;
-    // The peel's own pointer-down fixed whatever was being placed; this is for
-    // a second finger that started placing something while the first carried
-    // the sticker.
+    // The peel's own pointer-down already fixed what was being placed; this is
+    // for a second finger that started placing while the first carried this one.
     fixPlacing();
     // Fixing it may have taken the last free slot, and `addElement` is a
     // silent no-op on a full note: refuse the drop so the sheet flies the
@@ -692,7 +587,6 @@ export default function StickyEditor({
   function onPaperDown(e: ReactPointerEvent<HTMLDivElement>) {
     e.preventDefault();
     if (!content || tearing || crumpling) return;
-    // A second finger never joins the first one's gesture: it takes it over.
     if (activeId.current !== null && activeId.current !== e.pointerId) {
       startPinch(e);
       return;
@@ -702,12 +596,8 @@ export default function StickyEditor({
     setFontsOpen(false);
     const live = contentRef.current ?? content;
     const [x, y, p] = toNote(e);
-    // Keep the gesture on the paper even when the pointer wanders off it.
     capturePointer(e);
 
-    // Placing (#80): the element being placed takes a press on its handles or
-    // its body. A press anywhere else fixes it and does nothing more — no
-    // stroke, no second box, no turn.
     const el = placingRef.current;
     if (el) {
       const grip = placingGrip(el, x, y);
@@ -716,10 +606,8 @@ export default function StickyEditor({
       return;
     }
 
-    // The open sticker sheet is what you hold (#86): the paper takes the
-    // peeled sticker's placing, above, and nothing else — no stroke, no box,
-    // no rub, no turn and no curl. The held tool is untouched, and reaches the
-    // paper again the moment the sheet goes down.
+    // The open sticker sheet is what you hold, so the paper takes only the
+    // peeled sticker's placing, above.
     if (sheetOpen) return;
 
     if (held === "eraser") {
@@ -760,11 +648,6 @@ export default function StickyEditor({
       return;
     }
 
-    // Hand mode: a placed element is never taken hold of (#79), so a press is
-    // only ever the paper's own — a bottom corner peels it, anywhere else on it
-    // (over what is drawn there too) turns it.
-    // `using`: the hand is working, so it lifts in its slot and a mouse's
-    // cursor closes.
     setUsing(true);
     const corner = curlCorner(live.curl, x, y);
     if (corner) {
@@ -775,17 +658,14 @@ export default function StickyEditor({
     startSpin(e, x, y);
   }
 
-  // The second finger. On a live stroke it drops the draft (a second finger is
-  // never more ink); either way the two fingers turn the note, whatever lies
-  // under them.
   function startPinch(e: ReactPointerEvent) {
     const first = activeId.current;
     const live = contentRef.current;
     const a = first === null ? undefined : points.current.get(first);
     if (!live || first === null || !a) return;
-    // Two fingers never twist what is being placed, nor turn the note out from
-    // under a drag on it; and a held tool that isn't mid-stroke (the eraser, a
-    // marker writing) keeps to one finger.
+    // A held tool that isn't mid-stroke (the eraser, a marker writing) keeps to
+    // one finger, and a drag on what is being placed is never turned out from
+    // under itself.
     if (
       sheetOpen ||
       placingDragRef.current ||
@@ -806,8 +686,6 @@ export default function StickyEditor({
     forceRender();
   }
 
-  // Both fingers, every move: how far round the second has swung, seen from
-  // the first, is how far the note turns.
   function pinchMove(e: ReactPointerEvent) {
     const pinch = pinchRef.current;
     const live = contentRef.current;
@@ -822,8 +700,6 @@ export default function StickyEditor({
     apply({ ...live, rotation: turnNote(pinch.rotation, turned) });
   }
 
-  // Take hold of the note at (x, y) in note units: from here on the rotation
-  // follows how far the pointer has swept round the paper's centre.
   function startSpin(e: ReactPointerEvent, x: number, y: number) {
     const rect = paperRef.current?.getBoundingClientRect();
     const live = contentRef.current;
@@ -842,9 +718,8 @@ export default function StickyEditor({
     setTurning(true);
   }
 
-  // The swept angle, applied to the note the gesture started from. Moves near
-  // the centre are ignored; a turn pressed there takes its starting angle from
-  // the first move out, so the note doesn't jump.
+  // A turn pressed near the centre takes its starting angle from the first move
+  // out, so the note doesn't jump.
   function spinTo(e: ReactPointerEvent) {
     const spin = spinRef.current;
     const live = contentRef.current;
@@ -873,8 +748,7 @@ export default function StickyEditor({
     if (!live) return;
     if (!busy()) {
       // A mouse can hover, so a bottom corner lifts under it before it is
-      // pressed (#69). A finger can't: its press shows the same mark. Not
-      // while something is being placed: a press there would only fix it.
+      // pressed; a finger can't.
       if (
         held === "hand" &&
         !sheetOpen &&
@@ -928,8 +802,6 @@ export default function StickyEditor({
     points.current.delete(e.pointerId);
     const pinch = pinchRef.current;
     if (pinch) {
-      // either finger leaving ends the gesture; the one still down starts
-      // nothing new until it is lifted and put back
       if (e.pointerId !== pinch.a && e.pointerId !== pinch.b) return;
       pinchRef.current = null;
       activeId.current = null;
@@ -942,18 +814,16 @@ export default function StickyEditor({
     const draft = draftRef.current;
     const dragged = placingDragRef.current !== null;
     endGesture();
-    // A sticker let go wholly off the paper goes back to its sheet (the sheet
-    // never runs out, so there is nothing to fly home): nothing is added.
+    // A sticker let go wholly off the paper is dropped, not added: the sheet it
+    // came from never runs out.
     const el = placingRef.current;
     if (dragged && el?.type === "sticker" && isOffNote(el)) {
       applyPlacing(null);
       return;
     }
     // iOS Safari raises the keyboard only for a focus() inside the gesture that
-    // asked for it — a frame later and the box is live with no keyboard under
-    // it. Keep this call synchronous here, and check it on a real phone. It
-    // runs after every press on a box being placed, too: a keyboard put away
-    // comes back up with the next touch on the box.
+    // asked for it, so this call stays synchronous here. It runs after every
+    // press on a box, so a keyboard put away comes back with the next touch.
     if (placingRef.current) {
       textRef.current?.focus();
       return;
@@ -966,7 +836,6 @@ export default function StickyEditor({
     forceRender();
   }
 
-  // One rub of the eraser: whatever is under the nib goes, with a fade.
   function rub(x: number, y: number) {
     const live = contentRef.current;
     if (!live) return;
@@ -977,12 +846,8 @@ export default function StickyEditor({
     apply(removeElement(live, hit));
   }
 
-  // --- placing (#80) -------------------------------------------------------
-
-  // Which part of the element being placed a press at (x, y) took hold of. The
-  // reach is a thumb's, HANDLE_TOUCH px across, for every pointer, a mouse's
-  // too; how many note units it covers depends on the size the sheet is drawn
-  // right now.
+  // The grab reach is HANDLE_TOUCH px for every pointer, a mouse's too; how many
+  // note units that covers depends on the size the sheet is drawn right now.
   function placingGrip(el: Placing, x: number, y: number): PlacingGrip | null {
     const rect = paperRef.current?.getBoundingClientRect();
     const side = rect?.width
@@ -991,9 +856,8 @@ export default function StickyEditor({
     return grabPlacing(el, x, y, (HANDLE_TOUCH / 2 / side) * CANVAS);
   }
 
-  // One move of a drag on the element being placed, measured from where the
-  // drag began and merged into the live element, so a letter typed mid-drag
-  // isn't lost. A move is settled back into the stored range as it goes.
+  // Measured from where the drag began, but merged into the live element, so a
+  // letter typed mid-drag isn't lost.
   function dragPlacing(drag: PlacingDrag, x: number, y: number) {
     const live = placingRef.current;
     if (!live) return;
@@ -1011,9 +875,8 @@ export default function StickyEditor({
     }
   }
 
-  // Placing ends here: the element goes onto the note for good. Safe to call
-  // twice: one press can arrive by the document's pointer-down and then by the
-  // handler it lands on.
+  // Safe to call twice: one press can arrive by the document's pointer-down and
+  // then by the handler it lands on.
   function fixPlacing() {
     const el = placingRef.current;
     if (!el) return;
@@ -1023,7 +886,6 @@ export default function StickyEditor({
     if (fixed && live) apply(addElement(live, fixed));
   }
 
-  // --- the tool riding the cursor -----------------------------------------
   // Positioned by hand rather than by state: a pointermove per frame must not
   // re-render the note.
   function followCursorTool(e: ReactPointerEvent) {
@@ -1039,20 +901,16 @@ export default function StickyEditor({
     if (el) el.style.opacity = "0";
   }
 
-  // Off the paper: the tool stops riding the cursor, and a corner lifted only
-  // because a mouse was over it settles back.
+  // Only a corner lifted by hover settles back; a peel in progress keeps its
+  // grip.
   function leavePaper() {
     hideCursorTool();
     if (!busy() && !pinchRef.current) setGripCorner(null);
   }
 
   const draft = draftRef.current;
-  // The image of the tool in your hand, for a fine pointer to carry. The hand
-  // has none: a mouse's own grab cursor already is one, and neither rides the
-  // pointer while the sticker sheet is what is held (#86).
+  // The hand carries no image: a mouse's own grab cursor already is one.
   const tool = held === "hand" || sheetOpen ? null : heldTool(held);
-  // The live stroke and the element being placed are elements like any other:
-  // each joins the end of the note while it is being made.
   const shown = !content
     ? content
     : placing
@@ -1063,12 +921,8 @@ export default function StickyEditor({
 
   return (
     <div className="absolute inset-0 select-none">
-      {/* The room the sheet stands in: bare paper, centred, clear of the tray
-          below and with PIN_ROOM above for "pin it up" taped over it. While the
-          sticker sheet is up (#86) its top edge is the floor instead, and the
-          tape is away, so the note has that room too — it moves up rather than
-          shrinking. A size container, so the paper below fits itself to what
-          room there is without anyone measuring anything. */}
+      {/* PIN_ROOM above is the room "pin it up" is taped in; the sticker sheet
+          takes the floor while it is up. A size container: the paper's 100cqh. */}
       <div
         ref={stage}
         className={`${STILL} pointer-events-none absolute inset-x-0 flex items-center justify-center`}
@@ -1083,8 +937,8 @@ export default function StickyEditor({
           <div
             className="relative"
             style={{
-              // Pinned up, the note is in the Spotlight: the mat slides away
-              // bare, and comes back up with it lying where it was.
+              // Hidden, not unmounted: the mat comes back up with the note
+              // lying where it was.
               visibility: pinning ? "hidden" : undefined,
             }}
           >
@@ -1100,12 +954,10 @@ export default function StickyEditor({
               onPointerCancel={onPaperUp}
               onPointerLeave={leavePaper}
               style={{
-                // Scaling down is the last resort (#86): the side is the note's
-                // own until the room the stage leaves is the smaller of the two.
-                // ponytail: the side, not the tilted box it really occupies,
-                // which is up to 7% bigger at 4°. Only a mat short enough for
-                // the cap to bite at all can lose a corner to it; take the
-                // tilt off the cap if one turns up.
+                // The width is the note's own side until the room the stage
+                // leaves is the smaller of the two.
+                // ponytail: capped on the side, not the bigger tilted box it
+                // occupies. Take the tilt off the cap if a mat ever clips one.
                 width: `min(${PAPER_SIDE}, 100cqh)`,
                 aspectRatio: NOTE_PAPER_ASPECT_RATIO,
                 filter: "drop-shadow(3px 9px 12px rgba(0,0,0,.45))",
@@ -1124,9 +976,8 @@ export default function StickyEditor({
             >
               <NotePaper content={shown} />
 
-              {/* The overlay rides inside the rotated sheet, so everything on
-                  it is drawn in plain note units and turns with the paper. It
-                  never takes the pointer: the paper under it does. */}
+              {/* The overlay rides inside the rotated sheet, so everything on it
+                  is drawn in plain note units and turns with the paper. */}
               {(placing || gripCorner) && (
                 <svg
                   viewBox={`0 0 ${CANVAS} ${CANVAS}`}
@@ -1159,10 +1010,8 @@ export default function StickyEditor({
                 </svg>
               )}
 
-              {/* WYSIWYG: the visible text is the SVG above; this only catches
-                  keystrokes, so it is invisible and never takes the pointer.
-                  No onBlur: a phone putting its keyboard away blurs it, and
-                  only a press elsewhere fixes the box (#80). */}
+              {/* No onBlur: a phone putting its keyboard away blurs this, and
+                  only a press elsewhere fixes the box. */}
               {placing?.type === "text" && (
                 <textarea
                   ref={textRef}
@@ -1180,18 +1029,11 @@ export default function StickyEditor({
               )}
             </div>
 
-            {/* "pin it up" (#82): taped just above the paper, in this frame
-                rather than on the paper, so it rides the sheet's shift with
-                the note but never turns with it. `w-max`: a box hung off the
-                middle would otherwise wrap in the half-width left to it.
-                `-translate-x-1/2` survives TAPE's inline `transform: rotate`
-                only because Tailwind v4 writes it to the separate CSS
-                `translate` property, which the browser applies alongside. */}
+            {/* In this frame rather than on the paper, so it rides the sheet's
+                shift with the note but never turns with it. */}
             <TapeLabel
               ref={pinButton}
               loud
-              // away while the sticker sheet is up or a text box is being
-              // written, at every size (#86): neither is a moment to pin up.
               away={
                 !landed ||
                 crumpling !== null ||
@@ -1199,6 +1041,9 @@ export default function StickyEditor({
                 placing?.type === "text"
               }
               onClick={pinUp}
+              // `-translate-x-1/2` survives TAPE's inline `transform: rotate`
+              // only because Tailwind v4 writes it to the separate CSS
+              // `translate` property, which the browser applies alongside
               className="-translate-x-1/2 pointer-events-auto absolute bottom-full left-1/2 mb-2 w-max"
             >
               pin it up
@@ -1214,14 +1059,9 @@ export default function StickyEditor({
         onTear={takeSheet}
       />
 
-      {/* The tray (#82): the mat's bottom edge, where the objects lie. ONE
-          centred row at every width — hand, markers, draw/write, sticker tab,
-          eraser, a gap, bin. Nothing wraps: the room a narrow screen takes
-          comes out of the gap before the bin, then out of the space BETWEEN
-          the markers (the SQUEEZE in MARKER_SLOT leans them on each other).
-          z-40: the sticker sheet (z-50) covers it, and the tray lies dim and
-          out of reach under it (#86) — the tab included, which stays put. While
-          a pad is being chosen the tray is away below the mat's edge. */}
+      {/* ONE centred row, nothing wrapping: the room a narrow screen takes
+          comes out of the gap before the bin, then the space between the
+          markers (the SQUEEZE in MARKER_SLOT). z-40: under the sheet's z-50. */}
       <div
         data-slot="tray"
         inert={choosing || sheetOpen}
@@ -1265,8 +1105,7 @@ export default function StickyEditor({
           font={font}
           fontsOpen={fontsOpen}
           onMode={(m) => {
-            // An ordinary tool press, so it fixes what is being placed —
-            // except "Aa" on a text box, which only brings its samples back.
+            // "Aa" spares only a text box, whose samples it brings back up.
             if (m === "draw" || placingRef.current?.type !== "text")
               fixPlacing();
             setMode(m);
@@ -1275,7 +1114,6 @@ export default function StickyEditor({
           onFont={(f) => {
             setFont(f);
             setFontsOpen(false);
-            // a box still being placed takes the new face at once
             const live = placingRef.current;
             if (live?.type === "text") applyPlacing({ ...live, font: f });
           }}
@@ -1293,14 +1131,12 @@ export default function StickyEditor({
           slot={ERASER_SLOT}
           onClick={() => pickUp("eraser")}
         >
-          {/* `using` is "some tool is working"; EraserBody lifts for it only
-              when the eraser is the tool in hand (#74) */}
           <EraserBody held={held === "eraser"} using={using} />
         </ToolSlot>
         <span aria-hidden="true" className="block" style={BIN_SPACER} />
-        {/* A press on the bin or its slip takes no focus, as on the rocker:
-            otherwise a tap on the bin while the slip asks moves focus out of
-            the slip, which closes it, and the bin's click asks again. */}
+        {/* A press here takes no focus: otherwise a tap on the bin while the slip
+            asks moves focus out of the slip, closing it, and the click asks
+            again. */}
         <div
           ref={binCorner}
           className="relative shrink-0"
@@ -1324,8 +1160,6 @@ export default function StickyEditor({
 
       <StickerSheet
         open={sheetOpen}
-        // Nothing to stick it to, or no room left: the sticker stays put. The
-        // tool shake belongs to the tool in your hand, and peeling holds none.
         canPeel={!!content && content.elements.length < MAX_ELEMENTS}
         onDrop={dropSticker}
         onClose={() => setSheetOpen(false)}
@@ -1335,21 +1169,17 @@ export default function StickyEditor({
         <PinUp
           content={pinning}
           onChange={onPinning}
-          // The page stops holding a note being pinned up, so the mat slides
-          // back up; the note on it never had the fastener, so it comes back
-          // without. Rendered now rather than after the handler: the mat is
-          // inert until it is up again, and focus can't reach anything in it.
+          // flushSync first: the mat is inert until it is up again, so focus
+          // can't reach the button before then.
           onBack={() => {
             flushSync(() => onPinning(undefined));
             pinButton.current?.focus();
           }}
-          // sent: the mat is bare again for the next note
           onPinned={clearMat}
         />
       )}
 
-      {/* the held tool, riding a mouse with its nib on the hotspot. Parked
-          off-screen until the pointer is over the paper. */}
+      {/* parked invisible until followCursorTool puts it under the pointer */}
       {fine && tool && (
         <div
           ref={cursorRef}
@@ -1364,14 +1194,11 @@ export default function StickyEditor({
   );
 }
 
-// The sheet's own transform: the tilt it is stored with (#76), under whatever
-// flight it is on. The tilt is the LAST transform in the list, so it turns the
-// paper about its own centre whatever the flight did to it — and the pointer
-// mapping reads that same centre back off the box.
+// The sheet's own transform: the stored tilt, under whatever flight it is on.
+// The tilt is the LAST transform in the list, so it turns the paper about its
+// own centre whatever the flight did to it.
 function noteMotion(
-  // where a sheet being torn off starts, for its first frame
   tearing: Offset | null,
-  // where the bin is, for a sheet on its way in
   crumpling: Offset | null,
   rotation: number,
   turning: boolean,
@@ -1383,8 +1210,6 @@ function noteMotion(
       opacity: 0,
       transition: `transform ${CRUMPLE_MS}ms cubic-bezier(.5,0,.8,.35), opacity ${CRUMPLE_MS}ms ease-in`,
     };
-  // Coming off its pad the sheet lifts — a touch bigger, its shadow thrown
-  // further — and both settle as it lands (the paper's own shadow is inline).
   if (tearing)
     return {
       // square to the screen, as it lay on its pad: no tilt yet
@@ -1401,8 +1226,7 @@ function noteMotion(
   };
 }
 
-// The hidden textarea sits exactly over the box it is typing into, in percent
-// so it needs no measurement of the paper.
+// In percent, so the hidden textarea needs no measurement of the paper.
 function textBoxStyle(el: TextEl): CSSProperties {
   const b = bounds(el);
   const pc = (n: number) => `${(n / CANVAS) * 100}%`;

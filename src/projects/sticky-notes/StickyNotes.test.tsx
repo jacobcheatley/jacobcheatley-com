@@ -12,15 +12,13 @@ import { SHAKE_MS } from "./desk-objects";
 import type { NoteContent } from "./note-schema";
 import { StickyNotes } from "./StickyNotes";
 
-// The whole page (#88): the wall, the mat over it, and pinning a note up from
-// one into the Spotlight over the other. The route's only contribution is
-// `matUp` (whether the URL is /sticky-notes/new), so the tests drive that prop
-// the way Back and the invite drive the URL. Motion is CSS and FLIP; these
-// assert the state it carries, never the flight.
+// The route's only contribution is `matUp` (whether the URL is
+// /sticky-notes/new), so the tests drive that prop the way Back and the invite
+// drive the URL. Motion is CSS and FLIP; these assert the state it carries.
 
 // The router and the write server fn don't belong in jsdom: stub them at the
-// seams, as the phase-1 editor tests did. The note and its contract run for
-// real. The factories read these lazily, so declaring them below is fine.
+// seams. `vi.mock` is hoisted above these declarations, so the factories have
+// to read them lazily.
 const navigate = vi.fn();
 const addNote = vi.fn();
 
@@ -56,12 +54,9 @@ const approved = (author: string) => ({
   } satisfies NoteContent,
 });
 
-// --- what there is to look at ----------------------------------------------
-
 // The mat is the surface the "← the wall" link is stuck to.
 const mat = () =>
   screen.getByRole("link", { name: /the wall/i }).parentElement as HTMLElement;
-// the scene a note is pinned up in, and the note lifted into it
 const scene = () => screen.queryByRole("dialog", { name: /pin it up/i });
 const lifted = () => document.querySelector<HTMLElement>("[data-spotlight]");
 // the sheet lying on the mat, as opposed to any note on the wall
@@ -73,7 +68,6 @@ const choices = () =>
   within(scene() as HTMLElement).getAllByRole("button", {
     name: /^fasten it with/i,
   });
-// what the lifted note is fastened with, as it wears it
 const fastenedWith = () =>
   lifted()?.querySelector("[data-press]")?.getAttribute("data-press") ?? "none";
 const nameTag = () => screen.queryByRole("textbox", { name: /your name/i });
@@ -82,14 +76,10 @@ const tag = () => nameTag()?.parentElement as HTMLElement;
 const tick = () => screen.getByRole("button", { name: /sign the tag/i });
 const backTape = () =>
   screen.getByRole("button", { name: /back to the desk/i });
-// what the one POST carried
 const posted = () => addNote.mock.calls[0]?.[0]?.data;
 const storedPending = () =>
   JSON.parse(localStorage.getItem("sticky-notes:pending") ?? "[]");
-// the submit's navigation, as the router would be asked for it
 const backToTheWall = { to: "/sticky-notes", replace: true };
-
-// --- what there is to do -----------------------------------------------------
 
 const tap = (name: RegExp) =>
   fireEvent.click(screen.getByRole("button", { name }));
@@ -105,8 +95,8 @@ async function tearOff(colour: string) {
   await waitFor(() => expect(matPaper()).toHaveAttribute("aria-busy", "false"));
 }
 
-// a mark on the sheet, so there is content to come back with — a torn sheet
-// comes with the black marker already in hand (#84)
+// a mark on the sheet, so there is content to come back with: a torn sheet
+// comes with the black marker already in hand, so no tool is picked up first
 function drawAStroke() {
   const paper = matPaper() as HTMLElement;
   fireEvent.pointerDown(paper, { pointerId: 1, clientX: 10, clientY: 10 });
@@ -114,15 +104,12 @@ function drawAStroke() {
   fireEvent.pointerUp(paper, { pointerId: 1, clientX: 30, clientY: 20 });
 }
 
-// With the mat up (each test renders the page itself, for its `rerender`):
-// a sheet torn off, marked if asked, and pinned up...
 type Sheet = { colour?: string; marked?: boolean };
 async function pinnedUp({ colour = "yellow", marked = false }: Sheet = {}) {
   await tearOff(colour);
   if (marked) drawAStroke();
   pinItUp();
 }
-// ...then fastened with a red pin.
 async function fastened(sheet?: Sheet) {
   await pinnedUp(sheet);
   tap(/with a red pin/i);
@@ -177,10 +164,9 @@ describe("StickyNotes pin it up", () => {
     expect(lifted()?.closest("[inert]")).toBeNull();
     expect(document.querySelector("[inert]")).not.toBeNull();
     expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
-    // it flew off the mat: there is no second copy of it left lying there
+    // it flew off the mat: no second copy of it left lying there
     expect(matPaper()).not.toBeVisible();
-    // and nothing of it is put in the wall's newest slot: the board still
-    // holds the invite and sam's note, and nothing else
+    // the board still holds the invite and sam's note, and nothing else
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
@@ -193,7 +179,6 @@ describe("StickyNotes pin it up", () => {
     expect(choices()).toHaveLength(9);
     expect(pinning).toContainElement(nameTag());
     expect(pinning).toContainElement(backTape());
-    // nothing rises or collapses: no box of stationery, no tab to open it
     expect(screen.queryByRole("region")).toBeNull();
     expect(screen.queryByRole("button", { name: /^fasteners$/i })).toBeNull();
   });
@@ -241,13 +226,13 @@ describe("StickyNotes tag", () => {
     expect(input).toHaveAttribute("spellcheck", "false");
     expect(input).toHaveAttribute("maxlength", "50");
     expect(input).toHaveAttribute("placeholder", "sign here");
-    // and the managers' own opt-outs, one per manager
+    // the managers' own opt-outs, one per manager
     expect(input).toHaveAttribute("data-1p-ignore");
     expect(input).toHaveAttribute("data-lpignore", "true");
     expect(input).toHaveAttribute("data-bwignore");
     expect(input).toHaveAttribute("data-form-type", "other");
-    // a class on purpose: #77 asks for CSS text-transform, so the name shows
-    // lowercase as it is typed (the schema lowercases what is stored)
+    // a class on purpose: CSS text-transform shows the name lowercase as it is
+    // typed, while the schema lowercases what is stored
     expect(input).toHaveClass("lowercase");
   });
 
@@ -315,7 +300,6 @@ describe("StickyNotes focus", () => {
     await pinnedUp();
     expect(nameTag()).not.toHaveFocus();
 
-    // nor when a fastener is chosen — the keyboard stays on the choice made
     tap(/with a red pin/i);
     expect(nameTag()).not.toHaveFocus();
   });
@@ -340,7 +324,6 @@ describe("StickyNotes abandoning a pin", () => {
     expect(matPaper()).toBeVisible();
     expect(matPaper()).toHaveAttribute("data-colour", "pink");
     expect(marksOnTheMat()).toBe(1);
-    // pinned up again, it goes as it left the mat: no fastener yet
     pinItUp();
     expect(fastenedWith()).toBe("none");
   });
@@ -359,7 +342,7 @@ describe("StickyNotes abandoning a pin", () => {
     render(<StickyNotes notes={[]} matUp />);
     await pinnedUp();
 
-    // no × and no way out on the scrim: pinning brings its own
+    // no × and no way out on the scrim: the pinning brings its own
     expect(screen.queryByRole("button", { name: /close note/i })).toBeNull();
     fireEvent.click(scene() as HTMLElement);
     expect(scene()).not.toBeNull();
@@ -395,11 +378,9 @@ describe("StickyNotes leaving the mat mid-placing", () => {
     });
 
     rerender(<StickyNotes notes={[approved("sam")]} matUp={false} />); // Back
-    // kept, and no longer being placed
     expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
     expect(marksOnTheMat()).toBe(1);
 
-    // the wall's own Escape still reaches it, and a press there fixes nothing
     tap(/zoom note by sam/i);
     // sent where the key goes, so an editor listener could stop it on the way
     fireEvent.keyDown(document.activeElement as HTMLElement, {
@@ -438,7 +419,6 @@ describe("StickyNotes submit", () => {
 
     expect(tag()).toHaveAttribute("aria-busy", "true");
     expect(tick()).toBeDisabled();
-    // what was posted is what lands: no changing the fastener under it now
     for (const choice of choices()) expect(choice).toBeDisabled();
   });
 
@@ -502,7 +482,6 @@ describe("StickyNotes submit", () => {
     rerender(<StickyNotes notes={[]} matUp={false} />);
     rerender(<StickyNotes notes={[]} matUp />);
     expect(matPaper()).toBeNull(); // a fresh start, not the note just sent
-    // the pad chooser, with the keyboard on it
     expect(
       screen.getByRole("button", { name: /tear off a yellow sheet/i }),
     ).toHaveFocus();
