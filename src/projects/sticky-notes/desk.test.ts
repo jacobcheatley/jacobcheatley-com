@@ -15,8 +15,6 @@ describe("centreOffset", () => {
   });
 });
 
-// The pinned note's flight, as the numbers it starts from: the wall tile moved
-// and scaled so the sheet in it lies back where the sheet lay on the mat.
 describe("flightTransform", () => {
   it("moves a tile the size of the sheet straight back over it", () => {
     const sheet = { left: 40, top: 300, width: 120, height: 120 };

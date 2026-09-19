@@ -10,9 +10,8 @@ import { CANVAS, type NoteContent } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
 // What the editor draws over the note: the caret, the grip, and the outline and
-// handles of the element being placed (#80). Stateless — handed an
-// element, it draws it — so it lives apart from StickyEditor's gesture shell,
-// which only decides what shows.
+// handles of the element being placed. Stateless, so it lives apart from
+// StickyEditor's gesture shell, which decides what shows.
 
 type TextEl = Extract<NoteElement, { type: "text" }>;
 
@@ -22,11 +21,9 @@ const CARET_MS = 1000; // one blink, on a step: a cursor snaps, it doesn't fade
 // The shell catches it from much further away (HANDLE_TOUCH).
 const HANDLE_R = 7;
 
-// The caret's tip, in the text's OWN space: just past the last glyph of the
-// last line, on that line's baseline. Measured off the tspans NoteRender
-// actually drew — the same ones, so the caret cannot drift from the text — and
-// estimated from `wrapLines` when there is nothing to measure yet: the very
-// first paint, and jsdom, which lays out no glyphs at all.
+// The caret's tip, in the text's OWN space: just past the last glyph of the last
+// line, on that line's baseline. Measured off the tspans NoteRender drew, so the
+// caret cannot drift from the text; estimated where no glyphs are laid out yet.
 export function caretAt(
   paper: HTMLDivElement | null,
   el: TextEl,
@@ -46,7 +43,7 @@ export function caretAt(
   const tspan = tspans?.[tspans.length - 1];
   if (typeof tspan?.getEndPositionOfChar !== "function") return estimate;
   try {
-    // Coordinates in the <text>'s own space, before its rotation — so the caret
+    // Coordinates in the <text>'s own space, before its rotation, so the caret
     // is drawn inside that same rotation (caretRect).
     const end = tspan.getEndPositionOfChar(last.length - 1);
     return { x: end.x, y: end.y };
@@ -56,9 +53,7 @@ export function caretAt(
   }
 }
 
-// A bar in the draft's own ink, standing on the baseline. It blinks on a step
-// so it reads as a cursor rather than a fade, and holds steady for anyone who
-// asked for less motion.
+// A bar in the draft's own ink, standing on the baseline.
 export function caretRect(at: { x: number; y: number }, el: TextEl) {
   const h = el.fontSize * 1.05;
   return (
@@ -78,7 +73,6 @@ export function caretRect(at: { x: number; y: number }, el: TextEl) {
 }
 
 // The corner the hand has hold of, or a mouse is over: the crease that peels.
-// A turn needs no mark — the note turning under the pointer is the feedback.
 export function gripMark(grip: Corner, curl: NoteContent["curl"]) {
   const f = Math.max(curl[grip] * MAX_FOLD, 12);
   return (
@@ -98,9 +92,9 @@ export function gripMark(grip: Corner, curl: NoteContent["curl"]) {
   );
 }
 
-// The dashed box around an element, in note units — inside the element's own
-// rotation, so the outline lies on the thing rather than around it. A stroke
-// has no rotation of its own: its box is the ink's.
+// The dashed box around an element, in note units, inside the element's own
+// rotation, so the outline lies on the thing rather than around it. A stroke has
+// no rotation of its own: its box is the ink's.
 export function outlineRect(el: NoteElement) {
   const b = bounds(el);
   const box = (
@@ -120,9 +114,8 @@ export function outlineRect(el: NoteElement) {
   return <g transform={`rotate(${el.rotation} ${el.x} ${el.y})`}>{box}</g>;
 }
 
-// An element's handles: one at the box's far corner that only turns it, and on
-// a text box a second on its right edge for the width it wraps at. Drawn small —
-// they sit on a note, not a toolbar — and caught from HANDLE_TOUCH px away.
+// An element's handles: one at the box's far corner that only turns it, and on a
+// text box a second on its right edge for the width it wraps at.
 export function handleMarks(el: NoteElement) {
   const handles = elementHandles(el);
   if (!handles) return null;

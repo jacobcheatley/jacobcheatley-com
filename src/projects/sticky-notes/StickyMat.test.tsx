@@ -3,11 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { StickyMat } from "./StickyMat";
 
-// TanStack's <Link> needs a router context; the wall's own test stubs it the
-// same way. The route → `up` derivation itself is one `useMatch` call in
-// `src/routes/sticky-notes.tsx`; mounting the real route tree here would drag in
-// the root shell document and the loader's server fn for one boolean, so the mat
-// is tested at its prop and the derivation is left to the browser check.
+// TanStack's <Link> needs a router context. Mounting the real route tree here
+// would drag in the root shell document and the loader's server fn for one
+// boolean, so the mat is tested at its `up` prop.
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: React.PropsWithChildren<{ to?: string }>) => (
     <a href={to}>{children}</a>
@@ -38,9 +36,8 @@ describe("StickyMat", () => {
   });
 
   it("keeps the island mounted once the mat has been up", async () => {
-    // The acceptance criterion behind the latch: a half-built note must survive
-    // mat-down, so the editor may not unmount when the route goes back to the
-    // wall. A pad on the bare mat's chooser is the island's stable marker.
+    // A half-built note must survive mat-down, so the editor may not unmount.
+    // A pad on the bare mat's chooser is the island's stable marker.
     const { rerender } = render(<StickyMat up={true} />);
     const editor = await screen.findByRole("button", {
       name: /tear off a yellow sheet/i,

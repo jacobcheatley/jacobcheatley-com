@@ -12,8 +12,8 @@ import {
 } from "./note-render";
 import { CANVAS, FASTENERS, type NoteContent } from "./note-schema";
 
-// createElement (not JSX) keeps this a .test.ts in the node project, which also
-// proves the acceptance criterion: NoteRender renders with no browser/DOM.
+// createElement (not JSX) keeps this a .test.ts in the node project, so it also
+// pins that NoteRender needs no browser or DOM.
 function render(content: NoteContent) {
   return renderToStaticMarkup(createElement(NoteRender, { content }));
 }
@@ -89,11 +89,9 @@ describe("NoteRender", () => {
     ] as const;
     const outputs = keys.map((fastener) => render({ ...content, fastener }));
     const out = (k: (typeof keys)[number]) => outputs[keys.indexOf(k)] ?? "";
-    // every fastener produces different output
     expect(new Set(outputs).size).toBe(keys.length);
     expect(out("pin-red")).toContain("#e11d48"); // red pin head
     expect(out("pin-blue")).toContain("#2563eb"); // blue pin head
-    // the single staple and the two-corner staples differ
     expect(out("staples")).not.toBe(out("staple"));
   });
 
@@ -106,8 +104,8 @@ describe("NoteRender", () => {
   });
 
   it("draws the fixed nib whatever pressure a point carries", () => {
-    // a marker has no pressure (#84): a mouse (0.5), a touch (0 or 1) and a
-    // pen (light force) all stored a number here, and all must render alike
+    // a marker has no pressure: a mouse (0.5), a touch (0 or 1) and a pen
+    // (light force) all store a number here, and all must render alike
     const stroke = (pressure: number): NoteContent => ({
       ...content,
       elements: [
@@ -157,7 +155,6 @@ describe("NotePaper", () => {
 
   it("keeps the paper layer identical to the composed render", () => {
     const paper = renderPaper({ ...content, curl: { bl: 0.4, br: 0.6 } });
-    // same content, same folds — the mat shows exactly what the wall will
     expect(paper).toContain("hello");
     expect(paper).toContain("\u2b50");
     expect(paper).toContain("feDropShadow");

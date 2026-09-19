@@ -3,8 +3,7 @@ import { db } from "@/db/index.server";
 import type { NoteSubmission } from "./note-schema";
 import { stickyNotes } from "./schema";
 
-// Inserts a pending note (approvedAt stays null until the approval CLI sets it)
-// and returns its id.
+// approvedAt stays null until the approval CLI sets it, so the note is pending.
 export async function addNote(note: NoteSubmission) {
   const [row] = await db
     .insert(stickyNotes)
@@ -14,7 +13,6 @@ export async function addNote(note: NoteSubmission) {
   return row.id;
 }
 
-// Approved notes only (approvedAt set by the approval CLI), newest first.
 export function listApprovedNotes(limit = 100) {
   return db
     .select()
@@ -24,8 +22,6 @@ export function listApprovedNotes(limit = 100) {
     .limit(limit);
 }
 
-// Pending notes (approvedAt still null), newest first — what the approval CLI
-// renders for the owner to judge.
 export function listPendingNotes() {
   return db
     .select()
@@ -34,8 +30,7 @@ export function listPendingNotes() {
     .orderBy(desc(stickyNotes.createdAt), desc(stickyNotes.id));
 }
 
-// Approves a note that is still pending. Returns rows affected: 1 on success,
-// 0 for an unknown or already-approved id (nothing changes either way).
+// Returns rows affected: 1 on success, 0 for an unknown or already-approved id.
 export async function approveNote(id: number) {
   const rows = await db
     .update(stickyNotes)

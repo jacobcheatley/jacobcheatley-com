@@ -10,28 +10,23 @@ import {
   type PaperColour,
 } from "./note-schema";
 
-// The things lying on the cutting mat, drawn: the pads on the chooser, the
-// hand, the markers, the eraser, the draw/write rocker, the bin and its slip. Props in,
-// CSS out — no model, no pointer handling, no state of their own. StickyEditor
-// owns all of that and wears these.
+// The things lying on the cutting mat, drawn. Props in, CSS out: no model, no
+// pointer handling, no state of their own — StickyEditor owns all of that.
 
-// The sheet's side on the mat, and so each pad's on the chooser: a pad is the
-// note's real size (#81). `svh` is the height with a phone browser's toolbars
-// showing: `vh` counts them hidden, and the stack, which fits to the chooser's
-// real height, would lose its last pad under them.
+// The sheet's side on the mat, and each pad's on the chooser: a pad is the note's
+// real size. `svh`, not `vh`: `vh` counts a phone browser's toolbars hidden, and
+// the stack, which fits the chooser's real height, would lose a pad under them.
 export const PAPER_SIDE = "min(88vw, 60svh)";
 const CHOOSER_MS = 400; // the pads left behind sliding away, or back
 
-const LIFT_MS = 220; // cap off, body lifts — the bit #70 liked most
+const LIFT_MS = 220; // cap off, body lifts
 const PRESS_MS = 160; // a font chip or the sticker tab pressed in
 
-// Tool sizes. The tray is ONE row at every width (#74, #82), so nothing on it may
-// wrap, grow or shrink: each object lies in a box of a fixed size, and every
-// lift, tilt and cap-off inside that box is a transform, which cannot move its
-// neighbours. A marker's box is only as wide as the marker (they sit shoulder
-// to shoulder on a phone); its 88px height is what keeps it a thumb target.
+// Tool sizes. The tray is ONE row at every width, so nothing on it may wrap,
+// grow or shrink: each object lies in a box of a fixed size, and every lift,
+// tilt and cap-off inside that box is a transform, which cannot move a neighbour.
 const TOUCH = 48;
-const MARKER_W = 30; // drawn width — the T0 verdict (#70) wanted fatter objects, not just fatter targets
+const MARKER_W = 30; // drawn width: the marker is narrower than its target
 const MARKER_H = 72;
 const TOOL_H = 88;
 const ERASER_W = 40;
@@ -43,25 +38,21 @@ const HAND_H = 50;
 const ROCKER_W = TOUCH;
 const ROCKER_H = TOUCH;
 const FONT_CHIP = TOUCH;
-// The sticker tab: drawn as a sheet corner, and its own target.
 const STICKER_TAB_W = 40;
 const STICKER_TAB_H = 44;
 const BIN_W = TOUCH;
 const BIN_H = 56;
 
 // The space between neighbours in the tray: whatever room the screen has left,
-// and none at all on a narrow phone. The markers "really don't need spacing"
-// (owner, #74) — closing up is what keeps the tray one row.
+// and none at all on a narrow phone, which is what keeps the tray one row.
 export const DESK_GAP = "clamp(0px, 1.5vw - 5px, 12px)";
-// Past zero the four markers lean on each other rather than wrap. ponytail: 4px
-// a side is the ceiling — 8px of overlap between neighbours, which is where a
-// 30px marker still reads as a separate pen. If a narrower phone than 320
-// turns up, take the width off the bin and the sticker tab, not off this.
 // The width the markers start squeezing at; the bin gap (below) closes there too.
 const SQUEEZE_FROM = "100vw - 420px";
+// Past zero the four markers lean on each other rather than wrap.
+// ponytail: 4px a side is the ceiling, 8px of overlap, where a 30px marker still
+// reads as a separate pen; take width off the bin and the tab before this.
 const SQUEEZE = `clamp(-4px, (${SQUEEZE_FROM}) / 25, 0px)`;
 
-// The fixed boxes the tray's objects lie in.
 export const MARKER_SLOT: CSSProperties = {
   width: MARKER_W,
   height: TOOL_H,
@@ -72,11 +63,9 @@ export const HAND_SLOT: CSSProperties = { width: HAND_W, height: TOOL_H };
 
 // The tray's lip under the objects, clear of a phone's home indicator.
 export const TRAY_PAD = "max(0.75rem, env(safe-area-inset-bottom))";
-// The room before the bin: up to 32px from the eraser on a wide screen, and
-// nothing at all below 420px, where the markers are already squeezing (#84) —
-// no screen that tight has room to hold the bin off. The spacer takes back the
-// row gap on its far side, so the gaps either side of it don't count twice; a
-// shrinkable flex item, it gives up its width before anything else has to.
+// The room before the bin: up to 32px from the eraser on a wide screen, nothing
+// at all where the markers are already squeezing. The negative margin takes back
+// the row gap on its far side, so the gaps either side don't count twice.
 export const BIN_SPACER: CSSProperties = {
   width: `clamp(0px, (${SQUEEZE_FROM}) / 8, 32px - ${DESK_GAP})`,
   marginInlineEnd: `calc(-1 * ${DESK_GAP})`,
@@ -97,9 +86,8 @@ const ERASER_HOTSPOT: [number, number] = [5, ERASER_H - 3];
 export type Mode = "draw" | "write";
 
 // A tool lying in its slot on the mat: the object plus the shadow that IS the
-// slot. The whole slot is the target, and its box is fixed (`slot`) — the tool
-// inside it lifts and tilts by transform only, so picking up or using one tool
-// can never shift the object beside it (#74).
+// slot. The whole slot is the target, and the tool inside its fixed box lifts and
+// tilts by transform only, so it can never shift the object beside it.
 export function ToolSlot({
   label,
   held,
@@ -112,7 +100,7 @@ export function ToolSlot({
   held: boolean;
   // the note is full: rock the tool so the dead pointer-down says something
   shake?: boolean;
-  // the fixed box this tool lies in, from the sizes above
+  // the fixed box this tool lies in
   slot: CSSProperties;
   onClick: () => void;
   children: ReactNode;
@@ -149,9 +137,9 @@ export function ToolSlot({
   );
 }
 
-// A capped marker. Picked up, the cap twists off and drops beside the slot while
-// the body lifts; mid-stroke it leans further (the coarse-pointer stand-in for
-// a tool riding the cursor).
+// A capped marker: the cap twists off beside the slot as the body lifts, and
+// mid-stroke it leans further — the coarse-pointer stand-in for a tool riding
+// the cursor.
 export function MarkerBody({
   ink,
   held = false,
@@ -237,8 +225,6 @@ export function MarkerBody({
   );
 }
 
-// How the eraser and the hand rise out of their slots: up when held, higher
-// and tipped further while they work.
 function lift(held: boolean, using: boolean): CSSProperties {
   return {
     transform: !held
@@ -250,10 +236,9 @@ function lift(held: boolean, using: boolean): CSSProperties {
   };
 }
 
-// A block eraser: cream rubber with a purple band. It lifts only when it is the
-// thing in your hand — `using` is the editor's "a tool is working" flag, and
-// reading it on its own is what made the eraser rise every time a marker drew
-// a stroke (#74). MarkerBody has always gated it on `held`; this now matches.
+// A block eraser: cream rubber with a purple band. It lifts only while it is the
+// tool in hand: `using` is the editor's "a tool is working" flag, true while a
+// marker draws too, so it counts only alongside `held`.
 export function EraserBody({
   held = false,
   using = false,
@@ -288,9 +273,8 @@ export function EraserBody({
   );
 }
 
-// The hand (#82): an open-hand cut-out lying in the tray, for holding nothing
-// but the note itself. It lifts like the eraser when it is the one held, and
-// further while it turns or peels the note.
+// An open-hand cut-out lying in the tray, for holding nothing but the note
+// itself.
 export function HandBody({
   held = false,
   using = false,
@@ -332,8 +316,7 @@ export function HandBody({
   );
 }
 
-// The tool in your hand, as the image that rides a fine pointer: where the
-// pointer sits inside it, the tilt around that point, and the object itself.
+// The tool in your hand, as the image that rides a fine pointer.
 export function heldTool(held: Ink | "eraser"): {
   hotspot: [number, number];
   style: CSSProperties;
@@ -351,7 +334,7 @@ export function heldTool(held: Ink | "eraser"): {
   };
 }
 
-// One font sample: the name of the face, written in it, on a chip of card.
+// One font sample: "Aa" on a chip of card, in the face it would write.
 export function FontChip({
   font,
   active,
@@ -394,7 +377,6 @@ export function FontChip({
 // Draw or write with the marker in your hand: one rocker, tinted with that
 // marker's ink so it reads as part of it, inert and grey while the hand or the
 // eraser is held.
-// The "Aa" side opens the four font samples, each in its own face.
 export function ModeControl({
   ink,
   mode,
@@ -411,8 +393,8 @@ export function ModeControl({
   fontsOpen: boolean;
   onMode: (m: Mode) => void;
   onFont: (f: Font) => void;
-  // the editor closes the samples on a press anywhere but in here. React 19
-  // hands a function component its `ref` as a plain prop: no forwardRef.
+  // the editor closes the samples on a press anywhere but in here; a plain prop
+  // in React 19, no forwardRef
   ref?: Ref<HTMLDivElement>;
 }) {
   const tint = ink ? INK[ink] : GREY;
@@ -454,7 +436,7 @@ export function ModeControl({
       className="relative shrink-0"
       // A press here takes no focus: a text box being placed keeps its hidden
       // textarea focused, so a phone keeps its keyboard up while a font is
-      // picked for it (#80). The click still happens.
+      // picked for it. The click still happens.
       onPointerDown={(e) => e.preventDefault()}
     >
       <div
@@ -501,8 +483,7 @@ export function ModeControl({
         )}
       </div>
 
-      {/* the samples ARE the choice: each label in its own face. Centred on
-          the rocker, which sits near the middle of the centred tray (#82):
+      {/* Centred on the rocker, which sits near the middle of the centred tray:
           hung off either edge, the row runs off a 360px mat. */}
       {ink && fontsOpen && (
         <div className="-translate-x-1/2 absolute bottom-[calc(100%+10px)] left-1/2 z-30 flex gap-1.5">
@@ -521,10 +502,9 @@ export function ModeControl({
   );
 }
 
-// How each pad lies in the chooser (#85): a turn and a nudge, keyed by paper
-// colour, so the same pad always lies the same way and nothing flickers
-// between renders. Within ±3° and ±6px — enough to read as tossed down, not as
-// a mistake. (The lean the mat allows for is in `.pad-stacks`, styles.css.)
+// How each pad lies in the chooser: a turn and a nudge keyed by paper colour, so
+// the same pad always lies the same way and nothing flickers between renders.
+// Within ±3° and ±6px, enough to read as tossed down rather than as a mistake.
 export const PAD_JITTER: Record<
   PaperColour,
   readonly [number, number, number]
@@ -537,19 +517,15 @@ export const PAD_JITTER: Record<
   white: [-3, -2, 3],
 };
 
-// that lie as a transform, the turn about the pad's own centre
+// that lie as a transform: the turn is about the pad's own centre
 const lie = (colour: PaperColour) => {
   const [deg, dx, dy] = PAD_JITTER[colour];
   return `translate(${dx}px, ${dy}px) rotate(${deg}deg)`;
 };
 
-// The pad chooser (#81, #85): with no note on the mat, the mat is six pads at
-// the note's real size, square to the screen, in as many columns as fit across
-// — one, two or three — each column a stack where every pad shows a strip and
-// the last lies whole on top. The columns and the peek are `.pad-stacks` in
-// styles.css: they need container queries, which no inline style can hold. Put
-// away, the pads slide off and fade — all but the one torn from, which has just
-// become the sheet.
+// The pad chooser: with no note on the mat, the mat is six pads at the note's
+// real size, in as many columns as fit. The columns and the peek are
+// `.pad-stacks` in styles.css: container queries, which no inline style holds.
 export function PadChooser({
   putAway,
   torn,
@@ -582,10 +558,9 @@ export function PadChooser({
             type="button"
             aria-label={`Tear off ${colour === "orange" ? "an" : "a"} ${colour} sheet`}
             onClick={(e) => onTear(colour, e.currentTarget)}
-            // The focus ring drawn inside the pad: outside, the rest of the
-            // pad's ring pokes out from under the pads stacked over it. `!`
-            // because the site-wide focus ring is unlayered CSS, which beats
-            // any utility that isn't important.
+            // The focus ring drawn inside the pad: outside, it pokes out from
+            // under the pads stacked over it. `!` because the site-wide focus
+            // ring is unlayered CSS, which beats any utility that isn't important.
             className={`focus-visible:-outline-offset-4! rounded-[3px] border-0 p-0 ${STILL}`}
             style={{
               width: PAPER_SIDE,
@@ -661,9 +636,9 @@ export function Bin({
   );
 }
 
-// The bin's question (#81): a slip of paper that pops up over the bin before a
-// note with anything on it goes in. What a press anywhere else means is the
-// editor's business.
+// The bin's question: a slip of paper that pops up over the bin before a note
+// with anything on it goes in. What a press anywhere else means is the editor's
+// business.
 export function BinSlip({
   onBin,
   onKeep,
@@ -728,9 +703,8 @@ export function BinSlip({
   );
 }
 
-// The sticker sheet's tab (#75): the corner of a sheet of stickers lying in
-// the tray. It stays there while the sheet is up (#82), pressed in, and is
-// still the thing you tap to put the sheet away.
+// The corner of a sheet of stickers lying in the tray. It stays there, pressed
+// in, while the sheet is up, and is still the thing you tap to put it away.
 export function StickerTab({
   open,
   onClick,
@@ -782,11 +756,9 @@ export function StickerTab({
   );
 }
 
-// "pin it up" (#82) is loud tape hung just above the note, and the editor keeps
-// PIN_ROOM clear over the paper for it: one line of its text, its padding, the
-// gap it stands off the paper by, and the few px its tilt lifts one end (-2.2°
-// across ~180px of tape is ~7px, half of it above the middle). The label is
-// sized from these same numbers, so the room and the tape can't drift apart.
+// The room the editor keeps clear over the paper for the loud "pin it up" tape:
+// one line of its text, its padding, the gap it stands off by, and the few px its
+// -2.2° tilt lifts one end. The label is sized from these same numbers.
 const LOUD_TEXT = 38; // px, twice the quiet tape's
 const LOUD_LINE = 1.375; // Tailwind's leading-snug, as the quiet tape has
 const LOUD_PAD_Y = 12;
@@ -797,7 +769,7 @@ export const PIN_ROOM = Math.ceil(
 );
 
 // A strip of masking tape with a word on it, in the casual hand: the desk's own
-// buttons ("pin it up", "back to the desk"), stuck on rather than printed.
+// buttons, stuck on rather than printed.
 export function TapeLabel({
   children,
   onClick,
@@ -808,10 +780,9 @@ export function TapeLabel({
 }: {
   children: ReactNode;
   onClick: () => void;
-  // "pin it up" (#82): the one thing on the mat that should shout, so twice
-  // the size, on the site's orange, standing PIN_GAP off what it hangs over.
-  // Not bold: the casual hand comes in one weight, and the browser would fake
-  // a second.
+  // "pin it up": the one thing on the mat that should shout, so twice the size
+  // and on the site's orange. Not bold: the casual hand comes in one weight, and
+  // the browser would fake a second.
   loud?: boolean;
   // what it labels is in flight: faded out, and out of reach until it lands
   away?: boolean;

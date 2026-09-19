@@ -48,10 +48,8 @@ body {
   outline-offset: 2px;
 }
 
-/* The sticky-notes desk (#74): its one keyframed motion, for the held tool
-   saying no when the note is already full. Everything else on the mat is a
-   transition timed from a JS constant, so only the frames live here — the
-   duration is applied inline, and motion-reduce:animate-none! turns it off. */
+/* Frames only: the duration comes inline from a JS constant, and
+   motion-reduce:animate-none! on the shaking object turns it off. */
 @keyframes desk-shake {
   25% {
     transform: translateX(-5px);
@@ -61,11 +59,10 @@ body {
   }
 }
 
-/* The press-on (#77): a fastener chosen for the note just pinned up. The
-   fastener comes down from a little above the board and overshoots as it goes
-   in; the note gives under the thumb and settles. One generic motion for all
-   nine. Unlike the desk's other motion the timing lives here too: the
-   fastener layer is inside the note's SVG, where no inline style reaches. */
+/* One press-on for all nine fasteners: it comes down from above the board and
+   overshoots as it goes in, and the note gives under the thumb. The timing
+   lives here rather than inline because the fastener layer is inside the note's
+   SVG, where no inline style reaches. */
 @media (prefers-reduced-motion: no-preference) {
   [data-press] {
     animation: note-press 350ms ease-out;
@@ -99,10 +96,8 @@ body {
   }
 }
 
-/* The text caret while a note is being written (#74): a step blink, so it
-   snaps on and off like a cursor instead of fading in and out. The rate is
-   inline from a JS constant, like the desk's transitions, and
-   motion-reduce:animate-none! leaves it standing steady. */
+/* Frames only: the blink rate and its step timing come inline from
+   note-overlay.tsx, and motion-reduce:animate-none! leaves the caret steady. */
 @keyframes desk-caret {
   0% {
     opacity: 1;
@@ -112,20 +107,13 @@ body {
   }
 }
 
-/* The pad chooser (#85): the six pads in as many columns as fit across the mat
-   at the pad's real size — one, two or three — split evenly between them, each
-   column a stack. A column's rows are the peek each pad shows above the next,
-   with the last row a whole pad: the peek is the height left over once the top
-   pad lies whole, shared by the pads under it, and never less than a thumb —
-   past that the chooser scrolls. `cqh` is the chooser's own height (it is a
-   size container), so the fit is CSS, with nothing measured. The lean comes
-   off the top of that: the room a pad's jitter (±3°, ±6px) hangs past its row,
-   about 3% of its side plus the nudge, so a stack that fits does not scroll by
-   those few pixels. The column gap is that lean again, once for each of the
-   two pads facing across it — at the widest pads they can just touch, which
-   pads on a desk do. The pad's side and the thumb are PAPER_SIDE and TOUCH in
-   desk-objects.tsx; the two container conditions write them out again because
-   a container query takes no var(). */
+/* Each column is a stack: its rows are the peek each pad shows above the next,
+   the last a whole pad. `cqh` is the chooser's own height (it is a size
+   container), so the fit is CSS with nothing measured. `--lean` is the room a
+   pad's jitter (±3°, ±6px) hangs past its row, so a stack that fits does not
+   scroll by those few pixels, and the column gap is that lean once for each of
+   the two pads facing across it. The container conditions write out PAPER_SIDE
+   and TOUCH from desk-objects.tsx, because a container query takes no var(). */
 .pad-stacks {
   --pad: min(88vw, 60svh);
   --lean: calc(var(--pad) * 0.03 + 6px);

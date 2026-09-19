@@ -4,7 +4,7 @@ export type ProjectCardProps = {
   to: LinkProps["to"];
   title: string;
   description: string;
-  /** Thumbnail tint (any CSS colour), e.g. a color-mix over --color-surface. */
+  /** Thumbnail fill: any CSS `background` value. */
   tint: string;
   live?: boolean;
 };

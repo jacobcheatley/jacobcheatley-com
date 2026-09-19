@@ -1,5 +1,4 @@
 #!/bin/sh
-# Block commits that contain secrets. See README "Secret scanning".
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "pre-commit: gitleaks not found on PATH — install it (see README) so secrets can be scanned." >&2
   echo "To bypass in an emergency: git commit --no-verify" >&2

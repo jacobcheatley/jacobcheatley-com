@@ -127,8 +127,8 @@ describe("the pending list", () => {
   });
 
   it("drops entries that fail the note contract", () => {
-    // the wall renders whatever comes back, so a shape-only guard would hand
-    // NoteRender a note with no elements array and throw mid-render
+    // the wall renders whatever comes back, so a half-shaped note would throw
+    // inside NoteRender mid-render
     localStorage.setItem(KEY, JSON.stringify([{ content: 42 }]));
     expect(readPending()).toEqual([]);
     localStorage.setItem(KEY, JSON.stringify([{ content: content() }]));
@@ -161,7 +161,6 @@ describe("reconcilePending", () => {
       { author: "ada", content: content() },
     ]);
     expect(left.map((p) => p.author)).toEqual(["sam"]);
-    // the write-back means the next read agrees
     expect(readPending().map((p) => p.author)).toEqual(["sam"]);
   });
 

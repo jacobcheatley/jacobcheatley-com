@@ -3,13 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
 import type { NoteContent } from "./note-schema";
 
-// The Spotlight: the wall darkened, with one note lifted straight out of it.
-// Shared by the wall's zoom-in and by pinning (#88), which flies its note into
-// `data-spotlight` and hangs the fasteners and the tag below it. `children` is
-// whatever belongs under the note — the zoom-in's caption, say.
-
-// The lifted note: the wall's tile size is left behind, and the shadow follows
-// the paper silhouette, so a drop-shadow filter rather than a box one.
+// The shadow follows the paper silhouette, so a drop-shadow filter rather than
+// a box one.
 const noteStyle: CSSProperties = {
   aspectRatio: NOTE_ASPECT_RATIO,
   filter: "drop-shadow(0 12px 30px rgba(0,0,0,.5))",
@@ -34,19 +29,16 @@ export function Spotlight({
     closeRef.current?.focus();
   }, []);
 
-  // The fastener going on (#88): pinning hands over a new note for every
-  // choice, even the same fastener twice over, so the paper is keyed by how
-  // many have been made and each one mounts afresh for the press-on keyframes
-  // (styles.css, on `data-press`) to play again. The note the Spotlight opens
-  // on is the one that flew in, not a press.
+  // Pinning hands over a new note for every choice, even the same fastener twice
+  // over, so the paper is keyed by how many have been made: each one mounts
+  // afresh for the press-on keyframes (styles.css, on `data-press`) to replay.
   const [press, setPress] = useState({ content, n: 0 });
   if (press.content !== content) setPress({ content, n: press.n + 1 });
   const pressing = press.n > 0 && content.fastener !== "none";
 
   // With a way back the scrim is a real button (the tap-out target); the note
   // and whatever hangs below it sit layered above it, so clicking them never
-  // reaches the scrim and no static element needs a click handler. Esc is
-  // handled by the caller.
+  // reaches the scrim and no static element needs a click handler.
   return (
     <div
       role="dialog"

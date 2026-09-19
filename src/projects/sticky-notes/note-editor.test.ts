@@ -71,7 +71,7 @@ const text = (over?: Partial<Extract<Element, { type: "text" }>>): Element => ({
 });
 
 // A ring of ink: r = 100 about (250, 250). Its bounding box swallows the whole
-// middle of the note, which is exactly what the old box hit-test got wrong.
+// middle of the note, which a box hit-test would wrongly count as a hit.
 const circleStroke = (): Element =>
   stroke({
     size: 8,
@@ -135,7 +135,6 @@ describe("element ops", () => {
   });
 
   it("moveElement leaves a drag's float dust out of the note", () => {
-    // 150.1 - 100.3 is 49.79999999999999 in floating point
     expect(moveElement(sticker(60, 80), 150.1 - 100.3, 0)).toMatchObject({
       x: 109.8,
     });
@@ -461,8 +460,8 @@ describe("an element's own handles", () => {
   it("turns the handles with the element they belong to", () => {
     const [x = 0, y = 0] = elementHandles(sticker(250, 250, 1))?.corner ?? [];
     const turned = elementHandles({
-      // `Extract` picks the member of the Element union whose `type` is
-      // "sticker", so the spread is known to have a sticker's fields
+      // `Extract` picks the sticker member of the union, so the spread is known
+      // to carry a sticker's fields
       ...(sticker(250, 250) as Extract<Element, { type: "sticker" }>),
       rotation: 90,
     })?.corner;

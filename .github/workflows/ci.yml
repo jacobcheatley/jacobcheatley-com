@@ -88,7 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      # Same image staging just smoked, no rebuild. Migrations run via fly.toml release_command.
+      # Same image staging just smoked, no rebuild.
       - run: flyctl deploy -a jacobcheatley-com --image registry.fly.io/jacobcheatley-com-dev:${{ github.sha }} --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

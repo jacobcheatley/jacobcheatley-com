@@ -4,38 +4,27 @@ import { FONT_FAMILIES } from "./note-fonts";
 import type { Fastener, Ink, NoteContent, PaperColour } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
-// The one pure, state-free renderer: note `content` JSON → SVG. Every surface
-// (wall tile, zoom view, editor, approval CLI) uses it, so notes render
-// identically everywhere. No state, no effects, no DOM reads — it must run under
-// `renderToStaticMarkup` in a non-browser context (the CLI, #62). `useId` is the
-// one hook used, purely for collision-free SVG ids when many notes share a page.
-//
-// Rotation renders in CSS *around* this SVG (handled by consumers); the corner
-// curl fold and the fastener render *inside* the SVG so they look identical
-// everywhere. The semantic colour keys resolve to shades here, in render code,
-// so stored notes never need migrating when the palette is re-tuned.
+// Pure note `content` → SVG: no state, no effects, no DOM reads beyond `useId`
+// for collision-free ids, so it runs under `renderToStaticMarkup` outside a
+// browser. Rotation goes on in CSS around this SVG, curl and fastener inside.
 
 const CANVAS = 500;
 const MAX_FOLD = 120; // px a corner peels in at curl = 1
-// Transparent board headroom above the note so a fastener (esp. tape) can
-// overhang the top edge onto the wall. The note itself stays 0..500. Exported
-// so the editor (#61) maps pointer input through the exact same coordinate frame.
+// Transparent board headroom above the note so a fastener (tape especially) can
+// overhang the top edge. The note itself stays 0..500.
 export const FASTENER_MARGIN = 40;
 
-// The SVG's width / height. A consumer sizing a tile or zoom box must match this
-// exactly or the note crops, so derive it from here rather than re-typing it.
+// A consumer sizing a tile or zoom box must match this exactly or the note
+// crops, so derive from here rather than re-typing the ratio.
 export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
 
-// NotePaper drops the headroom, so the bare sheet is square. Named rather than
-// inlined for the same reason: the mat sizes its note from here.
+// NotePaper drops the headroom, so the bare sheet is square.
 export const NOTE_PAPER_ASPECT_RATIO = 1;
 
 // How much paper a fastener's preview shows below the note's top edge.
-// Exported so a consumer can size the swatch box from the same number.
 export const PREVIEW_DEPTH = 100;
 
-// Paper backgrounds — soft, saturated sticky-note stock. Exported so the editor
-// (#61) tints its paper/ink swatches from the exact rendered shades.
+// Paper backgrounds: soft, saturated sticky-note stock.
 export const PAPER: Record<PaperColour, string> = {
   yellow: "#fde68a",
   pink: "#fbcfe8",
@@ -45,7 +34,7 @@ export const PAPER: Record<PaperColour, string> = {
   white: "#f8fafc",
 };
 
-// Marker inks — bold and legible on any paper. Exported (see PAPER above).
+// Marker inks: bold and legible on any paper.
 export const INK: Record<Ink, string> = {
   black: "#1f2937",
   green: "#16a34a",
@@ -53,9 +42,8 @@ export const INK: Record<Ink, string> = {
   blue: "#2563eb",
 };
 
-// A marker has no pressure (#84): `thinning: 0` ignores every point's stored
-// number, so a mouse, a touch and a pen lay down the same nib — and notes
-// drawn before this, whose points carry real pressures, get it too.
+// A marker has no pressure: `thinning: 0` ignores every point's stored number,
+// so a mouse, a touch and a pen all lay down the same nib.
 const STROKE_OPTS = {
   thinning: 0,
   smoothing: 0.5,
@@ -68,7 +56,7 @@ type NoteElement = NoteContent["elements"][number];
 type Point = [number, number];
 
 // perfect-freehand's outline polygon → an SVG path (the median-quadratic helper
-// from its docs). noUncheckedIndexedAccess-safe via destructuring defaults.
+// from its docs). The destructuring defaults satisfy noUncheckedIndexedAccess.
 function svgPathFromStroke(stroke: number[][]): string {
   if (stroke.length < 2) return "";
   const [fx = 0, fy = 0] = stroke[0] ?? [];
@@ -112,11 +100,9 @@ function mix(a: string, b: string, t: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Fasteners fix the note to the board. Rendered inside the SVG (not in CSS
-// around it) so they look identical on the wall, zoom, editor and CLI. Drawn in
-// 500-canvas units but sized to survive the ~128px wall tile. Light comes from
-// the top-left, so every shadow falls down-right, matching the wall's CSS
-// drop-shadow. Most sit on top of the note; sticky tack sits behind it.
+// Fasteners fix the note to the board. Drawn in 500-canvas units but sized to
+// survive the ~128px wall tile, and lit from the top-left, so every shadow here
+// falls down-right like the wall's CSS drop-shadow.
 
 // Per-render SVG ids: a fastener needs at most one gradient and one blur.
 type FastenerIds = { grad: string; blur: string };
@@ -130,7 +116,6 @@ const PIN_SHADES: Partial<Record<Fastener, [string, string, string]>> = {
   "pin-blue": ["#93c5fd", "#2563eb", "#1e3a8a"],
 };
 
-// The <defs> a fastener needs: a soft blur for its shadows plus its gradient.
 function fastenerDefs(fastener: Fastener, ids: FastenerIds) {
   if (fastener === "none") return null;
   const shades = PIN_SHADES[fastener];
@@ -273,8 +258,7 @@ function serratedStrip(
   return pts.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-// Cream masking tape bridging board and note: torn ends, two light streaks,
-// faint edge lines, soft shadow.
+// Cream masking tape bridging board and note, with torn ends.
 function tapeMasking(ids: FastenerIds) {
   const cx = CANVAS / 2;
   const outline = tornStrip(cx - 90, -34, cx + 90, 30);
@@ -328,8 +312,8 @@ function tapeMasking(ids: FastenerIds) {
   );
 }
 
-// Clear tape: a faint blue-white tint, the sheen gradient, a hairline edge and
-// one bright streak. Subtle by design.
+// Clear tape, deliberately subtle: a faint blue-white tint, the sheen gradient,
+// a hairline edge, one bright streak.
 function tapeClear(ids: FastenerIds) {
   const cx = CANVAS / 2;
   const outline = serratedStrip(cx - 85, -32, cx + 85, 28);
@@ -501,9 +485,7 @@ function fastenerFront(fastener: Fastener, ids: FastenerIds) {
   }
 }
 
-// Exported so the editor can redraw one element on its own — the fade a rubbed
-// -out element leaves behind (#74), through this exact code so it matches.
-// Array order IS z-order and element identity (no stored id) and this render
+// Array order IS z-order and element identity (no stored id), and this render
 // never reorders, so the array index is the correct, stable React key.
 export function renderElement(el: NoteElement, index: number) {
   switch (el.type) {
@@ -557,12 +539,9 @@ export function renderElement(el: NoteElement, index: number) {
   }
 }
 
-// The paper layer: the sheet, the elements clipped to it, and the folded
-// corners — everything except the fastener. Split out so the editor's mat can
-// show bare paper (NotePaper) through the exact code the wall renders, while
-// NoteRender still composes paper and fastener into the one SVG. Returns the
-// two halves because the fastener slots *between* them: tack behind, paper,
-// fastener on top.
+// The sheet, the elements clipped to it and the folded corners: everything but
+// the fastener. Returned in two halves because the fastener slots *between*
+// them: tack behind, paper, fastener on top.
 function paperLayers(uid: string, content: NoteContent) {
   const clipId = `${uid}-clip`;
   const faceBr = `${uid}-face-br`;
@@ -610,7 +589,6 @@ function paperLayers(uid: string, content: NoteContent) {
     ),
     body: (
       <>
-        {/* paper, then content clipped to the (corner-cut) paper shape */}
         <path d={paper} fill={paperFill} />
         {/* the editor's caret measures off the last text in here */}
         <g data-elements="" clipPath={`url(#${clipId})`}>
@@ -661,20 +639,17 @@ export function NoteRender({ content }: { content: NoteContent }) {
         {fastenerDefs(content.fastener, fastenerIds)}
       </defs>
 
-      {/* `data-fastener` marks the fastener layer, which a note being pinned
-          up presses on by scaling (#77) */}
-      {/* sticky tack sits behind the note, peeking out above the top edge */}
+      {/* `data-fastener` marks the layer a note being pinned up presses on by
+          scaling. Sticky tack sits behind the note, so it goes first. */}
       <g data-fastener="">{fastenerBehind(content.fastener, fastenerIds)}</g>
       {paper.body}
-      {/* fastener on top of everything */}
       <g data-fastener="">{fastenerFront(content.fastener, fastenerIds)}</g>
     </svg>
   );
 }
 
-// The sheet on its own, no fastener and no board headroom — what the editor's
-// cutting mat shows while a note is being drawn. Same paper code as the wall,
-// so what you draw is what gets pinned up.
+// The sheet on its own, no fastener and no board headroom: what the editor's
+// cutting mat shows while a note is being drawn.
 export function NotePaper({ content }: { content: NoteContent }) {
   const uid = useId();
   const paper = paperLayers(uid, content);
@@ -693,9 +668,8 @@ export function NotePaper({ content }: { content: NoteContent }) {
   );
 }
 
-// A fastener as applied, on a strip of the note's top edge — one of the row
-// laid beneath the note in the Spotlight. Same drawing functions as the wall,
-// so what the row shows is exactly what lands on the board.
+// A fastener as applied, on a strip of the note's top edge: one of the row laid
+// beneath the note in the Spotlight.
 export function FastenerPreview({
   fastener,
   colour = "yellow",

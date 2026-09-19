@@ -4,9 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import type { NoteContent } from "./note-schema";
 import { Spotlight } from "./Spotlight";
 
-// The Spotlight on its own (#87): the dialog, what hangs under the note, and
-// the two ways back that only exist when the caller offers `onClose`.
-
 const content: NoteContent = {
   version: 1,
   w: 500,
@@ -84,7 +81,6 @@ describe("Spotlight", () => {
   it("offers no way out when the caller provides its own", () => {
     render(<Spotlight content={content} label="Pinning a note" />);
 
-    // pinning brings its own way back, so no × and a scrim that ignores taps
     expect(screen.queryByRole("button")).toBeNull();
   });
 });
