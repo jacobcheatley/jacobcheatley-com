@@ -60,16 +60,26 @@ const STROKE_OPTS = {
 
 type Point = [number, number];
 
+// The server (Bun/JavaScriptCore) and the browser (V8) disagree on the last
+// digits of the outline's trigonometry, and hydration compares `d` as text, so
+// every printed coordinate is cut back to where the two runtimes agree.
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 // perfect-freehand's outline polygon → an SVG path (the median-quadratic helper
 // from its docs). The destructuring defaults satisfy noUncheckedIndexedAccess.
 function svgPathFromStroke(stroke: number[][]): string {
   if (stroke.length < 2) return "";
   const [fx = 0, fy = 0] = stroke[0] ?? [];
-  const parts: (string | number)[] = ["M", fx, fy, "Q"];
+  const parts: (string | number)[] = ["M", round2(fx), round2(fy), "Q"];
   for (let i = 0; i < stroke.length; i++) {
     const [x0 = 0, y0 = 0] = stroke[i] ?? [];
     const [x1 = 0, y1 = 0] = stroke[(i + 1) % stroke.length] ?? [];
-    parts.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+    parts.push(
+      round2(x0),
+      round2(y0),
+      round2((x0 + x1) / 2),
+      round2((y0 + y1) / 2),
+    );
   }
   parts.push("Z");
   return parts.join(" ");
