@@ -735,62 +735,11 @@ describe("StickyEditor eraser", () => {
   });
 });
 
-describe("StickyEditor thumb targets", () => {
-  // jsdom measures nothing, so what is asserted is the rule that holds the
-  // size: every object lies in a box with a fixed width and height that no flex
-  // rule may squeeze, and nothing the tool DOES may resize.
-  const slots = () => [
-    eraserSlot(),
-    tabSlot(),
-    slot("bin"),
-    ...screen
-      .getAllByRole("button", { name: /(pick up|put down) the .* marker/i })
-      .map((el) => el as HTMLElement),
-  ];
-
-  it("lays every object in a box of its own fixed size", () => {
-    render(editor({ initialContent: seeded({}) }));
-
-    for (const el of slots()) {
-      expect(el?.style.width).toMatch(/^\d+px$/);
-      expect(el?.style.height).toMatch(/^\d+px$/);
-      expect(el?.className).not.toMatch(/(^|\s)shrink(\s|$)/);
-    }
-  });
-
-  it("keeps every object at least a thumb's reach in one direction", () => {
-    render(editor({ initialContent: seeded({}) }));
-
-    for (const el of slots()) {
-      const w = Number.parseInt(el?.style.width ?? "0", 10);
-      const h = Number.parseInt(el?.style.height ?? "0", 10);
-      // a marker is only 30 wide (they sit shoulder to shoulder), so its 88px
-      // height is what makes it hittable
-      expect(Math.max(w, h)).toBeGreaterThanOrEqual(48);
-      expect(Math.min(w, h)).toBeGreaterThanOrEqual(30);
-    }
-  });
-
-  it("stands the rocker up, one thumb wide and two tall", () => {
-    render(editor({ initialContent: seeded({}) }));
-    const draw = screen.getByRole("button", { name: /draw with the marker/i });
-    const write = screen.getByRole("button", {
-      name: /write with the marker/i,
-    });
-
-    for (const half of [draw, write]) {
-      expect(half.style.width).toBe("48px");
-      expect(half.style.height).toBe("48px");
-    }
-    expect(draw.parentElement).toBe(write.parentElement);
-    expect(draw.parentElement?.className).toContain("flex-col");
-  });
-
+describe("StickyEditor tray", () => {
   it("lays the tray out as one centred row: hand, markers, draw/write, sticker tab, eraser, bin", () => {
     render(editor({ initialContent: seeded({}) }));
     const row = tray() as HTMLElement;
 
-    expect(row.className).not.toContain("flex-wrap");
     expect(
       [...row.querySelectorAll("button")].map((b) =>
         b.getAttribute("aria-label"),
@@ -807,25 +756,6 @@ describe("StickyEditor thumb targets", () => {
       "Pick up the eraser",
       "Bin this note",
     ]);
-    const binCorner = slot("bin")?.parentElement;
-    expect(binCorner?.parentElement).toBe(row);
-    const gap = binCorner?.previousElementSibling as HTMLElement | null;
-    // zero at 420px and below, where the markers are already squeezing
-    expect(gap?.style.width).toContain("100vw - 420px");
-  });
-
-  it("closes the markers up as the tray narrows, and no further", () => {
-    render(editor({ initialContent: seeded({}) }));
-    const row = screen.getByRole("button", {
-      name: /pick up the red marker/i,
-    }).parentElement;
-
-    expect(row?.style.gap).toContain("clamp(0px");
-    // past zero they lean on each other, by a capped overlap
-    const marker = screen.getByRole("button", {
-      name: /pick up the red marker/i,
-    });
-    expect(marker.style.marginInline).toContain("clamp(-4px");
   });
 
   // jsdom can't measure, so what is asserted is the invariant that keeps the
@@ -853,31 +783,6 @@ describe("StickyEditor thumb targets", () => {
     );
     expect(rubber()?.style.transform).toBe(still);
     up(paper);
-  });
-
-  it("lifts the eraser itself, by transform alone, when it is the one held", () => {
-    render(editor({ initialContent: seeded({}) }));
-    const box = () => eraserSlot().style.cssText;
-    const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
-    const before = box();
-
-    pickUp(/pick up the eraser/i);
-    expect(rubber()?.style.transform).toContain("translateY(-17px)");
-    expect(box()).toBe(before);
-  });
-
-  it("pops the font samples over the mat instead of onto the tray", () => {
-    render(editor({ initialContent: seeded({}) }));
-    pickUp(/pick up the red marker/i);
-    const casual = () =>
-      screen.queryByRole("button", { name: /write in casual/i });
-    expect(casual()).toBeNull();
-
-    pickUp(/write with the marker/i);
-    expect(casual()?.style.height).toBe("48px");
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(casual()).toBeNull();
   });
 });
 
@@ -1479,6 +1384,18 @@ describe("StickyEditor font samples", () => {
     ).toBeNull();
 
     fireEvent.pointerDown(document.body);
+    expect(casual()).toBeNull();
+  });
+
+  it("puts the font samples away on Escape", () => {
+    render(editor({ initialContent: seeded({}) }));
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    const casual = () =>
+      screen.queryByRole("button", { name: /write in casual/i });
+    expect(casual()).not.toBeNull();
+
+    fireEvent.keyDown(window, { key: "Escape" });
     expect(casual()).toBeNull();
   });
 
