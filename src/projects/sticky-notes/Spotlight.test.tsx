@@ -1,19 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { NoteContent } from "./note-schema";
+import { noteContent } from "./note-fixture";
 import { Spotlight } from "./Spotlight";
 
-const content: NoteContent = {
-  version: 1,
-  w: 500,
-  h: 500,
-  colour: "yellow",
-  rotation: 0,
-  curl: { bl: 0, br: 0 },
-  fastener: "none",
-  elements: [],
-};
+const content = noteContent();
 
 const note = () => document.querySelector("[data-spotlight]") as HTMLElement;
 
@@ -65,7 +56,7 @@ describe("Spotlight", () => {
     // the note arrives unfastened, and arriving is not a press
     expect(note().querySelector("[data-press]")).toBeNull();
 
-    const pinned = { ...content, fastener: "pin-red" } as NoteContent;
+    const pinned = noteContent({ fastener: "pin-red" });
     rerender(<Spotlight content={pinned} label="Pin it up" />);
     const first = note().querySelector("[data-press]");
     expect(first).toHaveAttribute("data-press", "pin-red");

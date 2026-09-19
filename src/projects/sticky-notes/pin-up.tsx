@@ -117,7 +117,7 @@ export function PinUp({
         // Pending first: the tile is written before the Spotlight goes, so there
         // is a slot to fly into. It is on the server whether or not this pin is
         // still going on, so it is pending either way.
-        savePending({ ...note.data, submittedAt: Date.now() });
+        savePending({ ...note.data, submittedAtMs: Date.now() });
         if (!live.current) return;
         // The tile it flies home into is laid out by the wall, a navigation and a
         // commit from here, so the wall flies it: this leaves it the measurement

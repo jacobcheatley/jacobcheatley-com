@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { noteContent } from "./note-fixture";
 import type { NoteContent } from "./note-schema";
 import {
   isApproved,
@@ -25,37 +26,23 @@ vi.stubGlobal("localStorage", {
 
 beforeEach(() => store.clear());
 
-function content(over?: Partial<NoteContent>): NoteContent {
-  return {
-    version: 1,
-    w: 500,
-    h: 500,
-    colour: "yellow",
-    rotation: 0,
-    curl: { bl: 0, br: 0 },
-    fastener: "none",
-    elements: [],
-    ...over,
-  };
-}
-
 describe("isApproved", () => {
   const pending: PendingNote = {
     author: "sam",
-    content: content(),
-    submittedAt: 1,
+    content: noteContent(),
+    submittedAtMs: 1,
   };
 
   it("matches an approved note with the same author and content", () => {
-    expect(isApproved(pending, [{ author: "sam", content: content() }])).toBe(
-      true,
-    );
+    expect(
+      isApproved(pending, [{ author: "sam", content: noteContent() }]),
+    ).toBe(true);
   });
 
   it("ignores an approved note by a different author", () => {
-    expect(isApproved(pending, [{ author: "lee", content: content() }])).toBe(
-      false,
-    );
+    expect(
+      isApproved(pending, [{ author: "lee", content: noteContent() }]),
+    ).toBe(false);
   });
 
   it("matches despite reordered object keys (the jsonb round-trip)", () => {
@@ -80,7 +67,7 @@ describe("isApproved", () => {
   it("ignores an approved note whose content differs", () => {
     expect(
       isApproved(pending, [
-        { author: "sam", content: content({ colour: "pink" }) },
+        { author: "sam", content: noteContent({ colour: "pink" }) },
       ]),
     ).toBe(false);
   });
@@ -92,8 +79,8 @@ describe("isApproved", () => {
 
 const pendingNote = (author: string, at: number): PendingNote => ({
   author,
-  content: content(),
-  submittedAt: at,
+  content: noteContent(),
+  submittedAtMs: at,
 });
 
 describe("the pending list", () => {
@@ -111,7 +98,7 @@ describe("the pending list", () => {
     for (let i = 0; i < MAX_PENDING + 5; i++) savePending(pendingNote("a", i));
     const list = readPending();
     expect(list).toHaveLength(MAX_PENDING);
-    expect(list[0]?.submittedAt).toBe(MAX_PENDING + 4); // newest kept
+    expect(list[0]?.submittedAtMs).toBe(MAX_PENDING + 4); // newest kept
   });
 
   it("reads a legacy single note as a one-element list", () => {
@@ -131,8 +118,14 @@ describe("the pending list", () => {
     // inside NoteRender mid-render
     localStorage.setItem(KEY, JSON.stringify([{ content: 42 }]));
     expect(readPending()).toEqual([]);
-    localStorage.setItem(KEY, JSON.stringify([{ content: content() }]));
+    localStorage.setItem(KEY, JSON.stringify([{ content: noteContent() }]));
     expect(readPending()).toEqual([]); // no author
+  });
+
+  it("reads an entry stored with keys it does not know, without them", () => {
+    const stored = { ...pendingNote("ada", 1), mood: "pleased" };
+    localStorage.setItem(KEY, JSON.stringify([stored]));
+    expect(readPending()).toEqual([pendingNote("ada", 1)]);
   });
 
   it("keeps the valid entries out of a mixed list", () => {
@@ -143,10 +136,10 @@ describe("the pending list", () => {
     expect(readPending().map((p) => p.author)).toEqual(["ada"]);
   });
 
-  it("reads a legacy entry with no submittedAt", () => {
-    const { submittedAt: _, ...legacy } = pendingNote("lee", 7);
-    localStorage.setItem(KEY, JSON.stringify([legacy]));
-    expect(readPending()).toEqual([{ ...legacy, submittedAt: 0 }]);
+  it("reads a legacy entry with no submittedAtMs, unstamped", () => {
+    const { submittedAtMs: _, ...legacy } = pendingNote("lee", 7);
+    localStorage.setItem(KEY, JSON.stringify([{ ...legacy, submittedAt: 7 }]));
+    expect(readPending()).toEqual([{ ...legacy, submittedAtMs: 0 }]);
   });
 });
 
@@ -158,7 +151,7 @@ describe("reconcilePending", () => {
     savePending(sam);
 
     const left = reconcilePending(readPending(), [
-      { author: "ada", content: content() },
+      { author: "ada", content: noteContent() },
     ]);
     expect(left.map((p) => p.author)).toEqual(["sam"]);
     expect(readPending().map((p) => p.author)).toEqual(["sam"]);
@@ -167,7 +160,9 @@ describe("reconcilePending", () => {
   it("clears the key once every pending note is approved", () => {
     savePending(pendingNote("ada", 1));
     expect(
-      reconcilePending(readPending(), [{ author: "ada", content: content() }]),
+      reconcilePending(readPending(), [
+        { author: "ada", content: noteContent() },
+      ]),
     ).toEqual([]);
     expect(localStorage.getItem(KEY)).toBeNull();
   });

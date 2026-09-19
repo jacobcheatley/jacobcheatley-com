@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { noteContent } from "./note-fixture";
 import { type NoteContent, noteContentSchema, noteSchema } from "./note-schema";
 
 // A minimal valid note, one of each element type. Tests clone and mutate it.
-function validContent(): NoteContent {
-  return {
-    version: 1,
-    w: 500,
-    h: 500,
-    colour: "yellow",
+const validContent = () =>
+  noteContent({
     rotation: -2,
     curl: { bl: 0.3, br: 0.1 },
     fastener: "pin-red",
@@ -26,8 +23,7 @@ function validContent(): NoteContent {
       },
       { type: "sticker", x: 120, y: 90, emoji: "⭐", scale: 1, rotation: 0 },
     ],
-  };
-}
+  });
 
 const bad = (content: unknown) => noteContentSchema.safeParse(content).success;
 

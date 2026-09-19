@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PAD_JITTER, PIN_ROOM } from "./desk-objects";
 import { emptyNote } from "./note-editor";
@@ -14,6 +15,12 @@ import StickyEditor from "./StickyEditor";
 // A note is born at the pad chooser and dies in the bin, which sends the mat
 // back to the chooser. Motion is CSS; these tests assert the state a transition
 // carries, never the transition itself.
+
+// The page always gives the editor somewhere to pin a note up to; only the
+// tests about the pinning itself look at what goes there.
+const editor = (props: Partial<ComponentProps<typeof StickyEditor>> = {}) => (
+  <StickyEditor onPinning={() => {}} {...props} />
+);
 
 // The crumple and the rubbed-out fade only finish once their timer has run, so
 // the whole file runs on fake timers and steps past them explicitly.
@@ -83,7 +90,7 @@ const flat = { bl: 0, br: 0 };
 
 describe("StickyEditor pad chooser", () => {
   it("fills a bare mat with the six pads, and nothing else to reach", () => {
-    render(<StickyEditor />);
+    render(editor());
 
     expect(note()).toBeNull();
     expect(pads()).toHaveLength(6);
@@ -94,12 +101,12 @@ describe("StickyEditor pad chooser", () => {
   });
 
   it("puts the keyboard on the first pad", () => {
-    render(<StickyEditor />);
+    render(editor());
     expect(pad("yellow")).toHaveFocus();
   });
 
   it("lies every pad a little askew, the same way on every render", () => {
-    const { rerender } = render(<StickyEditor />);
+    const { rerender } = render(editor());
     const turned = () => pads().map((p) => p.style.transform);
 
     expect(turned()).toHaveLength(6);
@@ -110,12 +117,12 @@ describe("StickyEditor pad chooser", () => {
     });
 
     const before = turned();
-    rerender(<StickyEditor />);
+    rerender(editor());
     expect(turned()).toEqual(before);
   });
 
   it("puts the chooser away without straightening the pads, and takes only the torn colour", () => {
-    render(<StickyEditor />);
+    render(editor());
     fireEvent.click(pad("blue"));
 
     expect(pads()).toHaveLength(5);
@@ -128,7 +135,7 @@ describe("StickyEditor pad chooser", () => {
   });
 
   it("tears a sheet off the pad tapped, and puts the chooser away for the tray", () => {
-    render(<StickyEditor />);
+    render(editor());
     fireEvent.click(pad("blue"));
 
     expect(paper()).toBe("blue");
@@ -141,7 +148,7 @@ describe("StickyEditor pad chooser", () => {
   });
 
   it("sticks pin it up just above the note, in its unrotated frame, even on a blank note", () => {
-    render(<StickyEditor initialContent={seeded({ rotation: 12 })} />);
+    render(editor({ initialContent: seeded({ rotation: 12 }) }));
     const pinButton = screen.getByRole("button", { name: /pin it up/i });
     const surface = note()?.closest("[data-colour]");
 
@@ -153,7 +160,7 @@ describe("StickyEditor pad chooser", () => {
   });
 
   it("offers no way to change the paper once it is torn", () => {
-    render(<StickyEditor initialContent={seeded({ colour: "pink" })} />);
+    render(editor({ initialContent: seeded({ colour: "pink" }) }));
     expect(chooser()).toHaveAttribute("inert");
     expect(screen.queryByRole("button", { name: /paper/i })).toBeNull();
   });
@@ -164,7 +171,7 @@ describe("StickyEditor bin", () => {
   const yes = () => screen.getByRole("button", { name: "Bin it" });
 
   it("asks before binning a note with something on it", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    render(editor({ initialContent: seeded({ elements: [HI] }) }));
     fireEvent.click(bin());
 
     expect(slip()).not.toBeNull();
@@ -187,7 +194,7 @@ describe("StickyEditor bin", () => {
     ],
     ["a press anywhere else", () => fireEvent.pointerDown(document.body)],
   ])("keeps the note on %s", (_, answer) => {
-    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    render(editor({ initialContent: seeded({ elements: [HI] }) }));
     fireEvent.click(bin());
     answer();
 
@@ -199,7 +206,7 @@ describe("StickyEditor bin", () => {
   });
 
   it("keeps the note on a second tap on the bin, and doesn't ask again", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    render(editor({ initialContent: seeded({ elements: [HI] }) }));
     fireEvent.click(bin());
     press(/bin this note/i);
 
@@ -210,7 +217,7 @@ describe("StickyEditor bin", () => {
   });
 
   it("keeps the note when the keyboard tabs away from the slip", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    render(editor({ initialContent: seeded({ elements: [HI] }) }));
     fireEvent.click(bin());
     const pinButton = screen.getByRole("button", { name: /pin it up/i });
     act(() => pinButton.focus());
@@ -226,7 +233,7 @@ describe("StickyEditor bin", () => {
     // scheduler (which runs on setImmediate)
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { unmount } = render(
-      <StickyEditor initialContent={seeded({ elements: [HI] })} />,
+      editor({ initialContent: seeded({ elements: [HI] }) }),
     );
     fireEvent.click(bin());
     // two activations before React re-renders, so both reach the tick
@@ -243,9 +250,7 @@ describe("StickyEditor bin", () => {
   });
 
   it("lets the press that keeps the note go on to do its own job", () => {
-    render(
-      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat, elements: [HI] }) }));
     fireEvent.click(bin());
 
     const surface = paperSurface();
@@ -257,7 +262,7 @@ describe("StickyEditor bin", () => {
   });
 
   it("crumples the note once told to, and the chooser comes back", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [HI] })} />);
+    render(editor({ initialContent: seeded({ elements: [HI] }) }));
     fireEvent.click(bin());
     fireEvent.click(yes());
 
@@ -271,7 +276,7 @@ describe("StickyEditor bin", () => {
   });
 
   it("bins a blank note at once, and the next sheet starts with the black marker", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the red marker/i);
     fireEvent.click(bin());
 
@@ -287,7 +292,7 @@ describe("StickyEditor bin", () => {
 
   it("takes pin it up down while a note flies, until the next sheet has landed", () => {
     // it stands beside the paper, not on it, so a flight would leave it behind
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const pinButton = () => screen.getByRole("button", { name: /pin it up/i });
     expect(pinButton()).not.toHaveAttribute("inert");
 
@@ -304,7 +309,7 @@ describe("StickyEditor bin", () => {
 
 describe("StickyEditor tools", () => {
   it("tears a sheet off with the black marker in hand and the rocker live", () => {
-    render(<StickyEditor />);
+    render(editor());
     fireEvent.click(pad("blue"));
     expect(marker("black")).toHaveAccessibleName("Put down the black marker");
     expect(marker("black")).toHaveAttribute("aria-pressed", "true");
@@ -315,7 +320,7 @@ describe("StickyEditor tools", () => {
   });
 
   it("holds the black marker until another is picked up, and the hand once it is put down", () => {
-    render(<StickyEditor />);
+    render(editor());
     fireEvent.click(pad("blue"));
 
     pickUp(/pick up the red marker/i);
@@ -328,7 +333,7 @@ describe("StickyEditor tools", () => {
   });
 
   it("puts the eraser down when the hand is picked up", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the eraser/i);
     pickUp(/pick up the hand/i);
 
@@ -339,7 +344,7 @@ describe("StickyEditor tools", () => {
   });
 
   it("gives the hand back when the eraser is put down", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the eraser/i);
     pickUp(/put down the eraser/i);
 
@@ -347,14 +352,14 @@ describe("StickyEditor tools", () => {
   });
 
   it("keeps the hand when the hand is tapped again", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the hand/i);
     pickUp(/put down the hand/i);
     expect(hand()).toHaveAttribute("aria-pressed", "true");
   });
 
   it("picks a marker up and puts it down again", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
 
     fireEvent.click(
       screen.getByRole("button", { name: /pick up the red marker/i }),
@@ -372,7 +377,7 @@ describe("StickyEditor tools", () => {
   });
 
   it("holds one tool at a time", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     fireEvent.click(
       screen.getByRole("button", { name: /pick up the red marker/i }),
     );
@@ -389,7 +394,7 @@ describe("StickyEditor tools", () => {
   });
 
   it("tints the draw/write control with the held ink and disables it in hand mode", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const draw = () =>
       screen.getByRole("button", { name: /draw with the marker/i });
     pickUp(/pick up the hand/i);
@@ -481,8 +486,8 @@ describe("StickyEditor drawing", () => {
     // the same two points, stored as a size-8 green stroke: the drawn path must
     // come out identical
     const reference = render(
-      <StickyEditor
-        initialContent={seeded({
+      editor({
+        initialContent: seeded({
           elements: [
             {
               type: "stroke",
@@ -494,13 +499,13 @@ describe("StickyEditor drawing", () => {
               ],
             },
           ],
-        })}
-      />,
+        }),
+      }),
     );
     const expected = drawn(reference.container)[0]?.getAttribute("d");
     reference.unmount();
 
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the green marker/i);
     const paper = paperSurface();
     down(paper, 100, 100);
@@ -516,7 +521,7 @@ describe("StickyEditor drawing", () => {
     // a marker has no pressure: a touch (1) and a light pen (0.1) must leave
     // the same numbers behind as a mouse
     const onPinning = vi.fn();
-    render(<StickyEditor initialContent={seeded({})} onPinning={onPinning} />);
+    render(editor({ initialContent: seeded({}), onPinning }));
     const paper = paperSurface();
     fireEvent.pointerDown(paper, {
       clientX: 100,
@@ -542,7 +547,7 @@ describe("StickyEditor drawing", () => {
   });
 
   it("draws nothing from a tap that never moves", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const paper = paperSurface();
     down(paper, 100, 100);
     up(paper);
@@ -562,7 +567,7 @@ describe("StickyEditor writing", () => {
   };
 
   it("shows what is being typed through the note's own renderer", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     fireEvent.change(openBox(), { target: { value: "hello" } });
 
     expect(drawn()).toHaveLength(1);
@@ -571,7 +576,7 @@ describe("StickyEditor writing", () => {
   });
 
   it("commits the text in the held ink and the chosen font", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     pickUp(/write in handwritten/i);
@@ -590,7 +595,7 @@ describe("StickyEditor writing", () => {
   });
 
   it("keeps a newline typed into the box", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const box = openBox();
     // true: nothing called preventDefault, so the textarea gets its newline
     expect(fireEvent.keyDown(box, { key: "Enter" })).toBe(true);
@@ -601,7 +606,7 @@ describe("StickyEditor writing", () => {
   });
 
   it("adds nothing when the box is fixed empty", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     openBox();
     tapAway();
 
@@ -609,7 +614,7 @@ describe("StickyEditor writing", () => {
   });
 
   it("throws the box away on Escape", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const box = openBox();
     fireEvent.change(box, { target: { value: "no" } });
     fireEvent.keyDown(box, { key: "Escape" });
@@ -620,7 +625,7 @@ describe("StickyEditor writing", () => {
 
   it("keeps the box open when the textarea loses focus: only a press fixes it", () => {
     // a phone's keyboard going away blurs the box without a press anywhere
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const box = openBox();
     fireEvent.change(box, { target: { value: "hi" } });
     fireEvent.blur(box);
@@ -644,7 +649,7 @@ describe("StickyEditor caret", () => {
   };
 
   it("puts a caret on the paper in the held ink as soon as the box opens", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     expect(caret()).toBeNull();
 
     openBox();
@@ -656,7 +661,7 @@ describe("StickyEditor caret", () => {
   });
 
   it("moves the caret along as the text grows", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const box = openBox();
 
     fireEvent.change(box, { target: { value: "a" } });
@@ -668,7 +673,7 @@ describe("StickyEditor caret", () => {
   });
 
   it("drops the caret a line and back to the margin on Enter", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const box = openBox();
 
     fireEvent.change(box, { target: { value: "ab" } });
@@ -680,7 +685,7 @@ describe("StickyEditor caret", () => {
   });
 
   it("takes the caret away with the box, committed or thrown out", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     fireEvent.change(openBox(), { target: { value: "hi" } });
     tapAway();
     expect(caret()).toBeNull();
@@ -697,7 +702,7 @@ describe("StickyEditor caret", () => {
 
 describe("StickyEditor eraser", () => {
   it("rubs out only the element under the nib", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
+    render(editor({ initialContent: seeded({ elements: [A, B] }) }));
     pickUp(/pick up the eraser/i);
     const paper = paperSurface();
     down(paper, 60, 80);
@@ -710,7 +715,7 @@ describe("StickyEditor eraser", () => {
   });
 
   it("starts a fresh fade for a rub that lands while one is still fading", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
+    render(editor({ initialContent: seeded({ elements: [A, B] }) }));
     pickUp(/pick up the eraser/i);
     const paper = paperSurface();
 
@@ -730,62 +735,11 @@ describe("StickyEditor eraser", () => {
   });
 });
 
-describe("StickyEditor thumb targets", () => {
-  // jsdom measures nothing, so what is asserted is the rule that holds the
-  // size: every object lies in a box with a fixed width and height that no flex
-  // rule may squeeze, and nothing the tool DOES may resize.
-  const slots = () => [
-    eraserSlot(),
-    tabSlot(),
-    slot("bin"),
-    ...screen
-      .getAllByRole("button", { name: /(pick up|put down) the .* marker/i })
-      .map((el) => el as HTMLElement),
-  ];
-
-  it("lays every object in a box of its own fixed size", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-
-    for (const el of slots()) {
-      expect(el?.style.width).toMatch(/^\d+px$/);
-      expect(el?.style.height).toMatch(/^\d+px$/);
-      expect(el?.className).not.toMatch(/(^|\s)shrink(\s|$)/);
-    }
-  });
-
-  it("keeps every object at least a thumb's reach in one direction", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-
-    for (const el of slots()) {
-      const w = Number.parseInt(el?.style.width ?? "0", 10);
-      const h = Number.parseInt(el?.style.height ?? "0", 10);
-      // a marker is only 30 wide (they sit shoulder to shoulder), so its 88px
-      // height is what makes it hittable
-      expect(Math.max(w, h)).toBeGreaterThanOrEqual(48);
-      expect(Math.min(w, h)).toBeGreaterThanOrEqual(30);
-    }
-  });
-
-  it("stands the rocker up, one thumb wide and two tall", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-    const draw = screen.getByRole("button", { name: /draw with the marker/i });
-    const write = screen.getByRole("button", {
-      name: /write with the marker/i,
-    });
-
-    for (const half of [draw, write]) {
-      expect(half.style.width).toBe("48px");
-      expect(half.style.height).toBe("48px");
-    }
-    expect(draw.parentElement).toBe(write.parentElement);
-    expect(draw.parentElement?.className).toContain("flex-col");
-  });
-
+describe("StickyEditor tray", () => {
   it("lays the tray out as one centred row: hand, markers, draw/write, sticker tab, eraser, bin", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const row = tray() as HTMLElement;
 
-    expect(row.className).not.toContain("flex-wrap");
     expect(
       [...row.querySelectorAll("button")].map((b) =>
         b.getAttribute("aria-label"),
@@ -802,32 +756,13 @@ describe("StickyEditor thumb targets", () => {
       "Pick up the eraser",
       "Bin this note",
     ]);
-    const binCorner = slot("bin")?.parentElement;
-    expect(binCorner?.parentElement).toBe(row);
-    const gap = binCorner?.previousElementSibling as HTMLElement | null;
-    // zero at 420px and below, where the markers are already squeezing
-    expect(gap?.style.width).toContain("100vw - 420px");
-  });
-
-  it("closes the markers up as the tray narrows, and no further", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-    const row = screen.getByRole("button", {
-      name: /pick up the red marker/i,
-    }).parentElement;
-
-    expect(row?.style.gap).toContain("clamp(0px");
-    // past zero they lean on each other, by a capped overlap
-    const marker = screen.getByRole("button", {
-      name: /pick up the red marker/i,
-    });
-    expect(marker.style.marginInline).toContain("clamp(-4px");
   });
 
   // jsdom can't measure, so what is asserted is the invariant that keeps the
   // eraser still: its box never changes, and its lift is a transform that only
   // its own hand raises.
   it("leaves the eraser and the bin where they lie while a marker works", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const eraser = () => eraserSlot();
     const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
     const before = [eraser()?.style.cssText, slot("bin")?.style.cssText];
@@ -849,31 +784,6 @@ describe("StickyEditor thumb targets", () => {
     expect(rubber()?.style.transform).toBe(still);
     up(paper);
   });
-
-  it("lifts the eraser itself, by transform alone, when it is the one held", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-    const box = () => eraserSlot().style.cssText;
-    const rubber = () => document.querySelector<HTMLElement>(ERASER_BODY);
-    const before = box();
-
-    pickUp(/pick up the eraser/i);
-    expect(rubber()?.style.transform).toContain("translateY(-17px)");
-    expect(box()).toBe(before);
-  });
-
-  it("pops the font samples over the mat instead of onto the tray", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
-    pickUp(/pick up the red marker/i);
-    const casual = () =>
-      screen.queryByRole("button", { name: /write in casual/i });
-    expect(casual()).toBeNull();
-
-    pickUp(/write with the marker/i);
-    expect(casual()?.style.height).toBe("48px");
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(casual()).toBeNull();
-  });
 });
 
 describe("StickyEditor pointer gestures", () => {
@@ -882,7 +792,7 @@ describe("StickyEditor pointer gestures", () => {
 
   it("focuses the text box as the placing tap ends, not a frame later", () => {
     // iOS Safari raises the keyboard only for a focus() inside the gesture.
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     const paper = paperSurface();
@@ -897,12 +807,12 @@ describe("StickyEditor pointer gestures", () => {
 
   it("takes the browser's default off a tap on the paper", () => {
     // the compatibility mousedown would blur the open box straight back out
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     expect(down(paperSurface(), 60, 80)).toBe(false);
   });
 
   it("fixes the open box on a tap away, and that tap opens no second one", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     const paper = paperSurface();
@@ -923,7 +833,7 @@ describe("StickyEditor pointer gestures", () => {
   });
 
   it("ignores a second finger while a stroke is live", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const paper = paperSurface();
 
     down(paper, 100, 100);
@@ -935,7 +845,7 @@ describe("StickyEditor pointer gestures", () => {
   });
 
   it("opens no draft once the note is full, and says so", () => {
-    render(<StickyEditor initialContent={full()} />);
+    render(editor({ initialContent: full() }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     const paper = paperSurface();
@@ -973,7 +883,7 @@ describe("StickyEditor sticker sheet", () => {
     fireEvent.pointerUp(el, { clientX: x, clientY: y, pointerId: 1 });
 
   it("pulls the sheet up from the tab and puts it away again", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     expect(tab()).toHaveAttribute("aria-expanded", "false");
     expect(slot("sheet")).toHaveAttribute("inert");
 
@@ -1001,7 +911,7 @@ describe("StickyEditor sticker sheet", () => {
     ],
     ["Escape", () => fireEvent.keyDown(window, { key: "Escape" })],
   ])("puts the sheet away on %s, with the marker back in hand", (_, close) => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = paperSurface();
     fireEvent.click(tab());
     close();
@@ -1017,16 +927,16 @@ describe("StickyEditor sticker sheet", () => {
 
   it("leaves Escape to the wall once the mat has gone down", () => {
     const content = seeded({});
-    const { rerender } = render(<StickyEditor initialContent={content} />);
+    const { rerender } = render(editor({ initialContent: content }));
     fireEvent.click(tab());
-    rerender(<StickyEditor initialContent={content} up={false} />);
+    rerender(editor({ initialContent: content, up: false }));
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(tab()).toHaveAttribute("aria-expanded", "true");
   });
 
   it("stands the note in the room above the sheet, at the size it already was", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const frame = () => paperSurface().parentElement as HTMLElement;
     const room = () => frame().parentElement as HTMLElement;
     expect(room().style.top).toBe(`${PIN_ROOM}px`);
@@ -1041,7 +951,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("covers the tray and takes it out of reach while it is up", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     const box = tabSlot().style.cssText;
 
     fireEvent.click(tab());
@@ -1057,7 +967,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("is the thing you hold: no stroke, no turn, no curl while it is up", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = paperSurface();
     fireEvent.click(tab());
 
@@ -1070,7 +980,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("rubs nothing out with the eraser held while the sheet is up", () => {
-    render(<StickyEditor initialContent={seeded({ elements: [A, B] })} />);
+    render(editor({ initialContent: seeded({ elements: [A, B] }) }));
     pickUp(/pick up the eraser/i);
     fireEvent.click(tab());
 
@@ -1083,7 +993,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("turns nothing with the hand held while the sheet is up", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     takeHand();
     const surface = paperSurface();
     fireEvent.click(tab());
@@ -1095,7 +1005,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("takes only the peeled sticker's placing while the sheet is up", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = paperSurface();
     dragTo("⭐", 250, 250);
     expect(placingOutline()).not.toBeNull();
@@ -1109,7 +1019,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("takes pin it up down while the sheet is up, and while a box is open", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const pinButton = () => screen.getByRole("button", { name: /pin it up/i });
     expect(pinButton()).not.toHaveAttribute("inert");
 
@@ -1129,7 +1039,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("sticks a peeled sticker where it was dropped on the paper", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     paperSurface(); // 500x500 at the origin: client coords ARE note coords
     const slot = dragTo("⭐", 250, 250);
 
@@ -1143,7 +1053,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("peels the same sticker as many times as it is asked for", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     paperSurface();
     dragTo("🔥", 100, 100);
     dragTo("🔥", 400, 300);
@@ -1152,7 +1062,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("marks the slot bare while its sticker is in flight", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     paperSurface();
     fireEvent.click(tab());
     down(cell("⭐"), 300, 600);
@@ -1162,7 +1072,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("sticks nothing when the sticker is let go off the paper", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     paperSurface();
     const slot = dragTo("⭐", 900, 900);
 
@@ -1173,11 +1083,11 @@ describe("StickyEditor sticker sheet", () => {
 
   it("lifts nothing off a full note", () => {
     render(
-      <StickyEditor
-        initialContent={seeded({
+      editor({
+        initialContent: seeded({
           elements: Array.from({ length: MAX_ELEMENTS }, () => HI),
-        })}
-      />,
+        }),
+      }),
     );
     paperSurface();
     fireEvent.click(tab());
@@ -1190,11 +1100,11 @@ describe("StickyEditor sticker sheet", () => {
 
   it("refuses a drop that the sticker being placed left no room for", () => {
     render(
-      <StickyEditor
-        initialContent={seeded({
+      editor({
+        initialContent: seeded({
           elements: Array.from({ length: MAX_ELEMENTS - 1 }, () => HI),
-        })}
-      />,
+        }),
+      }),
     );
     paperSurface();
     dragTo("⭐", 250, 250);
@@ -1208,7 +1118,7 @@ describe("StickyEditor sticker sheet", () => {
   });
 
   it("keeps the marker in your hand through a peel and a drop", () => {
-    render(<StickyEditor initialContent={seeded({})} />);
+    render(editor({ initialContent: seeded({}) }));
     paperSurface();
     pickUp(/pick up the green marker/i);
     pickUp(/write with the marker/i);
@@ -1228,13 +1138,13 @@ describe("StickyEditor on a tilted note", () => {
   // note's top edge on the right of the screen, so everything drawn, typed or
   // dropped comes back through that rotation, and a square's stub is 500x500.
   it("lays the sheet down at the angle it is stored with", () => {
-    render(<StickyEditor initialContent={seeded({ rotation: -12 })} />);
+    render(editor({ initialContent: seeded({ rotation: -12 }) }));
 
     expect(paperSurface().style.transform).toContain("rotate(-12deg)");
   });
 
   it("puts a typed box where the pointer pressed, not where the box is", () => {
-    render(<StickyEditor initialContent={seeded({ rotation: 90 })} />);
+    render(editor({ initialContent: seeded({ rotation: 90 }) }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     const surface = paperSurface();
@@ -1251,7 +1161,7 @@ describe("StickyEditor on a tilted note", () => {
   });
 
   it("sticks a dropped sticker through the same rotation", () => {
-    render(<StickyEditor initialContent={seeded({ rotation: 90 })} />);
+    render(editor({ initialContent: seeded({ rotation: 90 }) }));
     paperSurface();
     fireEvent.click(screen.getByRole("button", { name: /the sticker sheet/i }));
     const slot = screen.getByRole("button", { name: "Peel the ⭐ sticker" });
@@ -1278,7 +1188,7 @@ describe("StickyEditor hand mode", () => {
   };
 
   it("turns the note by the angle a drag sweeps", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     takeHand();
     const surface = paperSurface();
 
@@ -1290,7 +1200,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("holds the tilt to something the wall can wear", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     takeHand();
     const surface = paperSurface();
 
@@ -1302,7 +1212,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("draws on the paper instead of turning it when a marker is in hand", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = paperSurface();
 
     down(surface, 6, 250);
@@ -1314,7 +1224,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("peels a bottom corner further, and back, with a drag", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     takeHand();
     const surface = paperSurface();
 
@@ -1332,7 +1242,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("lifts a corner under a hovering mouse, before it is pressed", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     takeHand();
     const surface = paperSurface();
     const hover = (x: number, y: number) =>
@@ -1351,9 +1261,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("turns the note from a press on a placed text box, and leaves the box where it lies", () => {
-    render(
-      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat, elements: [HI] }) }));
     takeHand();
     const surface = paperSurface();
 
@@ -1369,7 +1277,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("holds the note still until a drag from near the centre leaves it", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     takeHand();
     const surface = paperSurface();
 
@@ -1386,9 +1294,7 @@ describe("StickyEditor hand mode", () => {
   });
 
   it("opens nothing on a second tap on placed text, and offers no fonts for it", () => {
-    render(
-      <StickyEditor initialContent={seeded({ curl: flat, elements: [HI] })} />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat, elements: [HI] }) }));
     takeHand();
     const surface = paperSurface();
 
@@ -1421,9 +1327,7 @@ describe("StickyEditor two fingers", () => {
 
   it("turns the note, not the sticker, with two fingers on a placed sticker", () => {
     render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat, elements: [STAR] })}
-      />,
+      editor({ initialContent: seeded({ curl: flat, elements: [STAR] }) }),
     );
     const surface = paperSurface();
 
@@ -1438,7 +1342,7 @@ describe("StickyEditor two fingers", () => {
   });
 
   it("turns the note with two fingers on bare paper", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = paperSurface();
 
     down(surface, 250, 250);
@@ -1450,7 +1354,7 @@ describe("StickyEditor two fingers", () => {
   });
 
   it("drops the stroke a second finger lands on, and turns the note instead", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = paperSurface();
 
     down(surface, 100, 100);
@@ -1467,7 +1371,7 @@ describe("StickyEditor two fingers", () => {
 
 describe("StickyEditor font samples", () => {
   it("closes the font samples on a press anywhere else, without eating it", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
     const casual = () =>
@@ -1483,12 +1387,24 @@ describe("StickyEditor font samples", () => {
     expect(casual()).toBeNull();
   });
 
-  it("leaves the wall's presses and Escape alone once the mat has gone down", () => {
-    const content = seeded({ curl: flat });
-    const { rerender } = render(<StickyEditor initialContent={content} />);
+  it("puts the font samples away on Escape", () => {
+    render(editor({ initialContent: seeded({}) }));
     pickUp(/pick up the red marker/i);
     pickUp(/write with the marker/i);
-    rerender(<StickyEditor initialContent={content} up={false} />);
+    const casual = () =>
+      screen.queryByRole("button", { name: /write in casual/i });
+    expect(casual()).not.toBeNull();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(casual()).toBeNull();
+  });
+
+  it("leaves the wall's presses and Escape alone once the mat has gone down", () => {
+    const content = seeded({ curl: flat });
+    const { rerender } = render(editor({ initialContent: content }));
+    pickUp(/pick up the red marker/i);
+    pickUp(/write with the marker/i);
+    rerender(editor({ initialContent: content, up: false }));
 
     fireEvent.pointerDown(document.body);
     fireEvent.keyDown(window, { key: "Escape" });
@@ -1521,12 +1437,7 @@ describe("StickyEditor placing", () => {
 
   it("moves, turns and widens a new text box, then fixes it with a tap that opens nothing", () => {
     const onPinning = vi.fn();
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat })}
-        onPinning={onPinning}
-      />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat }), onPinning }));
     const surface = openBox();
     // one empty line: the box is 60..300 x 80..110
     expect(handle("corner")).not.toBeNull();
@@ -1565,7 +1476,7 @@ describe("StickyEditor placing", () => {
   });
 
   it("changes the open box's font from the rocker's samples, and leaves it open", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
@@ -1583,7 +1494,7 @@ describe("StickyEditor placing", () => {
   });
 
   it("leaves a fixed box alone: a press on it in hand mode turns the note", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     const surface = openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
     tapAway();
@@ -1604,7 +1515,7 @@ describe("StickyEditor placing", () => {
     ["the bin", /bin this note/i],
     ["the sticker tab", /the sticker sheet/i],
   ])("fixes the open box on a press on %s", (_, name) => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
@@ -1622,7 +1533,7 @@ describe("StickyEditor placing", () => {
     ["the hand", /pick up the hand/i],
     ["the sticker tab", /the sticker sheet/i],
   ])("fixes the open box when the keyboard presses %s", (_, name) => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
@@ -1634,7 +1545,7 @@ describe("StickyEditor placing", () => {
 
   it("fixes a placing sticker on a press on the rocker's Aa half", () => {
     // "Aa" only spares a text box, which it brings the samples back up for
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     paperSurface();
     dragTo("⭐", 250, 250);
 
@@ -1644,7 +1555,7 @@ describe("StickyEditor placing", () => {
   });
 
   it("fixes a placing sticker on a press on the greyed-out rocker", () => {
-    render(<StickyEditor initialContent={seeded({ curl: flat })} />);
+    render(editor({ initialContent: seeded({ curl: flat }) }));
     paperSurface();
     dragTo("⭐", 250, 250);
 
@@ -1657,12 +1568,7 @@ describe("StickyEditor placing", () => {
 
   it("fixes the open box when the note is pinned up", () => {
     const onPinning = vi.fn();
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat })}
-        onPinning={onPinning}
-      />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat }), onPinning }));
     openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
@@ -1671,12 +1577,7 @@ describe("StickyEditor placing", () => {
 
   it("places a dropped sticker: moved, turned by its corner, fixed by a press away that turns nothing", () => {
     const onPinning = vi.fn();
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat })}
-        onPinning={onPinning}
-      />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat }), onPinning }));
     const surface = paperSurface();
     dragTo("⭐", 250, 250);
     expect(placingOutline()).not.toBeNull();
@@ -1696,12 +1597,7 @@ describe("StickyEditor placing", () => {
 
   it("sends a placing sticker back to the sheet on Escape, and keeps the sheet up", () => {
     const onPinning = vi.fn();
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat })}
-        onPinning={onPinning}
-      />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat }), onPinning }));
     paperSurface();
     dragTo("⭐", 250, 250);
 
@@ -1714,12 +1610,7 @@ describe("StickyEditor placing", () => {
 
   it("sends a placing sticker back to the sheet when it is dragged off the paper", () => {
     const onPinning = vi.fn();
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat })}
-        onPinning={onPinning}
-      />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat }), onPinning }));
     const surface = paperSurface();
     dragTo("⭐", 250, 250);
 
@@ -1731,12 +1622,7 @@ describe("StickyEditor placing", () => {
 
   it("fixes a placing sticker when the next one is peeled", () => {
     const onPinning = vi.fn();
-    render(
-      <StickyEditor
-        initialContent={seeded({ curl: flat })}
-        onPinning={onPinning}
-      />,
-    );
+    render(editor({ initialContent: seeded({ curl: flat }), onPinning }));
     paperSurface();
     dragTo("⭐", 100, 100);
 

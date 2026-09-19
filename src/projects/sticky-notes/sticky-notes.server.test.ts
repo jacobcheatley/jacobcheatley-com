@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
-import type { NoteContent } from "./note-schema";
+import { noteContent } from "./note-fixture";
 import { stickyNotes } from "./schema";
 import {
   addNote,
@@ -9,18 +9,12 @@ import {
   listPendingNotes,
 } from "./sticky-notes.server";
 
-const content: NoteContent = {
-  version: 1,
-  w: 500,
-  h: 500,
-  colour: "yellow",
-  rotation: 0,
-  curl: { bl: 0, br: 0 },
+const content = noteContent({
   fastener: "pin-red",
   elements: [
     { type: "sticker", x: 100, y: 100, emoji: "⭐", scale: 1, rotation: 0 },
   ],
-};
+});
 
 describe("addNote", () => {
   it("inserts a pending note, returns its id, and keeps it off the approved list", async () => {

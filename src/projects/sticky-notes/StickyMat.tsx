@@ -17,7 +17,7 @@ export function StickyMat({
   // The note that has left the mat for the Spotlight over the wall. The page
   // owns this, because it is the page that takes the mat down.
   pinning?: NoteContent;
-  onPinning?: (note: NoteContent | undefined) => void;
+  onPinning: (note: NoteContent | undefined) => void;
 }) {
   // Latch: once the mat has been up, the island stays mounted under it.
   // A direct /sticky-notes/new load starts latched, so the island SSRs too.

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { type NoteContent, noteSchema } from "./note-schema";
 
 // A visitor's own just-submitted notes, kept in their browser only: a list,
@@ -6,11 +7,13 @@ import { type NoteContent, noteSchema } from "./note-schema";
 
 const KEY = "sticky-notes:pending";
 
-export type PendingNote = {
-  author: string;
-  content: NoteContent;
-  submittedAt: number; // ms epoch; for debugging, not shown
-};
+// Stripping where the write path is strict: a stored entry may carry keys this
+// build has no use for. The timestamp is debug-only, so one without it reads.
+const pendingNoteSchema = noteSchema
+  .extend({ submittedAtMs: z.number().catch(0) })
+  .strip();
+
+export type PendingNote = z.infer<typeof pendingNoteSchema>;
 
 // Recursively key-sorted JSON. Approved content comes back through a Postgres
 // jsonb column, which does not preserve object key order. Arrays keep theirs:
@@ -66,15 +69,8 @@ export function readPending(): PendingNote[] {
   // an older stored value is a single note, not a list
   const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
   return list.flatMap((entry) => {
-    const n = entry as Partial<PendingNote> | null;
-    const note = noteSchema.safeParse({
-      author: n?.author,
-      content: n?.content,
-    });
-    if (!note.success) return [];
-    // submittedAt is debug-only, so an entry without one still shows
-    const submittedAt = typeof n?.submittedAt === "number" ? n.submittedAt : 0;
-    return [{ ...note.data, submittedAt }];
+    const note = pendingNoteSchema.safeParse(entry);
+    return note.success ? [note.data] : [];
   });
 }
 
