@@ -129,6 +129,34 @@ describe("NoteRender", () => {
     expect(d(stroke(0.1))).toBe(d(stroke(1)));
   });
 
+  it("prints every stroke coordinate to at most two decimals", () => {
+    const curved: NoteContent = {
+      ...content,
+      elements: [
+        {
+          type: "stroke",
+          ink: "red",
+          size: 8,
+          points: Array.from(
+            { length: 20 },
+            (_, i): [number, number, number] => [
+              40 + i * 18,
+              250 + (i - 9) * (i - 9) * 1.75 - i * 6,
+              0.5,
+            ],
+          ),
+        },
+      ],
+    };
+    const d =
+      render(curved).match(/<path d="([^"]*)" fill="#dc2626"/)?.[1] ?? "";
+    const coordinates = d.split(" ").filter((token) => /\d/.test(token));
+    expect(coordinates.length).toBeGreaterThan(0);
+    expect(coordinates.filter((n) => !/^-?\d+(\.\d{1,2})?$/.test(n))).toEqual(
+      [],
+    );
+  });
+
   it("is deterministic and needs no DOM", () => {
     expect(render(content)).toBe(render(content));
   });
