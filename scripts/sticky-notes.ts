@@ -79,8 +79,11 @@ async function approve(arg: string | undefined) {
   const id = Number(arg);
   if (!Number.isInteger(id) || id <= 0) usage();
   console.log(`target: ${dbHost}`);
-  const rows = await approveNote(id);
-  console.log(`approved note #${id}: ${rows} row(s) affected`);
+  if ((await approveNote(id)) === 0) {
+    console.error(`approve failed: note #${id} is unknown or already approved`);
+    process.exit(1);
+  }
+  console.log(`approved note #${id}`);
 }
 
 function usage(): never {
