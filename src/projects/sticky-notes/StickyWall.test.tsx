@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { noteContent } from "./note-fixture";
 import type { Font, NoteContent } from "./note-schema";
-import type { PendingNote } from "./pending-note";
+import { type PendingNote, readPending, savePending } from "./pending-note";
 import { StickyWall } from "./StickyWall";
 
 vi.mock("./note-fonts", async (orig) => ({
@@ -37,8 +37,10 @@ const pending = (author: string, at: number): PendingNote => ({
   submittedAt: at,
 });
 
-const storePending = (...list: PendingNote[]) =>
-  localStorage.setItem("sticky-notes:pending", JSON.stringify(list));
+// savePending prepends, so the oldest goes in first
+const storePending = (...newestFirst: PendingNote[]) => {
+  for (const note of [...newestFirst].reverse()) savePending(note);
+};
 
 afterEach(() => {
   localStorage.clear();
@@ -198,9 +200,7 @@ describe("StickyWall", () => {
     const tiles = screen.getAllByRole("button", { name: /zoom note by/i });
     expect(tiles).toHaveLength(2);
     expect(tiles[0]).toHaveAccessibleName(/lee/i);
-    expect(localStorage.getItem("sticky-notes:pending")).toBe(
-      JSON.stringify([pending("lee", 1)]),
-    );
+    expect(readPending()).toEqual([pending("lee", 1)]);
   });
 });
 

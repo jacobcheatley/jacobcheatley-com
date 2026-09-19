@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHAKE_MS } from "./desk-objects";
 import { noteContent } from "./note-fixture";
+import { readPending } from "./pending-note";
 import { StickyNotes } from "./StickyNotes";
 
 // The route's only contribution is `matUp` (whether the URL is
@@ -68,8 +69,6 @@ const tick = () => screen.getByRole("button", { name: /sign the tag/i });
 const backTape = () =>
   screen.getByRole("button", { name: /back to the desk/i });
 const posted = () => addNote.mock.calls[0]?.[0]?.data;
-const storedPending = () =>
-  JSON.parse(localStorage.getItem("sticky-notes:pending") ?? "[]");
 const backToTheWall = { to: "/sticky-notes", replace: true };
 
 const tap = (name: RegExp) =>
@@ -389,7 +388,7 @@ describe("StickyNotes submit", () => {
     await user.type(nameTag() as HTMLElement, "ada{Enter}");
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(backToTheWall));
-    expect(storedPending()).toMatchObject([
+    expect(readPending()).toMatchObject([
       { author: "ada", content: { fastener: "pin-red" } },
     ]);
 
@@ -439,7 +438,7 @@ describe("StickyNotes submit", () => {
 
     // it did reach the server, so it is pending all the same
     await waitFor(() =>
-      expect(storedPending()).toMatchObject([{ author: "ada" }]),
+      expect(readPending()).toMatchObject([{ author: "ada" }]),
     );
     expect(navigate).not.toHaveBeenCalled();
     expect(matPaper()).toBeVisible();
@@ -456,7 +455,7 @@ describe("StickyNotes submit", () => {
     const message = await screen.findByRole("alert");
     expect(scene()).toContainElement(message);
     expect(navigate).not.toHaveBeenCalled();
-    expect(storedPending()).toEqual([]);
+    expect(readPending()).toEqual([]);
 
     await user.click(tick());
     await waitFor(() => expect(navigate).toHaveBeenCalledWith(backToTheWall));
