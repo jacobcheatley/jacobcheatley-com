@@ -55,27 +55,27 @@ export const MAX_PENDING = 10;
 // is harmless, so every access swallows failure. Entries are parsed against the
 // real write-path schema: the wall hands them straight to NoteRender.
 export function readPending(): PendingNote[] {
+  let parsed: unknown;
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    // an older stored value is a single note, not a list
-    const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
-    return list.flatMap((entry) => {
-      const n = entry as Partial<PendingNote> | null;
-      const note = noteSchema.safeParse({
-        author: n?.author,
-        content: n?.content,
-      });
-      if (!note.success) return [];
-      // submittedAt is debug-only, so an entry without one still shows
-      const submittedAt =
-        typeof n?.submittedAt === "number" ? n.submittedAt : 0;
-      return [{ ...note.data, submittedAt }];
-    });
+    parsed = JSON.parse(raw);
   } catch {
     return [];
   }
+  // an older stored value is a single note, not a list
+  const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  return list.flatMap((entry) => {
+    const n = entry as Partial<PendingNote> | null;
+    const note = noteSchema.safeParse({
+      author: n?.author,
+      content: n?.content,
+    });
+    if (!note.success) return [];
+    // submittedAt is debug-only, so an entry without one still shows
+    const submittedAt = typeof n?.submittedAt === "number" ? n.submittedAt : 0;
+    return [{ ...note.data, submittedAt }];
+  });
 }
 
 function write(list: PendingNote[]): void {

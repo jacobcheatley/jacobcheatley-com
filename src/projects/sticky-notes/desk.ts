@@ -91,7 +91,7 @@ export function flyingFrom(rect: DOMRect | undefined): void {
 }
 
 // Taken once: a tile that mounts for any other reason finds no flight waiting.
-export function flightHome(): DOMRect | undefined {
+export function takeFlightHome(): DOMRect | undefined {
   const from = leftBehind;
   leftBehind = undefined;
   return from;

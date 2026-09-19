@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fadeScrim, flightHome, flyingFrom, SLIDE_MS } from "./desk";
+import { fadeScrim, flyingFrom, SLIDE_MS, takeFlightHome } from "./desk";
 
-describe("flightHome", () => {
+describe("takeFlightHome", () => {
   it("hands the rect over once, and nothing to the next tile that asks", () => {
     const rect = new DOMRect(10, 20, 100, 100);
     flyingFrom(rect);
-    expect(flightHome()).toBe(rect);
-    expect(flightHome()).toBeUndefined();
+    expect(takeFlightHome()).toBe(rect);
+    expect(takeFlightHome()).toBeUndefined();
   });
 });
 

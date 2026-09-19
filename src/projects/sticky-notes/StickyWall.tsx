@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useState } from "react";
-import { fadeScrim, flightHome, flyTo } from "./desk";
+import { fadeScrim, flyTo, takeFlightHome } from "./desk";
 import { loadFont } from "./note-fonts";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
-import type { Font, NoteContent } from "./note-schema";
+import { CANVAS, type Font, type NoteContent } from "./note-schema";
 import {
   type PendingNote,
   readPending,
@@ -41,7 +41,7 @@ const tileStyle = (content: NoteContent): CSSProperties => ({
 // starts the flight as it mounts; any other tile finds no rect waiting. Module
 // scope, so the ref never changes and React never re-attaches it.
 function flyHome(tile: HTMLLIElement | null) {
-  if (tile && flyTo(flightHome(), tile)) fadeScrim();
+  if (tile && flyTo(takeFlightHome(), tile)) fadeScrim();
 }
 
 const PendingBadge = () => (
@@ -71,8 +71,8 @@ const INVITE_FONT: Font = "casual";
 function inviteContent(text: string, fontSize: number): NoteContent {
   return {
     version: 1,
-    w: 500,
-    h: 500,
+    w: CANVAS,
+    h: CANVAS,
     colour: "yellow",
     rotation: -3,
     curl: { bl: 0, br: 0 },

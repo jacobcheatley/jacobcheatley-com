@@ -56,7 +56,6 @@ import {
   hitTest,
   isOffNote,
   moveElement,
-  type Element as NoteElement,
   noteSide,
   outsideSpinDead,
   type PlacingGrip,
@@ -89,6 +88,7 @@ import {
   MAX_POINTS_PER_STROKE,
   MAX_TEXT_LEN,
   type NoteContent,
+  type NoteElement,
   type PaperColour,
 } from "./note-schema";
 import { PinUp } from "./pin-up";
@@ -840,6 +840,7 @@ export default function StickyEditor({
     const live = contentRef.current;
     if (!live) return;
     const hit = hitTest(live, x, y);
+    if (hit === undefined) return;
     const el = live.elements[hit];
     if (!el) return;
     showGhost(el);

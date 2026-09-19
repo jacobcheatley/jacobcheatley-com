@@ -57,15 +57,21 @@ export const STICKER_EMOJI = [
   "🚀",
 ] as const;
 
-export const MAX_BODY_BYTES = 262_144; // 256 KB serialised
+const MAX_BODY_BYTES = 256 * 1024;
 export const MAX_ELEMENTS = 80;
 export const MAX_POINTS_PER_STROKE = 1000;
-export const MAX_POINTS_TOTAL = 20_000;
+const MAX_POINTS_TOTAL = 20_000;
 export const MAX_TEXT_LEN = 280;
+export const MAX_AUTHOR_LEN = 50;
 
 // `w`/`h` still travel in the JSON so every coordinate has a concrete frame,
 // but this is the only value accepted.
 export const CANVAS = 500;
+
+// What the stored numbers mean in note units: a sticker's side at `scale` 1,
+// and how far a corner peels in at `curl` 1.
+export const STICKER_BASE = 48;
+export const MAX_FOLD = 120;
 
 const coord = z.number().min(-50).max(550);
 const rotation = z.number().min(-180).max(180);
@@ -83,7 +89,7 @@ const author = z
   .trim()
   .toLowerCase()
   .min(1)
-  .max(50)
+  .max(MAX_AUTHOR_LEN)
   .refine((s) => !/\p{Cc}/u.test(s), "control characters are not allowed");
 
 // Text boxes keep `\n`; every other control character (C0, DEL, C1) is
@@ -181,4 +187,5 @@ export type Font = (typeof FONTS)[number];
 export type Fastener = (typeof FASTENERS)[number];
 
 export type NoteContent = z.infer<typeof noteContentSchema>;
+export type NoteElement = NoteContent["elements"][number];
 export type NoteSubmission = z.infer<typeof noteSchema>;

@@ -3,14 +3,17 @@
 // box can never disagree with the lines drawn inside it.
 export const LINE_HEIGHT = 1.2;
 
-// ponytail: naive width→char estimate (avg glyph ≈ 0.55·fontSize) plus explicit
-// newlines; swap for real text measurement if wrapping drifts from the editor.
+// An average glyph's width, in font-sizes.
+export const GLYPH_WIDTH = 0.55;
+
+// ponytail: naive width→char estimate off GLYPH_WIDTH plus explicit newlines;
+// swap for real text measurement if wrapping drifts from the editor.
 export function wrapLines(
   text: string,
   width: number,
   fontSize: number,
 ): string[] {
-  const maxChars = Math.max(1, Math.floor(width / (fontSize * 0.55)));
+  const maxChars = Math.max(1, Math.floor(width / (fontSize * GLYPH_WIDTH)));
   const lines: string[] = [];
   for (const para of text.split("\n")) {
     let line = "";

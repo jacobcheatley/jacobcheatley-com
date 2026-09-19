@@ -19,6 +19,11 @@ const LOADERS: Partial<Record<Font, () => Promise<unknown>>> = {
   marker: () => import("@fontsource/permanent-marker"),
 };
 
-export function loadFont(font: Font): Promise<unknown> {
-  return LOADERS[font]?.() ?? Promise.resolve();
+// Never rejects: a font that fails to load leaves its generic fallback painted.
+export async function loadFont(font: Font): Promise<void> {
+  try {
+    await LOADERS[font]?.();
+  } catch (cause) {
+    console.warn(new Error(`loading the "${font}" webfont failed`, { cause }));
+  }
 }

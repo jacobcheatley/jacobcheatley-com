@@ -1,6 +1,6 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 
-export type ProjectCardProps = {
+type ProjectCardProps = {
   to: LinkProps["to"];
   title: string;
   description: string;

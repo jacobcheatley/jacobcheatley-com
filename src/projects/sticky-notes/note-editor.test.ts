@@ -7,7 +7,6 @@ import {
   clientToNoteCoords,
   curlCorner,
   curlFromPointer,
-  type Element,
   elementHandles,
   emptyNote,
   fixedElement,
@@ -27,7 +26,12 @@ import {
   turnNote,
   widthFromPointer,
 } from "./note-editor";
-import { MAX_ELEMENTS, noteContentSchema, noteSchema } from "./note-schema";
+import {
+  MAX_ELEMENTS,
+  type NoteElement,
+  noteContentSchema,
+  noteSchema,
+} from "./note-schema";
 
 // A seeded RNG so seeded cosmetics are deterministic in tests.
 const seq = (...vals: number[]) => {
@@ -36,8 +40,8 @@ const seq = (...vals: number[]) => {
 };
 
 const stroke = (
-  over?: Partial<Extract<Element, { type: "stroke" }>>,
-): Element => ({
+  over?: Partial<Extract<NoteElement, { type: "stroke" }>>,
+): NoteElement => ({
   type: "stroke",
   ink: "black",
   size: 8,
@@ -48,7 +52,7 @@ const stroke = (
   ...over,
 });
 
-const sticker = (x: number, y: number, scale = 1): Element => ({
+const sticker = (x: number, y: number, scale = 1): NoteElement => ({
   type: "sticker",
   x,
   y,
@@ -57,7 +61,9 @@ const sticker = (x: number, y: number, scale = 1): Element => ({
   rotation: 0,
 });
 
-const text = (over?: Partial<Extract<Element, { type: "text" }>>): Element => ({
+const text = (
+  over?: Partial<Extract<NoteElement, { type: "text" }>>,
+): NoteElement => ({
   type: "text",
   x: 100,
   y: 100,
@@ -72,7 +78,7 @@ const text = (over?: Partial<Extract<Element, { type: "text" }>>): Element => ({
 
 // A ring of ink: r = 100 about (250, 250). Its bounding box swallows the whole
 // middle of the note, which a box hit-test would wrongly count as a hit.
-const circleStroke = (): Element =>
+const circleStroke = (): NoteElement =>
   stroke({
     size: 8,
     points: Array.from({ length: 33 }, (_, i) => {
@@ -135,9 +141,7 @@ describe("element ops", () => {
   });
 
   it("moveElement leaves a drag's float dust out of the note", () => {
-    expect(moveElement(sticker(60, 80), 150.1 - 100.3, 0)).toMatchObject({
-      x: 109.8,
-    });
+    expect(moveElement(sticker(60.1, 80), 0.2, 0)).toMatchObject({ x: 60.3 });
   });
 
   it("moveElement is rigid: a stroke dragged past the edge keeps its shape", () => {
@@ -231,12 +235,12 @@ describe("geometry", () => {
     expect(isOffNote(sticker(250, 600))).toBe(true);
   });
 
-  it("hitTest returns the topmost element under a point, or -1", () => {
+  it("hitTest returns the topmost element under a point, or nothing", () => {
     let note = emptyNote(seq(0.1));
     note = addElement(note, sticker(100, 100)); // index 0, below
     note = addElement(note, sticker(100, 100)); // index 1, on top
     expect(hitTest(note, 100, 100)).toBe(1);
-    expect(hitTest(note, 400, 400)).toBe(-1);
+    expect(hitTest(note, 400, 400)).toBeUndefined();
   });
 
   it("bounds pads a stroke by half its size", () => {
@@ -277,7 +281,7 @@ describe("hit-testing", () => {
     // (200, 110) is inside the unrotated box; rotating the box 90 deg about
     // (100, 100) carries that spot to (90, 200).
     expect(hitTest(note, 90, 200)).toBe(0);
-    expect(hitTest(note, 200, 110)).toBe(-1);
+    expect(hitTest(note, 200, 110)).toBeUndefined();
   });
 
   it("hitTestAll lists every hit topmost-first", () => {
@@ -462,7 +466,7 @@ describe("an element's own handles", () => {
     const turned = elementHandles({
       // `Extract` picks the sticker member of the union, so the spread is known
       // to carry a sticker's fields
-      ...(sticker(250, 250) as Extract<Element, { type: "sticker" }>),
+      ...(sticker(250, 250) as Extract<NoteElement, { type: "sticker" }>),
       rotation: 90,
     })?.corner;
     // a quarter turn about (250, 250) carries the bottom-right corner to the

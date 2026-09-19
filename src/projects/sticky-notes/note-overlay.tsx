@@ -1,13 +1,12 @@
-import {
-  bounds,
-  type Corner,
-  elementHandles,
-  MAX_FOLD,
-  type Element as NoteElement,
-} from "./note-editor";
+import { bounds, type Corner, elementHandles } from "./note-editor";
 import { INK } from "./note-render";
-import { CANVAS, type NoteContent } from "./note-schema";
-import { LINE_HEIGHT, wrapLines } from "./note-text";
+import {
+  CANVAS,
+  MAX_FOLD,
+  type NoteContent,
+  type NoteElement,
+} from "./note-schema";
+import { GLYPH_WIDTH, LINE_HEIGHT, wrapLines } from "./note-text";
 
 // What the editor draws over the note: the caret, the grip, and the outline and
 // handles of the element being placed. Stateless, so it lives apart from
@@ -32,7 +31,7 @@ export function caretAt(
   const lines = wrapLines(el.text, el.w, el.fontSize);
   const last = lines[lines.length - 1] ?? "";
   const estimate = {
-    x: el.x + last.length * 0.55 * el.fontSize,
+    x: el.x + last.length * GLYPH_WIDTH * el.fontSize,
     y: el.y + el.fontSize + LINE_HEIGHT * el.fontSize * (lines.length - 1),
   };
   if (!last) return estimate; // an empty line has no glyph to measure from

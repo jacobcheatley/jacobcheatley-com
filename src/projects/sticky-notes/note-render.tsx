@@ -1,15 +1,22 @@
 import { getStroke } from "perfect-freehand";
 import { useId } from "react";
 import { FONT_FAMILIES } from "./note-fonts";
-import type { Fastener, Ink, NoteContent, PaperColour } from "./note-schema";
+import {
+  CANVAS,
+  type Fastener,
+  type Ink,
+  MAX_FOLD,
+  type NoteContent,
+  type NoteElement,
+  type PaperColour,
+  STICKER_BASE,
+} from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
 // Pure note `content` → SVG: no state, no effects, no DOM reads beyond `useId`
 // for collision-free ids, so it runs under `renderToStaticMarkup` outside a
 // browser. Rotation goes on in CSS around this SVG, curl and fastener inside.
 
-const CANVAS = 500;
-const MAX_FOLD = 120; // px a corner peels in at curl = 1
 // Transparent board headroom above the note so a fastener (tape especially) can
 // overhang the top edge. The note itself stays 0..500.
 export const FASTENER_MARGIN = 40;
@@ -50,9 +57,7 @@ const STROKE_OPTS = {
   streamline: 0.5,
   simulatePressure: false,
 };
-const STICKER_BASE = 48; // px at scale 1
 
-type NoteElement = NoteContent["elements"][number];
 type Point = [number, number];
 
 // perfect-freehand's outline polygon → an SVG path (the median-quadratic helper

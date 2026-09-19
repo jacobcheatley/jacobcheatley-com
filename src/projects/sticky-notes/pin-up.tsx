@@ -6,16 +6,21 @@ import { flyingFrom } from "./desk";
 import { SHAKE_MS, TapeLabel } from "./desk-objects";
 import { FONT_FAMILIES } from "./note-fonts";
 import { FastenerPreview } from "./note-render";
-import { FASTENERS, type NoteContent, noteSchema } from "./note-schema";
+import {
+  FASTENERS,
+  MAX_AUTHOR_LEN,
+  type NoteContent,
+  noteSchema,
+} from "./note-schema";
 import { savePending } from "./pending-note";
 import { Spotlight } from "./Spotlight";
 import { addNoteFn } from "./sticky-notes.fn";
 
 // Everything but `none`, which is what you get by not choosing. TS infers the
 // `!== "none"` filter as a type predicate, so no cast is needed.
-const CHOICES = FASTENERS.filter((f) => f !== "none");
+const FASTENER_CHOICES = FASTENERS.filter((f) => f !== "none");
 
-const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
+const FASTENER_NAMES: Record<(typeof FASTENER_CHOICES)[number], string> = {
   "pin-red": "a red pin",
   "pin-green": "a green pin",
   "pin-yellow": "a yellow pin",
@@ -122,7 +127,8 @@ export function PinUp({
         // replace: Back from the wall shouldn't reopen a note that was sent
         navigate({ to: "/sticky-notes", replace: true });
       },
-      () => {
+      (cause: unknown) => {
+        console.error(new Error("posting the signed note failed", { cause }));
         sending.current = false;
         setPosting(false);
         setError("it didn't stick — try again");
@@ -147,7 +153,7 @@ export function PinUp({
         back to the desk
       </TapeLabel>
       <div className="relative z-10 flex flex-wrap justify-center gap-2">
-        {CHOICES.map((fastener) => (
+        {FASTENER_CHOICES.map((fastener) => (
           <button
             key={fastener}
             type="button"
@@ -230,7 +236,7 @@ function NameTag({
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}
-        maxLength={50}
+        maxLength={MAX_AUTHOR_LEN}
         // No name, no id, and one opt-out per password manager: nothing here
         // is an identity field, and an autofill bubble over the tag on a phone
         // would cover the note it hangs from.

@@ -70,7 +70,7 @@ export const BIN_SPACER: CSSProperties = {
   width: `clamp(0px, (${SQUEEZE_FROM}) / 8, 32px - ${DESK_GAP})`,
   marginInlineEnd: `calc(-1 * ${DESK_GAP})`,
 };
-export const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
+const TAB_SLOT: CSSProperties = { width: STICKER_TAB_W, height: TOUCH };
 
 // How long the held tool shakes when the note is full and nothing more fits.
 export const SHAKE_MS = 200;
@@ -335,7 +335,7 @@ export function heldTool(held: Ink | "eraser"): {
 }
 
 // One font sample: "Aa" on a chip of card, in the face it would write.
-export function FontChip({
+function FontChip({
   font,
   active,
   tint,
@@ -507,19 +507,19 @@ export function ModeControl({
 // Within ±3° and ±6px, enough to read as tossed down rather than as a mistake.
 export const PAD_JITTER: Record<
   PaperColour,
-  readonly [number, number, number]
+  { deg: number; dx: number; dy: number }
 > = {
-  yellow: [-2, 3, -4],
-  pink: [1.5, -5, 2],
-  blue: [3, 2, 5],
-  green: [-1, -3, -2],
-  orange: [2.5, 6, -1],
-  white: [-3, -2, 3],
+  yellow: { deg: -2, dx: 3, dy: -4 },
+  pink: { deg: 1.5, dx: -5, dy: 2 },
+  blue: { deg: 3, dx: 2, dy: 5 },
+  green: { deg: -1, dx: -3, dy: -2 },
+  orange: { deg: 2.5, dx: 6, dy: -1 },
+  white: { deg: -3, dx: -2, dy: 3 },
 };
 
 // that lie as a transform: the turn is about the pad's own centre
 const lie = (colour: PaperColour) => {
-  const [deg, dx, dy] = PAD_JITTER[colour];
+  const { deg, dx, dy } = PAD_JITTER[colour];
   return `translate(${dx}px, ${dy}px) rotate(${deg}deg)`;
 };
 

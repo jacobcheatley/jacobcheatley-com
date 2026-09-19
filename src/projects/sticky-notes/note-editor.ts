@@ -1,8 +1,11 @@
 import {
   CANVAS,
   MAX_ELEMENTS,
+  MAX_FOLD,
   type NoteContent,
+  type NoteElement,
   PAPER_COLOURS,
+  STICKER_BASE,
 } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
@@ -10,21 +13,11 @@ import { LINE_HEIGHT, wrapLines } from "./note-text";
 // and the geometry the interaction shell needs. No React, no DOM, so the tricky
 // bits are unit-tested here and the shell only maps pointers onto these calls.
 
-export type Element = NoteContent["elements"][number];
-
-// Must match note-render's sticker base size, or an editor hit-box misses the
-// rendered glyph. Kept local: note-render doesn't export it.
-const STICKER_BASE = 48;
-
-// An emoji glyph doesn't fill its em box, so the drawn sticker can sit off the
-// centre the box is built around.
-export const STICKER_BOX_OFFSET_Y = 0;
-
 // Extra reach around an element's silhouette, so a fingertip near a thin line
 // still grabs it.
-export const HIT_SLOP = 6;
+const HIT_SLOP = 6;
 
-export const clamp = (n: number, lo: number, hi: number): number =>
+const clamp = (n: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(hi, n));
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -57,7 +50,7 @@ export function emptyNote(rand: () => number = Math.random): NoteContent {
 
 // Append (array order is z-order). Silently refuses past the element cap so the
 // editor can call it unconditionally; the contract enforces the cap anyway.
-export function addElement(content: NoteContent, el: Element): NoteContent {
+export function addElement(content: NoteContent, el: NoteElement): NoteContent {
   if (content.elements.length >= MAX_ELEMENTS) return content;
   return { ...content, elements: [...content.elements, el] };
 }
@@ -74,8 +67,8 @@ export function removeElement(
 
 // Rigid, unclamped translation: every point moves by the same delta, so a
 // stroke keeps its shape instead of squashing flat against an edge. TS can't
-// follow `<E extends Element>` through an object spread, hence the `as E`.
-export function moveElement<E extends Element>(
+// follow `<E extends NoteElement>` through an object spread, hence the `as E`.
+export function moveElement<E extends NoteElement>(
   el: E,
   dx: number,
   dy: number,
@@ -99,7 +92,7 @@ function settleShift(lo: number, hi: number): number {
 // The smallest rigid shift that puts every STORED coordinate back inside
 // -50..550 after an unclamped drag: a stroke's points, a text or sticker
 // anchor. The schema constrains coords, not silhouettes.
-export function settleElement<E extends Element>(el: E): E {
+export function settleElement<E extends NoteElement>(el: E): E {
   let x0: number;
   let x1: number;
   let y0: number;
@@ -122,11 +115,11 @@ export function settleElement<E extends Element>(el: E): E {
   return dx === 0 && dy === 0 ? el : moveElement(el, dx, dy);
 }
 
-export type Bounds = { x0: number; y0: number; x1: number; y1: number };
+type Bounds = { x0: number; y0: number; x1: number; y1: number };
 
 // Axis-aligned bounds in the element's own (unrotated) frame.
 // ponytail: a stroke is its bbox here, only hit-testing walks the polyline.
-export function bounds(el: Element): Bounds {
+export function bounds(el: NoteElement): Bounds {
   if (el.type === "stroke") {
     let x0 = Infinity;
     let y0 = Infinity;
@@ -143,8 +136,7 @@ export function bounds(el: Element): Bounds {
   }
   if (el.type === "sticker") {
     const r = (STICKER_BASE * el.scale) / 2;
-    const cy = el.y + STICKER_BOX_OFFSET_Y;
-    return { x0: el.x - r, y0: cy - r, x1: el.x + r, y1: cy + r };
+    return { x0: el.x - r, y0: el.y - r, x1: el.x + r, y1: el.y + r };
   }
   // text: (x, y) is the block's top-left — the renderer drops the first
   // baseline to y + fontSize — and each wrapped line adds a LINE_HEIGHT.
@@ -160,7 +152,7 @@ export function bounds(el: Element): Bounds {
 // Rotate (x, y) by deg about (cx, cy) — the same turn the renderer puts on a
 // rotated element, so a handle drawn through this lands on the box the visitor
 // can see.
-export function rotatePoint(
+function rotatePoint(
   x: number,
   y: number,
   cx: number,
@@ -210,7 +202,7 @@ function distToSegment(
 // Does the point land on the element's real silhouette? A stroke is its
 // polyline (its bounding box would swallow the hole in a drawn circle); text
 // and stickers are their box, seen through their own rotation.
-function hitsElement(el: Element, x: number, y: number): boolean {
+function hitsElement(el: NoteElement, x: number, y: number): boolean {
   if (el.type === "stroke") {
     const reach = el.size / 2 + HIT_SLOP;
     const pts = el.points;
@@ -232,7 +224,7 @@ function hitsElement(el: Element, x: number, y: number): boolean {
 }
 
 // True when the element sits entirely off the paper (0..CANVAS both axes).
-export function isOffNote(el: Element): boolean {
+export function isOffNote(el: NoteElement): boolean {
   const b = bounds(el);
   return b.x1 < 0 || b.x0 > CANVAS || b.y1 < 0 || b.y0 > CANVAS;
 }
@@ -253,9 +245,12 @@ export function hitTestAll(
   return found;
 }
 
-// Index of the topmost element under (x, y), or -1.
-export function hitTest(content: NoteContent, x: number, y: number): number {
-  return hitTestAll(content, x, y)[0] ?? -1;
+export function hitTest(
+  content: NoteContent,
+  x: number,
+  y: number,
+): number | undefined {
+  return hitTestAll(content, x, y)[0];
 }
 
 // --- the note's own geometry -------------------------------------------------
@@ -294,10 +289,6 @@ export function noteSide(bboxWidth: number, rotationDeg: number): number {
 // corners, so the sheet itself is the control. The shell only decides which
 // gesture a pointer started.
 
-// Must match note-render's fold size, kept here rather than pulling the
-// renderer's JSX into the model layer.
-export const MAX_FOLD = 120;
-
 // How close to the paper's centre, in note units, a turn has no angle worth
 // reading: a hair of movement there swings the pointer's angle right round.
 export const SPIN_DEAD = 40;
@@ -309,7 +300,7 @@ export const outsideSpinDead = (x: number, y: number): boolean =>
 export type Corner = "bl" | "br";
 
 // How far from a bottom corner still counts as taking hold of the fold.
-export const CURL_GRAB = 40;
+const CURL_GRAB = 40;
 
 // Which bottom corner a pointer took hold of: within reach of the corner it
 // peels from, or anywhere on the fold. The flap drawn back over the sheet and
@@ -343,7 +334,7 @@ export function curlFromPointer(
 
 // ponytail: the wall looks wrong past a light tilt, so a note is held to +-25
 // though the contract allows a half turn; this is the only number in the way.
-export const ROTATE_LIMIT = 25;
+const ROTATE_LIMIT = 25;
 
 // The note's tilt after a gesture has swept `by` degrees round its centre.
 // The sweep is normalised first: dragging across the centre flips atan2 by a
@@ -367,17 +358,17 @@ export const HANDLE_TOUCH = 48;
 
 // Unlike the note, an element may face any way at all, so a turn past half a
 // circle comes round the other side rather than sticking at the contract's end.
-export const turnElement = (from: number, by: number): number =>
+const turnElement = (from: number, by: number): number =>
   round1(wrap180(from + wrap180(by)));
 
 // Where an element's handles sit, in note coordinates, already turned by the
 // element's own rotation. A stroke has none: it is drawn, not placed.
-export type Handles = {
+type Handles = {
   corner: [number, number];
   width: [number, number] | null;
 };
 
-export function elementHandles(el: Element): Handles | null {
+export function elementHandles(el: NoteElement): Handles | null {
   if (el.type === "stroke") return null;
   const b = bounds(el);
   const at = (x: number, y: number) =>
@@ -413,7 +404,7 @@ export type PlacingGrip = "corner" | "width" | "move";
 // every pointer, a mouse's too, halved over the body so a sticker, whose corner
 // is nearer its middle than a thumb is wide, can still be moved.
 export function grabPlacing(
-  el: Element,
+  el: NoteElement,
   x: number,
   y: number,
   reach: number,
@@ -442,7 +433,7 @@ export function rotationFromHandle(
 
 // The element being placed as it goes onto the note for good: text trimmed,
 // and an empty box is nothing to add.
-export function fixedElement(el: Element): Element | null {
+export function fixedElement(el: NoteElement): NoteElement | null {
   if (el.type !== "text") return el;
   const text = el.text.trim();
   return text ? { ...el, text } : null;
