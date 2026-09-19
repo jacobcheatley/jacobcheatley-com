@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { noteContent } from "./note-fixture";
 import type { Font, NoteContent } from "./note-schema";
 import type { PendingNote } from "./pending-note";
 import { StickyWall } from "./StickyWall";
@@ -24,29 +25,15 @@ vi.mock("@tanstack/react-router", () => ({
   ),
 }));
 
-function content(over?: Partial<NoteContent>): NoteContent {
-  return {
-    version: 1,
-    w: 500,
-    h: 500,
-    colour: "yellow",
-    rotation: 0,
-    curl: { bl: 0, br: 0 },
-    fastener: "none",
-    elements: [],
-    ...over,
-  };
-}
-
 const note = (id: number, author: string, over?: Partial<NoteContent>) => ({
   id,
   author,
-  content: content(over),
+  content: noteContent(over),
 });
 
 const pending = (author: string, at: number): PendingNote => ({
   author,
-  content: content(),
+  content: noteContent(),
   submittedAt: at,
 });
 
@@ -145,7 +132,7 @@ describe("StickyWall", () => {
     );
 
     rerender(
-      <StickyWall notes={notes} pinning={content({ colour: "pink" })} />,
+      <StickyWall notes={notes} pinning={noteContent({ colour: "pink" })} />,
     );
 
     // invite, the pending note, the approved one; the note being pinned up is
@@ -173,7 +160,7 @@ describe("StickyWall", () => {
   });
 
   it("keeps the small invite, not the empty wall's, while a note is pinned up over it", () => {
-    render(<StickyWall notes={[]} pinning={content()} />);
+    render(<StickyWall notes={[]} pinning={noteContent()} />);
     // "+ pin" is the tile-sized invite; the empty wall's asks for the first note
     expect(screen.getByRole("link", { name: /pin a note/i })).toHaveTextContent(
       "+ pin",
@@ -184,7 +171,7 @@ describe("StickyWall", () => {
     // the same list both times: nothing but the pinning going re-reads it
     const notes = [note(1, "sam")];
     const { rerender } = render(
-      <StickyWall notes={notes} pinning={content()} />,
+      <StickyWall notes={notes} pinning={noteContent()} />,
     );
     // the submit writes the pending list, then the Spotlight goes
     storePending(pending("ada", 2));
@@ -202,7 +189,7 @@ describe("StickyWall", () => {
 
     // ada's note is now in the approved list (same author + content)
     render(
-      <StickyWall notes={[{ id: 9, author: "ada", content: content() }]} />,
+      <StickyWall notes={[{ id: 9, author: "ada", content: noteContent() }]} />,
     );
 
     await waitFor(() => {
@@ -234,7 +221,7 @@ describe("StickyWall fonts", () => {
     storePending({
       author: "pat",
       submittedAt: 1,
-      content: content({ elements: [text("marker")] }),
+      content: noteContent({ elements: [text("marker")] }),
     });
     render(
       <StickyWall

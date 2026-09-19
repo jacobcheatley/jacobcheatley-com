@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { noteContent } from "./note-fixture";
 import { FONT_FAMILIES } from "./note-fonts";
 import {
   FASTENER_MARGIN,
@@ -22,13 +23,7 @@ function renderPaper(content: NoteContent) {
   return renderToStaticMarkup(createElement(NotePaper, { content }));
 }
 
-const content: NoteContent = {
-  version: 1,
-  w: 500,
-  h: 500,
-  colour: "yellow",
-  rotation: 0,
-  curl: { bl: 0, br: 0 },
+const content = noteContent({
   fastener: "pin-red",
   elements: [
     {
@@ -54,7 +49,7 @@ const content: NoteContent = {
     },
     { type: "sticker", x: 120, y: 90, emoji: "⭐", scale: 1, rotation: 0 },
   ],
-};
+});
 
 describe("NoteRender", () => {
   it("emits a 500×500 svg with the stroke, text, and sticker in array (z-)order", () => {

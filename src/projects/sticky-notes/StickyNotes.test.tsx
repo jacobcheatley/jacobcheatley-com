@@ -9,7 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SHAKE_MS } from "./desk-objects";
-import type { NoteContent } from "./note-schema";
+import { noteContent } from "./note-fixture";
 import { StickyNotes } from "./StickyNotes";
 
 // The route's only contribution is `matUp` (whether the URL is
@@ -42,16 +42,7 @@ const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 const approved = (author: string) => ({
   id: 1,
   author,
-  content: {
-    version: 1,
-    w: 500,
-    h: 500,
-    colour: "white",
-    rotation: 0,
-    curl: { bl: 0, br: 0 },
-    fastener: "none",
-    elements: [],
-  } satisfies NoteContent,
+  content: noteContent(),
 });
 
 // The mat is the surface the "← the wall" link is stuck to.

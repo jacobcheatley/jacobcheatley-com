@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { noteContent } from "./note-fixture";
 import type { NoteContent } from "./note-schema";
 import {
   isApproved,
@@ -25,37 +26,23 @@ vi.stubGlobal("localStorage", {
 
 beforeEach(() => store.clear());
 
-function content(over?: Partial<NoteContent>): NoteContent {
-  return {
-    version: 1,
-    w: 500,
-    h: 500,
-    colour: "yellow",
-    rotation: 0,
-    curl: { bl: 0, br: 0 },
-    fastener: "none",
-    elements: [],
-    ...over,
-  };
-}
-
 describe("isApproved", () => {
   const pending: PendingNote = {
     author: "sam",
-    content: content(),
+    content: noteContent(),
     submittedAt: 1,
   };
 
   it("matches an approved note with the same author and content", () => {
-    expect(isApproved(pending, [{ author: "sam", content: content() }])).toBe(
-      true,
-    );
+    expect(
+      isApproved(pending, [{ author: "sam", content: noteContent() }]),
+    ).toBe(true);
   });
 
   it("ignores an approved note by a different author", () => {
-    expect(isApproved(pending, [{ author: "lee", content: content() }])).toBe(
-      false,
-    );
+    expect(
+      isApproved(pending, [{ author: "lee", content: noteContent() }]),
+    ).toBe(false);
   });
 
   it("matches despite reordered object keys (the jsonb round-trip)", () => {
@@ -80,7 +67,7 @@ describe("isApproved", () => {
   it("ignores an approved note whose content differs", () => {
     expect(
       isApproved(pending, [
-        { author: "sam", content: content({ colour: "pink" }) },
+        { author: "sam", content: noteContent({ colour: "pink" }) },
       ]),
     ).toBe(false);
   });
@@ -92,7 +79,7 @@ describe("isApproved", () => {
 
 const pendingNote = (author: string, at: number): PendingNote => ({
   author,
-  content: content(),
+  content: noteContent(),
   submittedAt: at,
 });
 
@@ -131,7 +118,7 @@ describe("the pending list", () => {
     // inside NoteRender mid-render
     localStorage.setItem(KEY, JSON.stringify([{ content: 42 }]));
     expect(readPending()).toEqual([]);
-    localStorage.setItem(KEY, JSON.stringify([{ content: content() }]));
+    localStorage.setItem(KEY, JSON.stringify([{ content: noteContent() }]));
     expect(readPending()).toEqual([]); // no author
   });
 
@@ -158,7 +145,7 @@ describe("reconcilePending", () => {
     savePending(sam);
 
     const left = reconcilePending(readPending(), [
-      { author: "ada", content: content() },
+      { author: "ada", content: noteContent() },
     ]);
     expect(left.map((p) => p.author)).toEqual(["sam"]);
     expect(readPending().map((p) => p.author)).toEqual(["sam"]);
@@ -167,7 +154,9 @@ describe("reconcilePending", () => {
   it("clears the key once every pending note is approved", () => {
     savePending(pendingNote("ada", 1));
     expect(
-      reconcilePending(readPending(), [{ author: "ada", content: content() }]),
+      reconcilePending(readPending(), [
+        { author: "ada", content: noteContent() },
+      ]),
     ).toEqual([]);
     expect(localStorage.getItem(KEY)).toBeNull();
   });
