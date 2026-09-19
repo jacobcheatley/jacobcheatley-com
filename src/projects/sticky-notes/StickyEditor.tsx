@@ -136,7 +136,7 @@ export default function StickyEditor({
   // listening to the wall's presses and keys.
   up?: boolean;
   pinning?: NoteContent;
-  onPinning?: (note: NoteContent | undefined) => void;
+  onPinning: (note: NoteContent | undefined) => void;
 }) {
   const [content, setContent] = useState<NoteContent | null>(initialContent);
   // The live note: a pointer event has to read back what the previous move
@@ -520,7 +520,7 @@ export default function StickyEditor({
     const from = paperRef.current?.getBoundingClientRect();
     // The Spotlight has to be there before there is anywhere to fly to, so
     // this render happens now rather than after the handler.
-    flushSync(() => onPinning?.({ ...live, fastener: "none" }));
+    flushSync(() => onPinning({ ...live, fastener: "none" }));
     flyTo(from, document.querySelector("[data-spotlight]"));
   }
 
@@ -1166,7 +1166,7 @@ export default function StickyEditor({
         onClose={() => setSheetOpen(false)}
       />
 
-      {pinning && onPinning && (
+      {pinning && (
         <PinUp
           content={pinning}
           onChange={onPinning}
