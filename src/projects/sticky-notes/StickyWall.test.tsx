@@ -71,7 +71,6 @@ describe("StickyWall", () => {
     expect(screen.getByRole("heading", { name: "Sticky Notes" })).toHaveClass(
       "sr-only",
     );
-    // the wall is cork and notes; Back is the way home
     expect(screen.queryByRole("link", { name: /jacobcheatley/i })).toBeNull();
   });
 
@@ -127,7 +126,7 @@ describe("StickyWall", () => {
 
     render(<StickyWall notes={[note(1, "sam")]} />);
 
-    // pending overlay is applied after mount; both land ahead of the approved one
+    // the pending overlay is applied after mount
     await waitFor(() => {
       const tiles = screen.getAllByRole("button", { name: /zoom note by/i });
       expect(tiles).toHaveLength(3);
@@ -139,7 +138,6 @@ describe("StickyWall", () => {
 
   it("puts nothing in the newest slot while a note is being pinned up", async () => {
     storePending(pending("ada", 2));
-    // the wall is up before anything is pinned up over it
     const notes = [note(1, "sam")];
     const { rerender } = render(<StickyWall notes={notes} />);
     await waitFor(() =>
@@ -150,7 +148,7 @@ describe("StickyWall", () => {
       <StickyWall notes={notes} pinning={content({ colour: "pink" })} />,
     );
 
-    // invite, the pending note, the approved one — the note being pinned up is
+    // invite, the pending note, the approved one; the note being pinned up is
     // in the Spotlight over the top, not on the board
     const items = screen.getAllByRole("listitem");
     expect(items).toHaveLength(3);
@@ -176,7 +174,7 @@ describe("StickyWall", () => {
 
   it("keeps the small invite, not the empty wall's, while a note is pinned up over it", () => {
     render(<StickyWall notes={[]} pinning={content()} />);
-    // "+ pin a note" is the tile-sized one; the empty wall's asks for the first
+    // "+ pin" is the tile-sized invite; the empty wall's asks for the first note
     expect(screen.getByRole("link", { name: /pin a note/i })).toHaveTextContent(
       "+ pin",
     );
@@ -210,18 +208,16 @@ describe("StickyWall", () => {
     await waitFor(() => {
       expect(screen.getAllByText(/pending/i)).toHaveLength(1);
     });
-    // ada's approved tile plus lee's still-pending one
     const tiles = screen.getAllByRole("button", { name: /zoom note by/i });
     expect(tiles).toHaveLength(2);
     expect(tiles[0]).toHaveAccessibleName(/lee/i);
-    // the trimmed list is written back
     expect(localStorage.getItem("sticky-notes:pending")).toBe(
       JSON.stringify([pending("lee", 1)]),
     );
   });
 });
 
-describe("StickyWall fonts (#93)", () => {
+describe("StickyWall fonts", () => {
   it("loads every font its notes use on mount, not just when the editor opens", async () => {
     const { loadFont } = await import("./note-fonts");
     const text = (font: Font) => ({

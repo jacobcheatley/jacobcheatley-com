@@ -1,5 +1,4 @@
-// dist/ is produced by `bun run build`; it does not exist when `bun run check` runs.
-// @ts-expect-error - the built server module is only present at runtime
+// @ts-expect-error - dist/ is built by `bun run build`, so it exists only at runtime
 const start = (await import("./dist/server/server.js")).default as {
   fetch: (r: Request) => Promise<Response> | Response;
 };

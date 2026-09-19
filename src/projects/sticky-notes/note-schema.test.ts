@@ -29,8 +29,7 @@ function validContent(): NoteContent {
   };
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: tests deliberately build invalid shapes.
-const bad = (content: any) => noteContentSchema.safeParse(content).success;
+const bad = (content: unknown) => noteContentSchema.safeParse(content).success;
 
 const BELL = String.fromCharCode(7); // a control char to smuggle in
 const CR = String.fromCharCode(13);

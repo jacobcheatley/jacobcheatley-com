@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useState } from "react";
-import { fadeScrim, flightHome, flyTo } from "./desk";
+import { fadeScrim, flyTo, takeFlightHome } from "./desk";
 import { loadFont } from "./note-fonts";
 import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
-import type { Font, NoteContent } from "./note-schema";
+import { CANVAS, type Font, type NoteContent } from "./note-schema";
 import {
   type PendingNote,
   readPending,
@@ -12,19 +12,12 @@ import {
 } from "./pending-note";
 import { Spotlight } from "./Spotlight";
 
-// The public wall: a corkboard of approved notes, newest-first, that SSRs with
-// no client JS needed to view it. Client JS adds only the two dynamic bits —
-// tap-to-zoom and the visitor's own pending-note overlay. Rotation lives here in
-// CSS around each tile; curl and the fastener are baked into NoteRender itself.
-
 // An approved note as the loader delivers it (extra columns come along unused).
 export type WallNote = { id: number; author: string; content: NoteContent };
 
-// What a tile/zoom needs — approved notes and the local pending note both fit.
 type DisplayNote = { author: string; content: NoteContent; pending?: boolean };
 
-// Warm corkboard: a faint stipple of pits over a wood-brown wash. Lifted from
-// the visual-direction probe (prototype/49-sticky-look, surface A).
+// Warm corkboard: a faint stipple of pits over a wood-brown wash.
 const CORK_BG: CSSProperties = {
   backgroundImage: [
     "radial-gradient(circle at 20% 30%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
@@ -36,22 +29,19 @@ const CORK_BG: CSSProperties = {
   backgroundSize: "14px 14px, 22px 22px, 18px 18px, 16px 16px, cover",
 };
 
-// A tile's box on the board. The note's own rotation; the shadow follows the
-// paper silhouette (curl cut-outs and all), so a drop-shadow filter, not a
-// rectangular box one.
+// The shadow follows the paper silhouette, curl cut-outs and all: a drop-shadow
+// filter, not a rectangular box one.
 const tileStyle = (content: NoteContent): CSSProperties => ({
   aspectRatio: NOTE_ASPECT_RATIO,
   transform: `rotate(${content.rotation}deg)`,
   filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
 });
 
-// A note sent from the Spotlight flies home into the newest pending tile (#88),
-// which is the first thing to exist where it is going — so the tile starts the
-// flight itself as it mounts, with the rect the pinning left behind. Any other
-// tile finds none waiting and stays where it is. Module scope, so the ref is
-// the same function every render and React never re-attaches it.
+// A note sent from the Spotlight flies home into the newest pending tile, which
+// starts the flight as it mounts; any other tile finds no rect waiting. Module
+// scope, so the ref never changes and React never re-attaches it.
 function flyHome(tile: HTMLLIElement | null) {
-  if (tile && flyTo(flightHome(), tile)) fadeScrim();
+  if (tile && flyTo(takeFlightHome(), tile)) fadeScrim();
 }
 
 const PendingBadge = () => (
@@ -75,15 +65,14 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
   );
 }
 
-// A blank note carrying the invite copy, pinned with the real pin-red fastener —
-// so the affordance renders through the exact same NoteRender path as any note,
-// not a look-alike CSS pin.
+// The invite copy on a blank note, so the affordance renders through the same
+// NoteRender path as any note rather than a look-alike CSS pin.
 const INVITE_FONT: Font = "casual";
 function inviteContent(text: string, fontSize: number): NoteContent {
   return {
     version: 1,
-    w: 500,
-    h: 500,
+    w: CANVAS,
+    h: CANVAS,
     colour: "yellow",
     rotation: -3,
     curl: { bl: 0, br: 0 },
@@ -104,9 +93,6 @@ function inviteContent(text: string, fontSize: number): NoteContent {
   };
 }
 
-// The add-a-note affordance IS a diegetic note pinned to the board, and always
-// sits first — the slot a new note lands in, since the wall is newest-first.
-// Bigger when the board is empty, tile-sized once notes exist.
 function AddNote({ empty }: { empty: boolean }) {
   const content = empty
     ? inviteContent("Nothing pinned yet — pin the first note", 46)
@@ -133,28 +119,24 @@ export function StickyWall({
   pinning,
 }: {
   notes: WallNote[];
-  // the note being pinned up, while it is (#88): the wall shows nothing of it
-  // — it is lifted into the Spotlight over the top — but it must not re-read
-  // its pending notes under a note that has not been sent yet.
+  // the note being pinned up, while it is: the wall shows nothing of it, but it
+  // must not re-read its pending notes under a note that has not been sent yet.
   pinning?: NoteContent;
 }) {
   const [zoomed, setZoomed] = useState<DisplayNote | null>(null);
   const [pending, setPending] = useState<PendingNote[]>([]);
 
   // Own pending notes live only in this browser, so read them after mount (SSR
-  // has no localStorage); each drops the moment it shows up approved. Read
-  // again when a pinning ends: a submit has just added one to the list. A
-  // layout effect, so the tile the note flies home into is laid out before the
-  // browser paints the wall it is coming back to.
+  // has no localStorage), and again when a pinning ends. A layout effect, so the
+  // tile the note flies home into is laid out before the wall paints.
   useLayoutEffect(() => {
     if (pinning) return;
     setPending(reconcilePending(readPending(), notes));
   }, [notes, pinning]);
 
-  // The note webfonts load lazily (note-fonts.ts), and until #93 only the
-  // editor asked for them — the wall sat in the cursive fallback until you
-  // opened the editor. Ask for every face a tile shows, plus the invite's.
-  // No dedupe: a dynamic import() is cached, so a repeat ask costs nothing.
+  // Ask for every face a tile shows, plus the invite's; the note webfonts load
+  // lazily (note-fonts.ts). No dedupe: a dynamic import() is cached, so a
+  // repeat ask costs nothing.
   useEffect(() => {
     loadFont(INVITE_FONT);
     for (const { content } of [...pending, ...notes])
@@ -162,7 +144,6 @@ export function StickyWall({
         if (el.type === "text") loadFont(el.font);
   }, [notes, pending]);
 
-  // Esc closes the Spotlight (tap-out is handled on the scrim itself).
   useEffect(() => {
     if (!zoomed) return;
     const onKey = (e: KeyboardEvent) => {
@@ -189,8 +170,7 @@ export function StickyWall({
         {pending.map((p, i) => {
           const tile = { ...p, pending: true };
           return (
-            // The newest of them holds the slot a note just sent flies home
-            // into; it is the first tile after the invite.
+            // The newest holds the slot a sent note flies home into.
             <li
               key={`${p.submittedAt}-${p.author}`}
               ref={i === 0 ? flyHome : undefined}

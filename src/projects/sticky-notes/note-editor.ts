@@ -1,57 +1,38 @@
 import {
   CANVAS,
   MAX_ELEMENTS,
+  MAX_FOLD,
   type NoteContent,
+  type NoteElement,
   PAPER_COLOURS,
+  STICKER_BASE,
 } from "./note-schema";
 import { LINE_HEIGHT, wrapLines } from "./note-text";
 
-// The editor's pure model layer: seeding a blank note and the immutable
-// element operations (add / update / move / remove) plus the geometry the
-// interaction shell needs (bounds, hit-test, off-note). No React, no DOM — so
-// the tricky bits (topmost hit-test, coord clamping, the note's own turn and
-// curl) are unit-tested here, and the shell stays thin: it maps pointers onto
-// these calls and holds no model logic of its own.
-//
-// A placed element never changes again (#79): the move and handle maths below
-// is for the element still being placed (#80). `moveElement` is unclamped, and
-// `settleElement` brings the result back inside the schema's -50..550 range, so
-// out-of-range coords are never stored; `isOffNote` tells the shell a sticker
-// has been dragged off the paper, back to its sheet.
-
-export type Element = NoteContent["elements"][number];
-
-// Must match note-render's sticker base size, so an editor hit-box matches the
-// rendered glyph. Kept local (note-render doesn't export it) — one number.
-const STICKER_BASE = 48;
-
-// An emoji glyph doesn't fill its em box, so the drawn sticker can sit off the
-// centre the box is built around. 0 until T6 tunes it against real glyphs.
-export const STICKER_BOX_OFFSET_Y = 0;
+// The editor's pure model layer: a blank note, the immutable element operations
+// and the geometry the interaction shell needs. No React, no DOM, so the tricky
+// bits are unit-tested here and the shell only maps pointers onto these calls.
 
 // Extra reach around an element's silhouette, so a fingertip near a thin line
 // still grabs it.
-export const HIT_SLOP = 6;
+const HIT_SLOP = 6;
 
-// Schema allows -50..550 (a little off-paper slack); clamp raw pointer input so
-// a wild drag can't emit an out-of-range coord the contract would reject. It
-// also rounds to a tenth of a unit — finer than any screen can show, and it
-// keeps the float noise a tilted note's rotation leaves behind (250.00000000003)
-// out of the stored JSON, where a long stroke pays for every digit.
-export const clamp = (n: number, lo: number, hi: number): number =>
+const clamp = (n: number, lo: number, hi: number): number =>
   Math.max(lo, Math.min(hi, n));
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Holds raw pointer input inside the schema's -50..550 (a little off-paper
+// slack), and rounds to a tenth: finer than any screen shows, and it keeps a
+// tilted note's float dust out of the JSON, where a long stroke pays per digit.
 export const clampCoord = (n: number): number => round1(clamp(n, -50, 550));
 
 // Degrees, brought back inside the contract's -180..180 after an addition.
 const wrap180 = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
-// Blank note with seeded cosmetics — paper colour / rotation / curl are
-// seeded-random per note (spec #49), lightly adjustable in the tray. Fastener
-// starts "none": choosing one IS the submit, so it isn't pre-seeded.
+// Blank note with seeded cosmetics: paper colour, rotation and curl are random
+// per note. Fastener starts "none" because choosing one IS the submit.
 export function emptyNote(rand: () => number = Math.random): NoteContent {
   const colour =
     PAPER_COLOURS[Math.floor(rand() * PAPER_COLOURS.length)] ?? "yellow";
@@ -69,7 +50,7 @@ export function emptyNote(rand: () => number = Math.random): NoteContent {
 
 // Append (array order is z-order). Silently refuses past the element cap so the
 // editor can call it unconditionally; the contract enforces the cap anyway.
-export function addElement(content: NoteContent, el: Element): NoteContent {
+export function addElement(content: NoteContent, el: NoteElement): NoteContent {
   if (content.elements.length >= MAX_ELEMENTS) return content;
   return { ...content, elements: [...content.elements, el] };
 }
@@ -85,14 +66,9 @@ export function removeElement(
 }
 
 // Rigid, unclamped translation: every point moves by the same delta, so a
-// stroke keeps its shape instead of squashing flat against an edge, and an
-// element can be dragged fully off the paper. Rounded to a tenth like
-// clampCoord: a drag's deltas are differences of floats, and their dust would
-// otherwise be stored.
-// `<E extends Element>` hands back the same kind of element it was given, so a
-// moved text box is still known to be a text box. TS can't follow that generic
-// through an object spread, hence the `as E`.
-export function moveElement<E extends Element>(
+// stroke keeps its shape instead of squashing flat against an edge. TS can't
+// follow `<E extends NoteElement>` through an object spread, hence the `as E`.
+export function moveElement<E extends NoteElement>(
   el: E,
   dx: number,
   dy: number,
@@ -106,18 +82,17 @@ export function moveElement<E extends Element>(
 }
 
 // The minimal shift that brings [lo, hi] back inside -50..550. A span wider
-// than the range can't fit, so its minimum goes to -50 and the overflow hangs
-// off the far end (unreachable via clampCoord'd input, but cheap to be safe).
+// than the range can't fit: its minimum goes to -50 and the overflow hangs off
+// the far end.
 function settleShift(lo: number, hi: number): number {
   const d = hi > 550 ? 550 - hi : 0;
   return lo + d < -50 ? -50 - lo : d;
 }
 
-// Drop an element back into the contract's coordinate range after an unclamped
-// drag: the smallest rigid shift that puts every STORED coordinate inside
-// -50..550 (a stroke's points; a text or sticker anchor — the schema constrains
-// coords, not silhouettes). Returns the element unchanged when it already fits.
-export function settleElement<E extends Element>(el: E): E {
+// The smallest rigid shift that puts every STORED coordinate back inside
+// -50..550 after an unclamped drag: a stroke's points, a text or sticker
+// anchor. The schema constrains coords, not silhouettes.
+export function settleElement<E extends NoteElement>(el: E): E {
   let x0: number;
   let x1: number;
   let y0: number;
@@ -140,13 +115,11 @@ export function settleElement<E extends Element>(el: E): E {
   return dx === 0 && dy === 0 ? el : moveElement(el, dx, dy);
 }
 
-export type Bounds = { x0: number; y0: number; x1: number; y1: number };
+type Bounds = { x0: number; y0: number; x1: number; y1: number };
 
-// Axis-aligned bounds in the element's own (unrotated) frame, used for the
-// outline, the box hit-test and off-note detection. ponytail: a stroke is
-// still its bbox here — only hit-testing walks the real polyline — which is
-// all the outline and off-note tests need.
-export function bounds(el: Element): Bounds {
+// Axis-aligned bounds in the element's own (unrotated) frame.
+// ponytail: a stroke is its bbox here, only hit-testing walks the polyline.
+export function bounds(el: NoteElement): Bounds {
   if (el.type === "stroke") {
     let x0 = Infinity;
     let y0 = Infinity;
@@ -163,8 +136,7 @@ export function bounds(el: Element): Bounds {
   }
   if (el.type === "sticker") {
     const r = (STICKER_BASE * el.scale) / 2;
-    const cy = el.y + STICKER_BOX_OFFSET_Y;
-    return { x0: el.x - r, y0: cy - r, x1: el.x + r, y1: cy + r };
+    return { x0: el.x - r, y0: el.y - r, x1: el.x + r, y1: el.y + r };
   }
   // text: (x, y) is the block's top-left — the renderer drops the first
   // baseline to y + fontSize — and each wrapped line adds a LINE_HEIGHT.
@@ -178,9 +150,9 @@ export function bounds(el: Element): Bounds {
 }
 
 // Rotate (x, y) by deg about (cx, cy) — the same turn the renderer puts on a
-// rotated element, so a handle drawn through this lands on the corner of the
-// box the visitor can see.
-export function rotatePoint(
+// rotated element, so a handle drawn through this lands on the box the visitor
+// can see.
+function rotatePoint(
   x: number,
   y: number,
   cx: number,
@@ -207,9 +179,8 @@ const unrotate = (
   deg: number,
 ): [number, number] => rotatePoint(x, y, cx, cy, -deg);
 
-// Distance from (px, py) to the segment ab — the standard projection-onto-the
-// -segment clamp. A zero-length segment degenerates to point distance, which is
-// what a one-point stroke (a dot) needs.
+// Distance from (px, py) to the segment ab. A zero-length segment degenerates
+// to point distance, which is what a one-point stroke (a dot) needs.
 function distToSegment(
   px: number,
   py: number,
@@ -231,7 +202,7 @@ function distToSegment(
 // Does the point land on the element's real silhouette? A stroke is its
 // polyline (its bounding box would swallow the hole in a drawn circle); text
 // and stickers are their box, seen through their own rotation.
-function hitsElement(el: Element, x: number, y: number): boolean {
+function hitsElement(el: NoteElement, x: number, y: number): boolean {
   if (el.type === "stroke") {
     const reach = el.size / 2 + HIT_SLOP;
     const pts = el.points;
@@ -253,7 +224,7 @@ function hitsElement(el: Element, x: number, y: number): boolean {
 }
 
 // True when the element sits entirely off the paper (0..CANVAS both axes).
-export function isOffNote(el: Element): boolean {
+export function isOffNote(el: NoteElement): boolean {
   const b = bounds(el);
   return b.x1 < 0 || b.x0 > CANVAS || b.y1 < 0 || b.y0 > CANVAS;
 }
@@ -274,15 +245,17 @@ export function hitTestAll(
   return found;
 }
 
-// Index of the topmost element under (x, y), or -1.
-export function hitTest(content: NoteContent, x: number, y: number): number {
-  return hitTestAll(content, x, y)[0] ?? -1;
+export function hitTest(
+  content: NoteContent,
+  x: number,
+  y: number,
+): number | undefined {
+  return hitTestAll(content, x, y)[0];
 }
 
-// --- the note's own geometry (#76) ------------------------------------------
+// --- the note's own geometry -------------------------------------------------
 // The paper renders rotated on the mat, so a client point means nothing until
-// it has come back through that rotation. This is the whole mapping, pure: the
-// shell measures the paper and hands it over.
+// it has come back through that rotation. The shell measures, this maps.
 
 // Client point → note units. `centre` is the paper's centre (the bounding box's
 // centre IS the rotation centre) and `side` its rendered, unrotated side.
@@ -305,28 +278,19 @@ export function clientToNoteCoords(
 
 // The rendered side of the square sheet, from the box a rotated one occupies.
 // Derived rather than read off `offsetWidth`: that is the LAYOUT size, and the
-// note is drawn scaled while it tears off, crumples, or is squeezed above the
-// sticker sheet on a short mat — which would put every pointer some way from
-// where it really is.
+// note is drawn scaled while it tears off, crumples or is squeezed on a mat.
 export function noteSide(bboxWidth: number, rotationDeg: number): number {
   const a = (rotationDeg * Math.PI) / 180;
   return bboxWidth / (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a)));
 }
 
-// --- the paper's own handles (#76) ------------------------------------------
-// No sliders anywhere (#69): in hand mode the note is turned by a drag anywhere
-// on it and peeled by its corners, so the sheet itself is the control. All of
-// it is geometry, so all of it is here — the shell only decides which gesture a
-// pointer started.
-
-// Must match note-render's fold size, like STICKER_BASE above: one number, kept
-// here rather than pulling the renderer's JSX into the model layer.
-export const MAX_FOLD = 120;
+// --- the paper's own handles -------------------------------------------------
+// No sliders: the note is turned by a drag anywhere on it and peeled by its
+// corners, so the sheet itself is the control. The shell only decides which
+// gesture a pointer started.
 
 // How close to the paper's centre, in note units, a turn has no angle worth
 // reading: a hair of movement there swings the pointer's angle right round.
-// Moves inside it are ignored, and a turn pressed there reads its angle from
-// where the pointer first leaves.
 export const SPIN_DEAD = 40;
 
 export const outsideSpinDead = (x: number, y: number): boolean =>
@@ -336,12 +300,11 @@ export const outsideSpinDead = (x: number, y: number): boolean =>
 export type Corner = "bl" | "br";
 
 // How far from a bottom corner still counts as taking hold of the fold.
-export const CURL_GRAB = 40;
+const CURL_GRAB = 40;
 
-// Which bottom corner a pointer took hold of, if either: within reach of the
-// corner it peels from, or anywhere on the fold. The flap is drawn folded back
-// over the sheet, so it and the triangle cut away from under it together fill
-// the square of the fold's size in the corner — and the flap is what you see.
+// Which bottom corner a pointer took hold of: within reach of the corner it
+// peels from, or anywhere on the fold. The flap drawn back over the sheet and
+// the triangle cut from under it fill the square of the fold's size there.
 export function curlCorner(
   curl: { bl: number; br: number },
   x: number,
@@ -356,9 +319,8 @@ export function curlCorner(
 }
 
 // The curl a drag leaves a corner at: the curl it had when taken hold of, plus
-// how far the pointer has since pulled in along the corner's own diagonal.
-// Relative, so taking hold of the flap doesn't snap the fold to the pointer.
-// Only the diagonal counts: sliding along the crease peels nothing.
+// how far the pointer has since pulled in along the corner's own diagonal, so
+// taking hold of the flap doesn't snap the fold to the pointer.
 export function curlFromPointer(
   corner: Corner,
   start: number,
@@ -371,9 +333,8 @@ export function curlFromPointer(
 }
 
 // ponytail: the wall looks wrong past a light tilt, so a note is held to +-25
-// even though the contract allows a half turn either way. If a sideways note
-// is ever wanted, this is the only number in the way.
-export const ROTATE_LIMIT = 25;
+// though the contract allows a half turn; this is the only number in the way.
+const ROTATE_LIMIT = 25;
 
 // The note's tilt after a gesture has swept `by` degrees round its centre.
 // The sweep is normalised first: dragging across the centre flips atan2 by a
@@ -381,36 +342,33 @@ export const ROTATE_LIMIT = 25;
 export const turnNote = (from: number, by: number): number =>
   round1(clamp(from + wrap180(by), -ROTATE_LIMIT, ROTATE_LIMIT));
 
-// Degrees from one point out to another: the sweep a turn of the note, two
-// fingers and `rotationFromHandle` all read their angle from.
+// Degrees from one point out to another (y runs down the screen).
 export const angleOf = (from: [number, number], to: [number, number]): number =>
   (Math.atan2(to[1] - from[1], to[0] - from[0]) * 180) / Math.PI;
 
-// --- an element's own handles (#76, #80) ------------------------------------
-// Only the element being placed has handles (a placed one never changes, #79):
+// --- an element's own handles ------------------------------------------------
+// Only the element being placed has handles, a placed one never changes again:
 // a corner handle that only turns it, and on a text box a right-edge handle for
 // the width it wraps at.
 
-// The handles are drawn small (they sit on a note, not a toolbar) but caught
-// big: this is the target's width in CSS px, for the shell to size into note
-// units against however large the sheet is rendered.
+// Drawn small (they sit on a note, not a toolbar) but caught big: the target's
+// width in CSS px, for the shell to size into note units against however large
+// the sheet is rendered.
 export const HANDLE_TOUCH = 48;
 
-// An element turned by `by` degrees. Unlike the note (turnNote, held to a tilt
-// the wall can wear) an element may face any way at all, so a turn past half a
+// Unlike the note, an element may face any way at all, so a turn past half a
 // circle comes round the other side rather than sticking at the contract's end.
-export const turnElement = (from: number, by: number): number =>
+const turnElement = (from: number, by: number): number =>
   round1(wrap180(from + wrap180(by)));
 
-// Where an element's handles sit, in note coordinates — already turned by the
-// element's own rotation, like the box they hang off. A stroke has none: it is
-// drawn, not placed, and the eraser is how it goes.
-export type Handles = {
+// Where an element's handles sit, in note coordinates, already turned by the
+// element's own rotation. A stroke has none: it is drawn, not placed.
+type Handles = {
   corner: [number, number];
   width: [number, number] | null;
 };
 
-export function elementHandles(el: Element): Handles | null {
+export function elementHandles(el: NoteElement): Handles | null {
   if (el.type === "stroke") return null;
   const b = bounds(el);
   const at = (x: number, y: number) =>
@@ -441,14 +399,12 @@ export function grabbedHandle(
 // The part of the element being placed that a press took hold of.
 export type PlacingGrip = "corner" | "width" | "move";
 
-// What a press at (x, y) takes hold of on the element being placed (#80): a
-// handle, its body to move it, or nothing — a press away, which fixes it.
-// `reach` is a thumb's reach in note units, used for every pointer, a mouse's
-// too. Outside the element a handle is caught from all of it; over the body
-// only from half, or a sticker, whose corner is nearer its middle than a thumb
-// is wide on a phone, could never be moved at all.
+// What a press at (x, y) takes hold of on the element being placed: a handle,
+// its body to move it, or nothing. `reach` is a thumb's reach in note units for
+// every pointer, a mouse's too, halved over the body so a sticker, whose corner
+// is nearer its middle than a thumb is wide, can still be moved.
 export function grabPlacing(
-  el: Element,
+  el: NoteElement,
   x: number,
   y: number,
   reach: number,
@@ -461,10 +417,9 @@ export function grabPlacing(
   return onBody ? "move" : null;
 }
 
-// One drag of the corner handle: the element's rotation when it was taken hold
-// of, plus how far round its anchor (x, y) — the point the renderer turns it
-// about — the pointer has since swung. Only the angle counts, never the reach:
-// the handle turns, it does not resize.
+// The element's rotation when the corner handle was taken hold of, plus how far
+// round its anchor (x, y) — the point the renderer turns it about — the pointer
+// has since swung. Only the angle counts: the handle turns, it does not resize.
 export function rotationFromHandle(
   el: { x: number; y: number; rotation: number },
   from: [number, number],
@@ -478,7 +433,7 @@ export function rotationFromHandle(
 
 // The element being placed as it goes onto the note for good: text trimmed,
 // and an empty box is nothing to add.
-export function fixedElement(el: Element): Element | null {
+export function fixedElement(el: NoteElement): NoteElement | null {
   if (el.type !== "text") return el;
   const text = el.text.trim();
   return text ? { ...el, text } : null;

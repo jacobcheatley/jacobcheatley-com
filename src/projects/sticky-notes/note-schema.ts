@@ -1,15 +1,11 @@
 import { z } from "zod";
 
 // The Sticky Notes write-path contract: the trust boundary. Shared by the
-// server function's `.validator` (server side) and the editor's in-browser
-// check (client side), so nothing here may import server code. Every object is
-// `.strict()` (via `z.strictObject`) — unknown keys are rejected, not dropped.
-//
-// See CONTEXT.md → "Sticky Notes" for the domain terms, and the build spec
-// (#57) / storage ticket (#58) for the caps below.
+// server function's validator and the editor's in-browser check, so nothing
+// here may import server code. Every object is strict: unknown keys rejected.
 
-// Semantic enum keys, never raw colour — the shade mapping lives in render code
-// so stored notes never need migrating when the palette is re-tuned.
+// Semantic keys, never raw colour: the shade mapping lives in render code, so
+// stored notes never need migrating when the palette is re-tuned.
 export const INKS = ["black", "green", "red", "blue"] as const;
 export const PAPER_COLOURS = [
   "yellow",
@@ -33,8 +29,7 @@ export const FASTENERS = [
   "stick",
 ] as const;
 
-// Curated sticker set. Kept small on purpose; re-tunable without a migration
-// since only the key is stored. The editor (#61) surfaces exactly these.
+// Curated set, kept deliberately small.
 export const STICKER_EMOJI = [
   "⭐",
   "❤️",
@@ -62,36 +57,39 @@ export const STICKER_EMOJI = [
   "🚀",
 ] as const;
 
-// Caps — see the build spec. Named so the tests and any future tuning read the
-// same numbers.
-export const MAX_BODY_BYTES = 262_144; // 256 KB serialised
+const MAX_BODY_BYTES = 256 * 1024;
 export const MAX_ELEMENTS = 80;
 export const MAX_POINTS_PER_STROKE = 1000;
-export const MAX_POINTS_TOTAL = 20_000;
+const MAX_POINTS_TOTAL = 20_000;
 export const MAX_TEXT_LEN = 280;
+export const MAX_AUTHOR_LEN = 50;
 
-// The note-local canvas is a server-enforced constant; `w`/`h` still travel in
-// the JSON so every coordinate has a concrete frame, but only 500 is accepted.
+// `w`/`h` still travel in the JSON so every coordinate has a concrete frame,
+// but this is the only value accepted.
 export const CANVAS = 500;
+
+// What the stored numbers mean in note units: a sticker's side at `scale` 1,
+// and how far a corner peels in at `curl` 1.
+export const STICKER_BASE = 48;
+export const MAX_FOLD = 120;
 
 const coord = z.number().min(-50).max(550);
 const rotation = z.number().min(-180).max(180);
 const pressure = z.number().min(0).max(1);
 
 // [x, y, pressure] — raw pointer input; perfect-freehand regenerates the
-// outline at render time (#59), so we never store the rendered shape.
+// outline at render time, so the rendered shape is never stored.
 const point = z.tuple([coord, coord, pressure]);
 
-// Author and timestamps are DB columns, not part of the content blob. Stored
-// lowercase — the wall is a scruffy corkboard, not a masthead, so a name never
-// shouts. Interior control characters (newlines included) are rejected
-// outright, after the lowercasing so caps can't smuggle one past.
+// Stored lowercase: the wall is a scruffy corkboard, not a masthead, so a name
+// never shouts. Control characters (newlines included) are rejected after the
+// lowercasing, so caps can't smuggle one past.
 const author = z
   .string()
   .trim()
   .toLowerCase()
   .min(1)
-  .max(50)
+  .max(MAX_AUTHOR_LEN)
   .refine((s) => !/\p{Cc}/u.test(s), "control characters are not allowed");
 
 // Text boxes keep `\n`; every other control character (C0, DEL, C1) is
@@ -146,8 +144,7 @@ const element = z.discriminatedUnion("type", [
   stickerElement,
 ]);
 
-// The content blob the editor emits and the wall + CLI consume. `version: 1`
-// leaves room for forward migration; array order IS z-order.
+// Array order IS z-order.
 export const noteContentSchema = z
   .strictObject({
     version: z.literal(1),
@@ -155,8 +152,7 @@ export const noteContentSchema = z
     h: z.literal(CANVAS),
     colour: z.enum(PAPER_COLOURS),
     rotation,
-    // Per-corner peel intensity for the two bottom corners (0 = flat, 1 = fully
-    // curled). The renderer folds each corner up by this much.
+    // Per-corner peel of the two bottom corners: 0 flat, 1 fully curled.
     curl: z.strictObject({
       bl: z.number().min(0).max(1),
       br: z.number().min(0).max(1),
@@ -172,16 +168,14 @@ export const noteContentSchema = z
     if (totalPoints > MAX_POINTS_TOTAL) {
       ctx.addIssue(`too many stroke points (max ${MAX_POINTS_TOTAL})`);
     }
-    // Guards the JSONB column against a giant payload. Byte-accurate rather than
-    // char-count, since emoji and multibyte text inflate the stored size.
+    // Byte-accurate rather than char count: emoji and multibyte text inflate
+    // the size the JSONB column has to hold.
     const bytes = new TextEncoder().encode(JSON.stringify(note)).length;
     if (bytes > MAX_BODY_BYTES) {
       ctx.addIssue(`note is too large (max ${MAX_BODY_BYTES} bytes)`);
     }
   });
 
-// The full submission payload: author + content. The server function validates
-// with this; the server re-validation is what makes it the trust boundary.
 export const noteSchema = z.strictObject({
   author,
   content: noteContentSchema,
@@ -193,4 +187,5 @@ export type Font = (typeof FONTS)[number];
 export type Fastener = (typeof FASTENERS)[number];
 
 export type NoteContent = z.infer<typeof noteContentSchema>;
+export type NoteElement = NoteContent["elements"][number];
 export type NoteSubmission = z.infer<typeof noteSchema>;

@@ -6,23 +6,21 @@ import { flyingFrom } from "./desk";
 import { SHAKE_MS, TapeLabel } from "./desk-objects";
 import { FONT_FAMILIES } from "./note-fonts";
 import { FastenerPreview } from "./note-render";
-import { FASTENERS, type NoteContent, noteSchema } from "./note-schema";
+import {
+  FASTENERS,
+  MAX_AUTHOR_LEN,
+  type NoteContent,
+  noteSchema,
+} from "./note-schema";
 import { savePending } from "./pending-note";
 import { Spotlight } from "./Spotlight";
 import { addNoteFn } from "./sticky-notes.fn";
 
-// Pinning a note up (#88): what happens between the mat and the wall. The
-// editor keeps the note and decides when; this file is the one scene it goes
-// through — the note lifted into a Spotlight over the darkened wall, the nine
-// fasteners in a row beneath it, the tag beneath those — and the two flights,
-// off the mat into the Spotlight and out of it into the wall's newest slot.
+// Everything but `none`, which is what you get by not choosing. TS infers the
+// `!== "none"` filter as a type predicate, so no cast is needed.
+const FASTENER_CHOICES = FASTENERS.filter((f) => f !== "none");
 
-// Everything but `none`, which is what you get by not choosing. TS reads the
-// `!== "none"` test as narrowing the list's type, so no cast is needed.
-const CHOICES = FASTENERS.filter((f) => f !== "none");
-
-// What a fastener is called out loud: its button, for a screen reader.
-const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
+const FASTENER_NAMES: Record<(typeof FASTENER_CHOICES)[number], string> = {
   "pin-red": "a red pin",
   "pin-green": "a green pin",
   "pin-yellow": "a yellow pin",
@@ -34,9 +32,9 @@ const FASTENER_NAMES: Record<(typeof CHOICES)[number], string> = {
   stick: "sticky tack",
 };
 
-// The pinning scene, over the wall. Portalled out of the editor: the editor
-// lives inside the mat, which is off-screen and inert by now, and whose
-// transform would make the Spotlight's `fixed` mean "fixed to the mat".
+// The pinning scene, over the wall. Portalled out of the editor, which lives
+// inside the mat, whose transform would make the Spotlight's `fixed` mean
+// "fixed to the mat".
 export function PinUp({
   content,
   onChange,
@@ -52,16 +50,14 @@ export function PinUp({
 }) {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  // A ref for the guard: a second Enter can arrive before a re-render would
-  // have told it the first one is already on its way. `posting` is the same
-  // fact for rendering: the fasteners are shut while it is true.
+  // A ref for the guard: a second Enter can arrive before a re-render would have
+  // told it the first is already on its way. `posting` is the same fact for
+  // rendering: the fasteners are shut while it is true.
   const sending = useRef(false);
   const [posting, setPosting] = useState(false);
-  // Whether this pin is still the one going on. A POST can outlive it — Back,
-  // "back to the desk" or anything else that ends the pinning unmounts this —
-  // and what arrives then must leave the mat and the URL to whatever came
-  // next. Set in the effect rather than the ref's first value, so StrictMode's
-  // rehearsal unmount and remount leaves it true.
+  // Whether this pin is still the one going on: a POST can outlive the unmount,
+  // and what arrives then must leave the mat and the URL to whatever came next.
+  // Set in the effect, so StrictMode's rehearsal remount leaves it true.
   const live = useRef(false);
   useEffect(() => {
     live.current = true;
@@ -72,24 +68,21 @@ export function PinUp({
   // Held here rather than on the tag, so nothing in the scene can drop a name
   // half typed.
   const [name, setName] = useState("");
-  // `useServerFn` wraps the server fn for a component: the same call, run
-  // through the router, so a redirect from the server would be followed.
+  // Through the router, so a redirect from the server would be followed.
   const addNote = useServerFn(addNoteFn);
 
-  // The Spotlight puts the keyboard nowhere of its own when it has no × (#87),
-  // so the way back takes it: it is the scene's first control, and where focus
-  // has to go as the mat slides out from under it.
+  // The Spotlight puts the keyboard nowhere of its own when it has no ×, so the
+  // way back takes it as the mat slides out from under the scene.
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     back.current?.focus();
   }, []);
 
-  // Escape is the tape label by another name; the browser's Back ends the
-  // pinning by the route instead.
+  // Escape is the tape label by another name.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Not once the note is on its way: it is as good as sent, and going back
-      // would leave it both pending and on the mat to be pinned up twice.
+      // Not once the note is on its way: going back would leave it both pending
+      // and on the mat, to be pinned up twice.
       if (e.key === "Escape" && !sending.current) onBack();
     };
     window.addEventListener("keydown", onKey);
@@ -97,7 +90,7 @@ export function PinUp({
   }, [onBack]);
 
   // Sign the tag: the one POST. Returns false when there is no name to sign
-  // with, so the tag can shake — the name is the only half being typed here.
+  // with, so the tag can shake.
   function sign(): boolean {
     const note = noteSchema.safeParse({ author: name, content });
     if (!note.success) {
@@ -105,9 +98,8 @@ export function PinUp({
         return false;
       // The content is past a cap the editor doesn't police (the byte size):
       // say so, rather than shake at a name that was fine.
-      // ponytail: the visitor only learns at the signing, after the flight.
-      // Upgrade: a live size check in the editor, refusing the mark that
-      // would tip the note over.
+      // ponytail: the visitor only learns at the signing; a live size check in
+      // the editor would refuse the mark that tips the note over.
       setError("too much on this note to pin up");
       return true;
     }
@@ -117,26 +109,26 @@ export function PinUp({
     setError(null);
     addNote({ data: note.data }).then(
       () => {
-        // Where the note is flying home from, taken while it still hangs in
-        // the Spotlight.
+        // Where the note is flying home from, taken while it still hangs in the
+        // Spotlight.
         const from = document
           .querySelector("[data-spotlight]")
           ?.getBoundingClientRect();
-        // Pending first, then the wall: the tile is already written when the
-        // Spotlight goes, so there is a slot to fly into. It is on the server
-        // whether or not this pin is still going on, so it is pending either
-        // way.
+        // Pending first: the tile is written before the Spotlight goes, so there
+        // is a slot to fly into. It is on the server whether or not this pin is
+        // still going on, so it is pending either way.
         savePending({ ...note.data, submittedAt: Date.now() });
         if (!live.current) return;
-        // The tile it flies home into is laid out by the wall, a navigation
-        // and a commit from here, so the wall flies it: this leaves it the
-        // measurement it cannot take for itself.
+        // The tile it flies home into is laid out by the wall, a navigation and a
+        // commit from here, so the wall flies it: this leaves it the measurement
+        // it cannot take for itself.
         flyingFrom(from);
         onPinned();
         // replace: Back from the wall shouldn't reopen a note that was sent
         navigate({ to: "/sticky-notes", replace: true });
       },
-      () => {
+      (cause: unknown) => {
+        console.error(new Error("posting the signed note failed", { cause }));
         sending.current = false;
         setPosting(false);
         setError("it didn't stick — try again");
@@ -147,12 +139,10 @@ export function PinUp({
 
   return createPortal(
     <Spotlight content={content} label="Pin it up">
-      {/* Back to the desk, where "pin it up" sits on the mat: above the note.
-          `order-first` rather than a box hung off the paper — the Spotlight
-          stacks what hangs under the note, and this is the one thing that
-          hangs over it, so it takes the same gap and cannot overlap. Every
-          child needs `relative z-10` to sit above the scrim, as the note
-          does. */}
+      {/* `order-first` rather than a box hung off the paper: the Spotlight
+          stacks what hangs under the note, and this is the one thing that hangs
+          over it, so it takes the same gap and cannot overlap. Every child
+          needs `relative z-10` to sit above the scrim. */}
       <TapeLabel
         ref={back}
         onClick={() => {
@@ -162,10 +152,8 @@ export function PinUp({
       >
         back to the desk
       </TapeLabel>
-      {/* The nine fasteners, as they will look on this very paper: one row on
-          a desktop, two on a phone. */}
       <div className="relative z-10 flex flex-wrap justify-center gap-2">
-        {CHOICES.map((fastener) => (
+        {FASTENER_CHOICES.map((fastener) => (
           <button
             key={fastener}
             type="button"
@@ -192,10 +180,9 @@ export function PinUp({
   );
 }
 
-// The paper tag under the note in the Spotlight: whoever pinned it writes their
-// name, and that is the submit. Not a form, and the tick is a plain button: a
-// lone field in a form is what a password manager reads as a login, and this
-// is a tag on a note. Enter in the field signs it just the same.
+// The paper tag under the note: whoever pinned it writes their name, and that is
+// the submit. Not a form, and the tick is a plain button: a lone field in a form
+// is what a password manager reads as a login. Enter in the field signs it too.
 function NameTag({
   name,
   error,
@@ -206,14 +193,12 @@ function NameTag({
   name: string;
   // why the last signing didn't take, written on the tag itself
   error: string | null;
-  // the note is on its way: nothing more to sign
   sending: boolean;
   onName: (name: string) => void;
   onSign: () => boolean;
 }) {
   // A blank tag rocks for a moment instead of going anywhere. Stopped on the
-  // clock, as the tool's shake is: under reduced motion there is no animation
-  // to end, so waiting for `animationend` left it shaking for good.
+  // clock, not `animationend`: under reduced motion there is no animation to end.
   const [shake, setShake] = useState(false);
   const shakeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(shakeTimer.current), []);
@@ -251,7 +236,7 @@ function NameTag({
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}
-        maxLength={50}
+        maxLength={MAX_AUTHOR_LEN}
         // No name, no id, and one opt-out per password manager: nothing here
         // is an identity field, and an autofill bubble over the tag on a phone
         // would cover the note it hangs from.

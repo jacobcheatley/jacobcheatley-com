@@ -1,8 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { Client } from "pg";
+import { Client, DatabaseError } from "pg";
 
-// Creates and migrates the test database once per run.
 export default async function setup() {
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl) throw new Error("DATABASE_URL is not set");
@@ -16,7 +15,8 @@ export default async function setup() {
   try {
     await admin.query(`CREATE DATABASE "${testDb}"`);
   } catch (err) {
-    if ((err as { code?: string }).code !== "42P04") throw err; // 42P04 = duplicate_database
+    // 42P04 = duplicate_database
+    if (!(err instanceof DatabaseError) || err.code !== "42P04") throw err;
   } finally {
     await admin.end();
   }

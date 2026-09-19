@@ -1,10 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-// The Sticky Notes happy path (#89): tear a sheet off, draw on it, pin it up
-// into the Spotlight over the wall, fasten it there, sign the tag, and find it
-// on the wall as pending. It WRITES a real (pending, never approved) note to
-// whatever database BASE_URL is backed by, so it runs only when asked to —
-// CI's post-deploy smoke sets SMOKE_WRITE.
+// Writes a real (pending, never approved) note to whatever database BASE_URL is
+// backed by, so it runs only when SMOKE_WRITE is set.
 test("a note drawn on the mat and pinned up shows on the wall as pending", async ({
   page,
 }) => {
@@ -25,9 +22,8 @@ test("a note drawn on the mat and pinned up shows on the wall as pending", async
     await expect(paper).toBeVisible({ timeout: 500 });
   }).toPass();
 
-  // One stroke with the black marker, which a torn sheet comes with (#84).
-  // Hovering waits for the sheet to finish flying off the pad, so the box
-  // measured is where it lies.
+  // A torn sheet comes with the black marker held. Hovering waits for the sheet
+  // to finish flying off the pad, so the box measured is where it lies.
   await expect(
     page.getByRole("button", { name: "Put down the black marker" }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -43,8 +39,6 @@ test("a note drawn on the mat and pinned up shows on the wall as pending", async
   await page.mouse.up();
   await expect(paper.locator("[data-elements] path")).toHaveCount(1);
 
-  // The note flies off the mat into the Spotlight (#88): the nine fasteners
-  // lie in a row under it and the tag hangs below those.
   await page.getByRole("button", { name: "pin it up" }).click();
   const spotlight = page.getByRole("dialog", { name: "Pin it up" });
   await spotlight

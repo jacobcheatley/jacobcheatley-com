@@ -2,10 +2,9 @@ import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { StickyNotes } from "@/projects/sticky-notes/StickyNotes";
 import { listNotesFn } from "@/projects/sticky-notes/sticky-notes.fn";
 
-// Sticky Notes is one page (#69). This layout owns it: the loader and the page
-// live here, so both `/sticky-notes` (mat down) and `/sticky-notes/new` (mat up)
-// are the same rendered wall with the cutting mat slid over it or away. The two
-// child routes render nothing of their own — they only name the two URLs.
+// This layout owns the loader and the page, so both `/sticky-notes` (mat down)
+// and `/sticky-notes/new` (mat up) are the same rendered wall with the cutting
+// mat slid over it or away. The child routes only name the two URLs.
 export const Route = createFileRoute("/sticky-notes")({
   loader: () => listNotesFn(),
   component: StickyNotesRoute,
@@ -13,9 +12,8 @@ export const Route = createFileRoute("/sticky-notes")({
 
 function StickyNotesRoute() {
   const notes = Route.useLoaderData();
-  // Matching the editor's URL means the mat is up, unless a note is being
-  // pinned up — StickyNotes decides that (`up = matUp && !pinning`). A miss
-  // returns undefined rather than throwing, which is the "wall" case.
+  // A miss returns undefined rather than throwing (`shouldThrow: false`), which
+  // is the "wall" case.
   const matUp =
     useMatch({ from: "/sticky-notes/new", shouldThrow: false }) !== undefined;
 

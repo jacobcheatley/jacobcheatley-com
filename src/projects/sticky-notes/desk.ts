@@ -1,27 +1,20 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 
-// The desk's shared look, kept out of both components that wear it. The mat
-// surface (StickyMat) SSRs with the wall; everything that lies ON it
-// (StickyEditor) is a lazy chunk, so neither may own constants the other
-// imports — a static import either way would pull the editor into the wall's
-// bundle. This module is the one both sides read from.
+// The desk's shared look and motion. StickyMat SSRs with the wall and
+// StickyEditor is a lazy chunk, so neither may own constants the other imports:
+// a static import either way pulls the editor into the wall's bundle.
 
-// Motion, all CSS: no animation library anywhere in this spec (#69). The
-// prototype's ease-out (#70): quick off the mark, long settle.
+// Quick off the mark, long settle.
 export const EASE_OUT = "cubic-bezier(.2,.8,.25,1)";
 
-// The mat's slide over the wall and away — and the pinned note's flight onto
-// the wall (#77), which rides that same slide down.
+// The mat's slide over the wall and away, and the pinned note's flight onto the
+// wall, which rides that same slide down.
 export const SLIDE_MS = 500;
 
-// A box on screen as the flight reads it: a DOMRect is one, and so is a plain
-// object in a test.
+// A DOMRect, structurally, so a plain object stands in for one in a test.
 type Box = { left: number; top: number; width: number; height: number };
 
-// How far one box's centre is from another's, in px: where a torn-off sheet
-// starts (its pad, seen from where it lands), where a crumpled one goes (the
-// bin, seen from the sheet), and the move in the pinned note's flight. A box
-// that isn't there to measure is no move at all.
+// How far one box's centre is from another's, in px.
 export type Offset = { dx: number; dy: number };
 
 export function centreOffset(
@@ -35,17 +28,11 @@ export function centreOffset(
   };
 }
 
-// A pinned note's flight (#88), as numbers: the translate and scale that put
-// the box it is flying to back over the box it is flying from, for the flight
-// to let go of. The scale is about the target's centre (CSS's default origin).
-// What has to line up is the paper, not the box: a composed note is taller
-// than its square of paper by the fastener's headroom, all of it above, and
-// the sheet on the mat has none — so the correction is whatever headroom the
-// two boxes differ by, in the flight's own scale. Between two boxes of the
-// same shape (the Spotlight and a wall tile) that is nothing.
-// ponytail: centres off the rotated bounding boxes, which is out by a pixel
-// or two at the steepest tilt; unrotate the boxes if a flight ever shows a
-// nudge.
+// Lines up the paper, not the box: a composed note carries the fastener's
+// headroom above its square of paper and a sheet on the mat has none, so the
+// correction is whatever headroom the two boxes differ by, at the flight's scale.
+// ponytail: centres off the rotated bounding boxes, out by a pixel or two at
+// the steepest tilt; unrotate the boxes if a flight ever shows a nudge.
 export function flightTransform(
   from: Box,
   to: Box,
@@ -56,19 +43,15 @@ export function flightTransform(
   return { dx, dy: dy - headroom / 2, scale };
 }
 
-// A note's flight from where it was into where it is going: a FLIP. The target
-// is already laid out where it belongs (Last); it is put back over the box the
-// note came from (First, measured before anything changed) by an inverse
-// transform (Invert), which is then let go under a transition (Play). No
-// animation library (#69).
+// A FLIP: the target, already laid out where it belongs, is put back over the
+// box the note came from and then let go under a transition.
 export function flyTo(
   from: DOMRect | undefined,
   target: HTMLElement | null,
 ): boolean {
-  if (!target || !from) return false; // nothing to fly, or nowhere to fly it
-  // Both flights end at the top of the page: the Spotlight is fixed to the
-  // viewport, and the wall's newest slot leads its first row. After the guard
-  // above, so a tile that mounts with no flight waiting doesn't scroll anyone.
+  if (!target || !from) return false;
+  // Both flights end at the top of the page. After the guard, so a tile that
+  // mounts with no flight waiting doesn't scroll anyone.
   window.scrollTo(0, 0);
   const to = target.getBoundingClientRect();
   if (!to.width) return false; // nothing laid out (jsdom)
@@ -84,10 +67,8 @@ export function flyTo(
 }
 
 // The Spotlight's scrim goes with its dialog the moment the route changes, a
-// frame before the sent note starts home; this leaves its afterimage behind to
-// fade out over the flight, so the dark lifts as the note shrinks into its
-// slot instead of snapping off. Plain DOM, outside React: nothing owns it once
-// it is gone.
+// frame before the sent note starts home; this afterimage fades over the
+// flight, so the dark lifts with the note instead of snapping off.
 export function fadeScrim(): void {
   const scrim = document.createElement("div");
   scrim.className = "pointer-events-none fixed inset-0 z-50 bg-black/70";
@@ -98,12 +79,11 @@ export function fadeScrim(): void {
   setTimeout(() => scrim.remove(), SLIDE_MS);
 }
 
-// The submit's flight (#88) crosses a navigation: the note is measured while it
-// still hangs in the Spotlight, and the tile it flies home into is only laid
-// out afterwards, by the wall the navigation lands on. The rect waits here in
-// between — the two sides share this module and nothing else.
-// ponytail: one slot for the whole page. Fine while there is one wall and one
-// note in flight at a time; hand the rect through a context if either changes.
+// The submit's flight crosses a navigation: the note is measured while it still
+// hangs in the Spotlight, and the tile it flies home into is only laid out
+// afterwards, by the wall. The rect waits here in between.
+// ponytail: one slot for the whole page. Fine while one wall flies one note at
+// a time; hand the rect through a context if either changes.
 let leftBehind: DOMRect | undefined;
 
 export function flyingFrom(rect: DOMRect | undefined): void {
@@ -111,19 +91,19 @@ export function flyingFrom(rect: DOMRect | undefined): void {
 }
 
 // Taken once: a tile that mounts for any other reason finds no flight waiting.
-export function flightHome(): DOMRect | undefined {
+export function takeFlightHome(): DOMRect | undefined {
   const from = leftBehind;
   leftBehind = undefined;
   return from;
 }
 
-// The sticker sheet's ride up from behind the tray (#75, #82), and the note's
-// move out of its way, which keeps time with it.
+// The sticker sheet's ride up from behind the tray, and the note's move out of
+// its way, which keeps time with it.
 export const SHEET_MS = 500;
 
 // Keep a gesture with the pointer that started it, wherever that pointer
-// wanders. The guard is for jsdom (no pointer capture at all) and for a
-// pointer id that is no longer live, which throws rather than returning.
+// wanders. The guard is for jsdom (no pointer capture at all) and for a pointer
+// id that is no longer live, which throws rather than returning.
 export function capturePointer(e: ReactPointerEvent): void {
   try {
     e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -132,8 +112,8 @@ export function capturePointer(e: ReactPointerEvent): void {
   }
 }
 
-// Cool slate cutting mat (spec #49): grid rules over a dark wash, distinct from
-// the wall's warm cork.
+// Cool slate cutting mat: grid rules over a dark wash, distinct from the wall's
+// warm cork.
 export const DESK_BG: CSSProperties = {
   backgroundImage: [
     "repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px)",
@@ -143,8 +123,8 @@ export const DESK_BG: CSSProperties = {
   backgroundSize: "26px 26px, 26px 26px, cover",
 };
 
-// A strip of masking tape stuck to the mat — the label style for the mat's own
-// controls (the pinning phase adds its own in T7).
+// A strip of masking tape stuck to the mat: the label style for the mat's own
+// controls.
 export const TAPE: CSSProperties = {
   backgroundColor: "#e8dcae",
   backgroundImage: [
@@ -156,7 +136,6 @@ export const TAPE: CSSProperties = {
   transform: "rotate(-2.2deg)",
 };
 
-// Tailwind's `!`: the desk's transitions are inline (their timings are JS
-// constants), and only an important rule can switch them off for
-// prefers-reduced-motion.
+// The desk's transitions are inline (their timings are JS constants), and only
+// an important rule can switch them off for prefers-reduced-motion.
 export const STILL = "motion-reduce:transition-none!";

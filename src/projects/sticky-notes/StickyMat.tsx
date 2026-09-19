@@ -3,16 +3,9 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { DESK_BG, EASE_OUT, SLIDE_MS, TAPE } from "./desk";
 import type { NoteContent } from "./note-schema";
 
-// The cutting mat: a full-viewport surface that slides up over the cork wall and
-// back down (#69). It is up on `/sticky-notes/new`, except while a note is
-// being pinned up (StickyNotes: `up = matUp && !pinning`); either way the wall
-// never unmounts, the mat just covers it.
-//
-// This module is the mat *surface* only, and it SSRs: a direct load of
-// /sticky-notes/new paints the mat already in place. Everything that lives ON
-// the mat (pads, note, strip, bin) is the StickyEditor island, code-split so the
-// wall costs no editor JS, fetched the first time the mat comes up and kept
-// mounted after that so a half-built note survives mat-down.
+// Everything that lives on the mat is code-split off it, so the wall costs no
+// editor JS, and stays mounted once fetched so a half-built note survives the
+// mat going down.
 const StickyEditor = lazy(() => import("./StickyEditor"));
 
 export function StickyMat({
@@ -21,9 +14,8 @@ export function StickyMat({
   onPinning,
 }: {
   up: boolean;
-  // The pinning phase (#88), passed straight through to the island: the note
-  // that has left the mat for the Spotlight over the wall, and how the island
-  // moves it there and back. The page owns it, because it takes the mat down.
+  // The note that has left the mat for the Spotlight over the wall. The page
+  // owns this, because it is the page that takes the mat down.
   pinning?: NoteContent;
   onPinning?: (note: NoteContent | undefined) => void;
 }) {

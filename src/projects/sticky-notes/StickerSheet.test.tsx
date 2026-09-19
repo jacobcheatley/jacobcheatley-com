@@ -2,10 +2,6 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StickerSheet } from "./StickerSheet";
 
-// The sheet on its own (#75): the peel gesture, and nothing about the note.
-// Where a sticker lands is `onDrop`'s answer, which is the editor's job and is
-// tested against the real paper in StickyEditor.test.
-
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
@@ -18,7 +14,6 @@ const handle = () =>
     | HTMLElement
     | undefined;
 const flying = () => screen.queryByText("⭐", { ignore: "button *" });
-// the dog-ear at the sheet's top right, one of its three ways down
 const corner = () =>
   screen.queryByRole("button", { name: "Close the sticker sheet" });
 
@@ -45,7 +40,7 @@ function sheet(over: Partial<Parameters<typeof StickerSheet>[0]> = {}) {
 describe("StickerSheet", () => {
   it("prints one flat grey behind every sticker", () => {
     sheet();
-    // the T0 verdict (#70): a printed backing, not a greyscale of the emoji
+    // a printed backing, not a greyscale of the emoji
     const backing = cell("⭐").firstElementChild as HTMLElement;
 
     expect(backing.textContent).toBe("⭐");
@@ -118,8 +113,8 @@ describe("StickerSheet", () => {
     const { open } = sheet({ open: false });
     const parked = () => document.querySelector('[data-slot="sheet"]');
 
-    // parked below the mat's edge: inert keeps it out of the tab order, the
-    // screen-reader tree and the pointer's way at once
+    // inert keeps it out of the tab order, the screen-reader tree and the
+    // pointer's way at once
     expect(parked()).toHaveAttribute("inert");
     open(true);
     expect(parked()).not.toHaveAttribute("inert");
@@ -128,7 +123,6 @@ describe("StickerSheet", () => {
   it("keeps the cells out of the tab order: a sticker is dragged, not tabbed to", () => {
     sheet();
     expect(cell("\u2b50")).toHaveAttribute("tabindex", "-1");
-    // and still named, for touch exploration and for reading the page
     expect(cell("\u2b50")).toHaveAccessibleName("Peel the \u2b50 sticker");
   });
 
@@ -152,16 +146,16 @@ describe("StickerSheet", () => {
 
   it("turns the corner up only while the sheet is up", () => {
     const { open } = sheet({ open: false });
-    expect(corner()).toBeNull(); // nothing to close a sheet that is away
+    expect(corner()).toBeNull();
 
     open(true);
     expect(corner()).toBeInTheDocument();
   });
 
   it("takes focus at the corner as it rises, without scrolling the mat after it", () => {
-    // the corner is still below the mat's edge when the sheet starts up; a
-    // plain focus() scrolls the mat's hidden overflow to show it and leaves
-    // the whole desk sitting high once the sheet is away again
+    // the corner is still below the mat's edge as the sheet starts up; a plain
+    // focus() scrolls the mat's hidden overflow to show it and leaves the whole
+    // desk sitting high once the sheet is away again
     const focus = vi.spyOn(HTMLElement.prototype, "focus");
     const { open } = sheet({ open: false });
     open(true);

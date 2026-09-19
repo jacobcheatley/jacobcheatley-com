@@ -12,7 +12,6 @@ import {
   listPendingNotes,
 } from "@/projects/sticky-notes/sticky-notes.server";
 
-// The owner's moderation CLI: `bun run sticky-notes pending | approve <id>`.
 // Auth is possession of DATABASE_URL, same as db:migrate; the printed host is
 // the guard against writing to the wrong environment.
 
@@ -21,8 +20,8 @@ async function pending() {
   // ponytail: no webfonts in the gallery (text falls back to cursive/sans);
   // inline the fontsource woff2s as data URIs if a fallback ever misleads a call.
   // One React tree for every tile: NoteRender's `useId` ids are unique only
-  // within a tree, so rendering per note would give every tile the first
-  // note's clip path and fold shading.
+  // within a tree, so rendering per note would give every tile the first note's
+  // clip path and fold shading.
   const tiles = renderToStaticMarkup(
     h(
       "main",

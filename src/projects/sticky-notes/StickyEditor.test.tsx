@@ -1,18 +1,19 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PAD_JITTER, PIN_ROOM } from "./desk-objects";
-import { type Element, emptyNote } from "./note-editor";
+import { emptyNote } from "./note-editor";
 import {
   MAX_ELEMENTS,
   type NoteContent,
+  type NoteElement,
   PAPER_COLOURS,
   STICKER_EMOJI,
 } from "./note-schema";
 import StickyEditor from "./StickyEditor";
 
-// The desk island (#73). A note is born at the pad chooser and dies in the bin,
-// which sends the mat back to the chooser (#81). Motion is CSS; these tests
-// assert the state a transition carries, never the transition itself.
+// A note is born at the pad chooser and dies in the bin, which sends the mat
+// back to the chooser. Motion is CSS; these tests assert the state a transition
+// carries, never the transition itself.
 
 // The crumple and the rubbed-out fade only finish once their timer has run, so
 // the whole file runs on fake timers and steps past them explicitly.
@@ -21,11 +22,12 @@ afterEach(() => vi.useRealTimers());
 
 const CRUMPLED = 600; // > CRUMPLE_MS
 const TORN = 600; // > TEAR_MS
-const GHOST_MS = 400; // > the rubbed-out fade
+const FADED = 400; // > the rubbed-out fade
+const FLOWN_HOME = 400; // > a missed sticker's flight back to the sheet
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
-// a pad is the only button whose label ends in that colour's sheet — the
-// markers name colours too ("Pick up the blue marker")
+// a pad is the only button whose label ends in that colour's sheet: the markers
+// name colours too ("Pick up the blue marker")
 const pad = (colour: string) =>
   screen.getByRole("button", { name: new RegExp(`${colour} sheet`, "i") });
 const pads = () => screen.getAllByRole("button", { name: /tear off/i });
@@ -34,14 +36,13 @@ const allPads = () => [
   ...document.querySelectorAll<HTMLElement>('[data-slot="chooser"] button'),
 ];
 const bin = () => screen.getByRole("button", { name: /bin this note/i });
-// the fixed boxes the tray's objects lie in, by the marker on each
 const slot = (name: string) =>
   document.querySelector<HTMLElement>(`[data-slot="${name}"]`);
-// The eraser and the sticker tab ARE their own boxes — no wrapper sets a
-// second one — so they are found the way a visitor finds them.
+// The eraser and the sticker tab ARE their own boxes: no wrapper sets a second
+// one, so they are found the way a visitor finds them.
 const eraserSlot = () => screen.getByRole("button", { name: /the eraser/i });
-// The tab lies in the tray. The open sheet's folded corner answers to "Close
-// the sticker sheet" too, so ask the tray for this one (#86).
+// The open sheet's folded corner answers to "Close the sticker sheet" too, so
+// ask the tray for this one.
 const tabSlot = () =>
   within(tray() as HTMLElement).getByRole("button", {
     name: /the sticker sheet/i,
@@ -51,17 +52,13 @@ const note = () => screen.queryByRole("img", { name: /sticky note/i });
 const paper = () =>
   note()?.closest("[data-colour]")?.getAttribute("data-colour");
 
-// The chooser and the tray take turns: whichever is away is inert, so nothing
-// on it is reachable by pointer, keyboard or screen reader.
 const chooser = () => slot("chooser");
 const tray = () => slot("tray");
-// One tool is always held (#82): the black marker on a fresh sheet, the hand
-// when whatever was picked up is put down again.
 const hand = () => screen.getByRole("button", { name: /the hand$/i });
 const marker = (ink: string) =>
   screen.getByRole("button", { name: new RegExp(`the ${ink} marker$`, "i") });
 
-const HI: Element = {
+const HI: NoteElement = {
   type: "text",
   x: 40,
   y: 60,
@@ -74,8 +71,8 @@ const HI: Element = {
 };
 
 // `emptyNote` seeds a random tilt, and a tilted note maps a client point to a
-// different note coordinate (#76) — so every test that presses a coordinate
-// starts square to the screen and the tilt is asked for explicitly.
+// different note coordinate: every test that presses a coordinate starts square
+// to the screen and asks for the tilt explicitly.
 const seeded = (over: Partial<NoteContent>): NoteContent => ({
   ...emptyNote(),
   rotation: 0,
@@ -107,7 +104,7 @@ describe("StickyEditor pad chooser", () => {
 
     expect(turned()).toHaveLength(6);
     PAPER_COLOURS.forEach((colour, i) => {
-      const [deg, dx, dy] = PAD_JITTER[colour];
+      const { deg, dx, dy } = PAD_JITTER[colour];
       expect(turned()[i]).toContain(`rotate(${deg}deg)`);
       expect(turned()[i]).toContain(`translate(${dx}px, ${dy}px)`);
     });
@@ -121,11 +118,10 @@ describe("StickyEditor pad chooser", () => {
     render(<StickyEditor />);
     fireEvent.click(pad("blue"));
 
-    // the blue pad went with the sheet torn off it; the other five slide off
-    expect(pads()).toHaveLength(5); // the hidden one is out of reach
+    expect(pads()).toHaveLength(5);
     for (const p of allPads()) {
       expect(p.style.transform).toContain("12vh"); // the slide off the mat
-      expect(p.style.transform).toContain("rotate("); // still askew under it
+      expect(p.style.transform).toContain("rotate(");
     }
     const hidden = allPads().map((p) => p.style.visibility === "hidden");
     expect(hidden).toEqual(PAPER_COLOURS.map((c) => c === "blue"));
@@ -159,7 +155,6 @@ describe("StickyEditor pad chooser", () => {
   it("offers no way to change the paper once it is torn", () => {
     render(<StickyEditor initialContent={seeded({ colour: "pink" })} />);
     expect(chooser()).toHaveAttribute("inert");
-    // no pad on the tray to swap the stock with
     expect(screen.queryByRole("button", { name: /paper/i })).toBeNull();
   });
 });
@@ -174,7 +169,7 @@ describe("StickyEditor bin", () => {
 
     expect(slip()).not.toBeNull();
     expect(yes()).toHaveFocus();
-    wait(CRUMPLED); // and nothing happens while it waits for an answer
+    wait(CRUMPLED);
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
 
@@ -221,7 +216,7 @@ describe("StickyEditor bin", () => {
     act(() => pinButton.focus());
 
     expect(slip()).toBeNull();
-    expect(pinButton).toHaveFocus(); // the keyboard stays where it was sent
+    expect(pinButton).toHaveFocus();
     wait(CRUMPLED);
     expect(screen.getByText("hi")).toBeInTheDocument();
   });
@@ -241,7 +236,7 @@ describe("StickyEditor bin", () => {
       tick.click();
       tick.click();
     });
-    expect(vi.getTimerCount()).toBe(before + 1); // one crumple on its way
+    expect(vi.getTimerCount()).toBe(before + 1);
 
     unmount(); // mid-crumple: nothing is left to fire on a gone editor
     expect(vi.getTimerCount()).toBe(before);
@@ -429,11 +424,9 @@ function paperSurface(): HTMLElement {
 // The drawn elements, in z-order: NotePaper clips them into one group.
 const drawn = (root: ParentNode = document.body) =>
   Array.from(root.querySelector("g[clip-path]")?.children ?? []);
-// The element being placed (#80) wears a dashed outline and its handles.
 const placingOutline = () => document.querySelector("rect[stroke-dasharray]");
 const handle = (name: "corner" | "width") =>
   document.querySelector(`[data-handle="${name}"]`);
-// the overlay a rubbed-out element keeps fading on
 const ghostLayer = () =>
   [...document.querySelectorAll("svg")].find(
     (svg) => svg.querySelector("title")?.textContent === "rubbed out",
@@ -457,8 +450,7 @@ const up = (el: HTMLElement) => fireEvent.pointerUp(el, { pointerId: 1 });
 
 const pickUp = (name: RegExp) =>
   fireEvent.click(screen.getByRole("button", { name }));
-// Hand mode is reached by picking the hand up: a torn sheet comes with the
-// black marker in hand (#84).
+// a torn sheet comes with the black marker in hand, so hand mode is asked for
 const takeHand = () => pickUp(/pick up the hand/i);
 // A real press on something on the mat: the pointer comes down, then the click.
 const press = (name: RegExp) => {
@@ -472,8 +464,7 @@ const tapAway = () => {
   down(surface, 400, 420);
   up(surface);
 };
-// What the note holds, read the way the editor hands it over: pinned up. A
-// click with no pointer-down, so it is "pin it up" itself that fixes what is
+// A click with no pointer-down, so it is "pin it up" itself that fixes what is
 // being placed.
 const pinned = (onPinning: ReturnType<typeof vi.fn>) => {
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -482,8 +473,8 @@ const pinned = (onPinning: ReturnType<typeof vi.fn>) => {
 };
 
 // two text boxes that overlap around (60, 80) — B (last) draws on top of A
-const A: Element = { ...HI, x: 40, y: 60, text: "aaa" };
-const B: Element = { ...HI, x: 50, y: 70, text: "bbb" };
+const A: NoteElement = { ...HI, x: 40, y: 60, text: "aaa" };
+const B: NoteElement = { ...HI, x: 50, y: 70, text: "bbb" };
 
 describe("StickyEditor drawing", () => {
   it("draws a stroke in the held ink at the fixed nib", () => {
@@ -522,8 +513,8 @@ describe("StickyEditor drawing", () => {
   });
 
   it("stores every point at pressure 0.5, whatever the pointer reported", () => {
-    // a marker has no pressure (#84): a touch (1) and a light pen (0.1) must
-    // leave the same numbers behind as a mouse
+    // a marker has no pressure: a touch (1) and a light pen (0.1) must leave
+    // the same numbers behind as a mouse
     const onPinning = vi.fn();
     render(<StickyEditor initialContent={seeded({})} onPinning={onPinning} />);
     const paper = paperSurface();
@@ -543,7 +534,7 @@ describe("StickyEditor drawing", () => {
     });
     up(paper);
 
-    const points = pinned(onPinning)?.flatMap((el: Element) =>
+    const points = pinned(onPinning)?.flatMap((el: NoteElement) =>
       el.type === "stroke" ? el.points : [],
     );
     expect(points?.length).toBeGreaterThanOrEqual(2);
@@ -574,7 +565,6 @@ describe("StickyEditor writing", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     fireEvent.change(openBox(), { target: { value: "hello" } });
 
-    // already on the paper, at the size and wrap it will keep
     expect(drawn()).toHaveLength(1);
     expect(drawn()[0]?.textContent).toBe("hello");
     expect(drawn()[0]?.getAttribute("font-size")).toBe("30");
@@ -602,7 +592,7 @@ describe("StickyEditor writing", () => {
   it("keeps a newline typed into the box", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const box = openBox();
-    // Enter is the textarea's own: nothing intercepts it
+    // true: nothing called preventDefault, so the textarea gets its newline
     expect(fireEvent.keyDown(box, { key: "Enter" })).toBe(true);
     fireEvent.change(box, { target: { value: "one\ntwo" } });
     tapAway();
@@ -640,9 +630,8 @@ describe("StickyEditor writing", () => {
 });
 
 describe("StickyEditor caret", () => {
-  // Without one you cannot tell where you are typing (#74). jsdom lays out no
-  // glyphs, so what runs here is the `wrapLines` fallback the first paint uses
-  // — the browser refines it from the rendered tspans.
+  // jsdom lays out no glyphs, so what runs here is the `wrapLines` fallback the
+  // first paint uses; the browser refines it from the rendered tspans.
   const caret = () => document.querySelector("rect[data-caret]");
   const at = (attr: string) => Number(caret()?.getAttribute(attr));
   const openBox = () => {
@@ -686,8 +675,8 @@ describe("StickyEditor caret", () => {
     const first = at("y");
     fireEvent.change(box, { target: { value: "ab\n" } });
 
-    expect(at("x")).toBe(60); // back to the left edge of the box
-    expect(at("y")).toBeCloseTo(first + 30 * 1.2); // one line down
+    expect(at("x")).toBe(60);
+    expect(at("y")).toBeCloseTo(first + 30 * 1.2);
   });
 
   it("takes the caret away with the box, committed or thrown out", () => {
@@ -696,7 +685,6 @@ describe("StickyEditor caret", () => {
     tapAway();
     expect(caret()).toBeNull();
 
-    // the marker is still in hand and still writing: open another box
     const surface = paperSurface();
     down(surface, 200, 200);
     up(surface);
@@ -716,9 +704,8 @@ describe("StickyEditor eraser", () => {
     up(paper);
 
     expect(drawn().map((el) => el.textContent)).toEqual(["aaa"]);
-    // it goes on fading where it was, then leaves
     expect(screen.getByText("bbb")).toBeInTheDocument();
-    wait(GHOST_MS);
+    wait(FADED);
     expect(screen.queryByText("bbb")).toBeNull();
   });
 
@@ -732,7 +719,7 @@ describe("StickyEditor eraser", () => {
     const first = ghostLayer();
     expect(first?.style.opacity).toBe("1");
 
-    wait(GHOST_MS / 2); // mid-fade: on its way out, still mounted
+    wait(FADED / 2); // mid-fade: on its way out, still mounted
     expect(first?.style.opacity).toBe("0");
 
     down(paper, 60, 80);
@@ -745,8 +732,8 @@ describe("StickyEditor eraser", () => {
 
 describe("StickyEditor thumb targets", () => {
   // jsdom measures nothing, so what is asserted is the rule that holds the
-  // size: every object lies in a box with a fixed width and height that no
-  // flex rule may squeeze, and nothing the tool DOES may resize (#74).
+  // size: every object lies in a box with a fixed width and height that no flex
+  // rule may squeeze, and nothing the tool DOES may resize.
   const slots = () => [
     eraserSlot(),
     tabSlot(),
@@ -790,7 +777,6 @@ describe("StickyEditor thumb targets", () => {
       expect(half.style.width).toBe("48px");
       expect(half.style.height).toBe("48px");
     }
-    // squiggle above Aa, in one column
     expect(draw.parentElement).toBe(write.parentElement);
     expect(draw.parentElement?.className).toContain("flex-col");
   });
@@ -799,7 +785,6 @@ describe("StickyEditor thumb targets", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const row = tray() as HTMLElement;
 
-    // nothing may wrap onto another line
     expect(row.className).not.toContain("flex-wrap");
     expect(
       [...row.querySelectorAll("button")].map((b) =>
@@ -817,11 +802,10 @@ describe("StickyEditor thumb targets", () => {
       "Pick up the eraser",
       "Bin this note",
     ]);
-    // the gap before the bin: some room when there is any, none when there isn't
     const binCorner = slot("bin")?.parentElement;
     expect(binCorner?.parentElement).toBe(row);
     const gap = binCorner?.previousElementSibling as HTMLElement | null;
-    // zero at 420px and below, where the markers are already squeezing (#84)
+    // zero at 420px and below, where the markers are already squeezing
     expect(gap?.style.width).toContain("100vw - 420px");
   });
 
@@ -831,19 +815,17 @@ describe("StickyEditor thumb targets", () => {
       name: /pick up the red marker/i,
     }).parentElement;
 
-    // the gap between the objects is the room there is for it
     expect(row?.style.gap).toContain("clamp(0px");
-    // and past zero they lean on each other, by a capped overlap
+    // past zero they lean on each other, by a capped overlap
     const marker = screen.getByRole("button", {
       name: /pick up the red marker/i,
     });
     expect(marker.style.marginInline).toContain("clamp(-4px");
   });
 
-  // The owner's report (#74): "eraser also moves when operating the marker".
-  // jsdom can't measure, so what is asserted is the invariant that kept it
-  // still — the eraser's box never changes, and its lift is a transform that
-  // only its own hand raises.
+  // jsdom can't measure, so what is asserted is the invariant that keeps the
+  // eraser still: its box never changes, and its lift is a transform that only
+  // its own hand raises.
   it("leaves the eraser and the bin where they lie while a marker works", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     const eraser = () => eraserSlot();
@@ -876,7 +858,7 @@ describe("StickyEditor thumb targets", () => {
 
     pickUp(/pick up the eraser/i);
     expect(rubber()?.style.transform).toContain("translateY(-17px)");
-    expect(box()).toBe(before); // the box it lies in never moved
+    expect(box()).toBe(before);
   });
 
   it("pops the font samples over the mat instead of onto the tray", () => {
@@ -935,7 +917,6 @@ describe("StickyEditor pointer gestures", () => {
     expect(screen.getByText("hi")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /text box/i })).toBeNull();
 
-    // the next tap is the one that opens a box
     down(paper, 400, 400);
     up(paper);
     expect(screen.getByRole("textbox", { name: /text box/i })).toHaveFocus();
@@ -946,7 +927,7 @@ describe("StickyEditor pointer gestures", () => {
     const paper = paperSurface();
 
     down(paper, 100, 100);
-    move(paper, 300, 300, 2); // another finger lands: not this gesture's
+    move(paper, 300, 300, 2);
     up(paper);
 
     // one point only, so perfect-freehand drew nothing
@@ -971,14 +952,12 @@ describe("StickyEditor pointer gestures", () => {
 });
 
 const tab = tabSlot;
-// the dog-ear at the sheet's top right: one of its three ways down (#86)
 const sheetCorner = () =>
   within(slot("sheet") as HTMLElement).getByRole("button", {
     name: /close the sticker sheet/i,
   });
 const cell = (emoji: string) =>
   screen.getByRole("button", { name: `Peel the ${emoji} sticker` });
-// peel one off the sheet and let go at a point on the mat
 const dragTo = (emoji: string, x: number, y: number) => {
   // a placement leaves the sheet up, so only pull it out when it is away
   if (tab().getAttribute("aria-expanded") === "false") fireEvent.click(tab());
@@ -996,8 +975,6 @@ describe("StickyEditor sticker sheet", () => {
   it("pulls the sheet up from the tab and puts it away again", () => {
     render(<StickyEditor initialContent={seeded({})} />);
     expect(tab()).toHaveAttribute("aria-expanded", "false");
-    // parked below the mat's edge: inert, so nothing on it is reachable —
-    // not by the pointer, the tab order or the screen reader
     expect(slot("sheet")).toHaveAttribute("inert");
 
     fireEvent.click(tab());
@@ -1011,9 +988,7 @@ describe("StickyEditor sticker sheet", () => {
     expect(tab()).toHaveAttribute("aria-expanded", "false");
   });
 
-  // The sheet covers the tray, so the tab is under it: the corner, a swipe
-  // and Escape are the three ways down (#86), and each hands back the marker
-  // that was in hand all along.
+  // The sheet covers the tray, so the tab is under it: hence three ways down.
   it.each([
     ["its folded corner", () => fireEvent.click(sheetCorner())],
     [
@@ -1057,8 +1032,7 @@ describe("StickyEditor sticker sheet", () => {
     expect(room().style.top).toBe(`${PIN_ROOM}px`);
 
     fireEvent.click(tab());
-    // the sheet's top edge is the room's floor, and "pin it up" is away, so
-    // the room it stood in is the note's: it moves up rather than shrinking
+    // "pin it up" is away, so the room it stood in is the note's
     expect(room().style.top).toBe("0px");
     expect(frame().style.transform).not.toContain("scale(");
 
@@ -1072,9 +1046,8 @@ describe("StickyEditor sticker sheet", () => {
 
     fireEvent.click(tab());
     expect(tab()).toHaveAttribute("aria-expanded", "true");
-    expect(tabSlot().style.cssText).toBe(box); // no lift onto the sheet
+    expect(tabSlot().style.cssText).toBe(box);
     expect(tray()).toContainElement(tab());
-    // dimmed under the sheet, and nothing in it answers a press
     expect(tray()).toHaveAttribute("inert");
     expect(tray()?.style.opacity).toBe("0.4");
 
@@ -1088,7 +1061,6 @@ describe("StickyEditor sticker sheet", () => {
     const surface = paperSurface();
     fireEvent.click(tab());
 
-    // the black marker is still held — it just doesn't reach the paper
     expect(marker("black")).toHaveAttribute("aria-pressed", "true");
     down(surface, 100, 100);
     move(surface, 160, 180);
@@ -1106,7 +1078,7 @@ describe("StickyEditor sticker sheet", () => {
     down(paper, 60, 80);
     move(paper, 70, 90);
     up(paper);
-    wait(GHOST_MS);
+    wait(FADED);
     expect(drawn().map((el) => el.textContent)).toEqual(["aaa", "bbb"]);
   });
 
@@ -1128,7 +1100,6 @@ describe("StickyEditor sticker sheet", () => {
     dragTo("⭐", 250, 250);
     expect(placingOutline()).not.toBeNull();
 
-    // a press elsewhere on the paper fixes it, and does nothing more
     down(surface, 400, 60);
     move(surface, 400, 160);
     up(surface);
@@ -1153,7 +1124,7 @@ describe("StickyEditor sticker sheet", () => {
     down(surface, 60, 80);
     up(surface);
     expect(pinButton()).toHaveAttribute("inert");
-    tapAway(); // the box fixed, and the tape is back
+    tapAway();
     expect(pinButton()).not.toHaveAttribute("inert");
   });
 
@@ -1166,7 +1137,7 @@ describe("StickyEditor sticker sheet", () => {
     expect(drawn()[0]?.textContent).toBe("⭐");
     expect(drawn()[0]?.getAttribute("x")).toBe("250");
     expect(drawn()[0]?.getAttribute("y")).toBe("250");
-    // the sheet is infinite: the slot is printed again, and still up
+    // the sheet is infinite: the slot is printed again
     expect(slot).not.toHaveAttribute("data-peeled");
     expect(tab()).toHaveAttribute("aria-expanded", "true");
   });
@@ -1196,7 +1167,7 @@ describe("StickyEditor sticker sheet", () => {
     const slot = dragTo("⭐", 900, 900);
 
     expect(drawn()).toHaveLength(0);
-    wait(400); // it flies home, then the slot is printed again
+    wait(FLOWN_HOME); // then the slot is printed again
     expect(slot).not.toHaveAttribute("data-peeled");
   });
 
@@ -1211,7 +1182,7 @@ describe("StickyEditor sticker sheet", () => {
     paperSurface();
     fireEvent.click(tab());
     down(cell("⭐"), 300, 600);
-    expect(cell("⭐")).not.toHaveAttribute("data-peeled"); // nothing lifts
+    expect(cell("⭐")).not.toHaveAttribute("data-peeled");
     upAt(cell("⭐"), 250, 250);
 
     expect(drawn()).toHaveLength(MAX_ELEMENTS);
@@ -1226,15 +1197,13 @@ describe("StickyEditor sticker sheet", () => {
       />,
     );
     paperSurface();
-    // one free slot, and the star still being placed in it
     dragTo("⭐", 250, 250);
     const slot = dragTo("🔥", 300, 300);
 
-    // the star stuck; the flame was refused, not silently dropped
     expect(drawn()).toHaveLength(MAX_ELEMENTS);
     expect(drawn().at(-1)?.textContent).toBe("⭐");
     expect(slot).toHaveAttribute("data-peeled"); // on its way home
-    wait(400);
+    wait(FLOWN_HOME);
     expect(slot).not.toHaveAttribute("data-peeled");
   });
 
@@ -1255,11 +1224,9 @@ describe("StickyEditor sticker sheet", () => {
 });
 
 describe("StickyEditor on a tilted note", () => {
-  // The sheet lies on the mat at its stored angle (#76), so the paper's box is
-  // no longer the note's frame: a quarter turn puts the note's top edge on the
-  // right of the screen. Everything drawn, typed or dropped has to come back
-  // through that rotation. jsdom measures nothing, so the box a rotated square
-  // occupies is stubbed — for 90 deg it is the same 500x500.
+  // A tilted paper's box is not the note's frame: a quarter turn puts the
+  // note's top edge on the right of the screen, so everything drawn, typed or
+  // dropped comes back through that rotation, and a square's stub is 500x500.
   it("lays the sheet down at the angle it is stored with", () => {
     render(<StickyEditor initialContent={seeded({ rotation: -12 })} />);
 
@@ -1298,10 +1265,8 @@ describe("StickyEditor on a tilted note", () => {
 });
 
 describe("StickyEditor hand mode", () => {
-  // The sheet is its own control (#69: no sliders anywhere) — a drag anywhere
-  // turns it, the bottom corners peel it, and a placed element is never taken
-  // hold of (#79). The paper is stubbed 500x500 at the origin, so its centre is
-  // (250, 250) and a client point is a note coordinate.
+  // The paper is stubbed 500x500 at the origin, so its centre is (250, 250) and
+  // a client point is a note coordinate.
   const tilt = () => paperSurface().style.transform;
   // The two bottom corners as the renderer folded them, off the paper outline:
   // "M 0 0 L 500 0 L 500 <500-br> L <500-br> 500 L <bl> 500 L 0 <500-bl> Z".
@@ -1362,7 +1327,7 @@ describe("StickyEditor hand mode", () => {
     expect(fold().br).toBeLessThan(peeled);
     up(surface);
 
-    expect(fold().bl).toBe(0); // the other corner never moved
+    expect(fold().bl).toBe(0);
     expect(tilt()).toContain("rotate(0deg)"); // and the corner is not the edge
   });
 
@@ -1440,9 +1405,7 @@ describe("StickyEditor hand mode", () => {
 });
 
 describe("StickyEditor two fingers", () => {
-  // Two fingers turn the note, whatever lies under them (#79), and a second
-  // finger landing on a stroke is never more ink.
-  const STAR: Element = {
+  const STAR: NoteElement = {
     type: "sticker",
     x: 250,
     y: 250,
@@ -1480,7 +1443,7 @@ describe("StickyEditor two fingers", () => {
 
     down(surface, 250, 250);
     downAt(surface, 300, 250, 2);
-    move(surface, 300, 270, 2); // the angle between them swings round
+    move(surface, 300, 270, 2);
     upAt(surface, 2);
 
     expect(paperSurface().style.transform).toContain("rotate(21.8deg)");
@@ -1492,12 +1455,12 @@ describe("StickyEditor two fingers", () => {
 
     down(surface, 100, 100);
     move(surface, 140, 160);
-    downAt(surface, 300, 300, 2); // a second finger is never more ink
+    downAt(surface, 300, 300, 2);
     move(surface, 300, 250, 2);
     upAt(surface, 2);
     up(surface);
 
-    expect(drawn()).toHaveLength(0); // nothing committed
+    expect(drawn()).toHaveLength(0);
     expect(paperSurface().style.transform).toContain("rotate(-11.8deg)");
   });
 });
@@ -1510,8 +1473,8 @@ describe("StickyEditor font samples", () => {
     const casual = () =>
       screen.queryByRole("button", { name: /write in casual/i });
     expect(casual()).not.toBeNull();
-    // no backdrop over the mat: the press that closes them goes on to do its
-    // own job, so picking a font and placing a box is one tap, not two (#74)
+    // no backdrop over the mat: picking a font and placing a box is one tap,
+    // not two
     expect(
       screen.queryByRole("button", { name: /close the font samples/i }),
     ).toBeNull();
@@ -1536,8 +1499,6 @@ describe("StickyEditor font samples", () => {
 });
 
 describe("StickyEditor placing", () => {
-  // A new text box or sticker can be moved, turned and (text) widened until the
-  // next press anywhere else fixes it, and that press does nothing more (#80).
   // The paper is 500x500 at the origin, so a handle's 48px reach is 24 units.
   const drag = (
     surface: HTMLElement,
@@ -1608,7 +1569,7 @@ describe("StickyEditor placing", () => {
     openBox();
     fireEvent.change(box() as HTMLElement, { target: { value: "hi" } });
 
-    press(/write with the marker/i); // the samples, back up
+    press(/write with the marker/i);
     const sample = screen.getByRole("button", {
       name: /write in handwritten/i,
     });
@@ -1718,7 +1679,6 @@ describe("StickyEditor placing", () => {
     );
     const surface = paperSurface();
     dragTo("⭐", 250, 250);
-    // not stuck yet: outlined, with a corner handle and no width to set
     expect(placingOutline()).not.toBeNull();
     expect(handle("corner")).not.toBeNull();
     expect(handle("width")).toBeNull();
@@ -1726,7 +1686,7 @@ describe("StickyEditor placing", () => {
     drag(surface, [250, 250], [200, 220]); // its body
     // the corner handle at (224, 244): a quarter turn round its centre
     drag(surface, [224, 244], [176, 244]);
-    drag(surface, [450, 60], [450, 160]); // away: fixes it, turns nothing
+    drag(surface, [450, 60], [450, 160]);
     expect(surface.style.transform).toContain("rotate(0deg)");
     expect(placingOutline()).toBeNull();
     expect(pinned(onPinning)).toEqual([
@@ -1780,7 +1740,7 @@ describe("StickyEditor placing", () => {
     paperSurface();
     dragTo("⭐", 100, 100);
 
-    down(cell("🔥"), 300, 600); // the peel alone fixes the star
+    down(cell("🔥"), 300, 600);
     expect(placingOutline()).toBeNull();
     expect(drawn().map((el) => el.textContent)).toEqual(["⭐"]);
     move(cell("🔥"), 400, 300);

@@ -30,7 +30,6 @@ describe("addNote", () => {
     const [row] = await db.select().from(stickyNotes);
     expect(row?.id).toBe(id);
     expect(row?.approvedAt).toBeNull();
-    // The JSONB blob round-trips intact.
     expect(row?.content).toEqual(content);
 
     expect(await listApprovedNotes()).toHaveLength(0);
