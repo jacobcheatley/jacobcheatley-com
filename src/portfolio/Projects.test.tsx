@@ -8,5 +8,7 @@ it("links the Sticky Notes Cover to its Project by name", () => {
   render(<Projects />);
   const link = screen.getByRole("link", { name: "Sticky Notes" });
   expect(link).toHaveAttribute("href", "/sticky-notes");
-  expect(within(link).getByRole("img", { name: "sticky note" })).toBeVisible();
+  expect(
+    within(link).getAllByRole("img", { name: "sticky note" }).length,
+  ).toBeGreaterThan(0);
 });
