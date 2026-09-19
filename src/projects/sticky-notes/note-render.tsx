@@ -1,5 +1,5 @@
 import { getStroke } from "perfect-freehand";
-import { useId } from "react";
+import { type CSSProperties, useId } from "react";
 import { FONT_FAMILIES } from "./note-fonts";
 import {
   CANVAS,
@@ -24,6 +24,26 @@ export const FASTENER_MARGIN = 40;
 // A consumer sizing a tile or zoom box must match this exactly or the note
 // crops, so derive from here rather than re-typing the ratio.
 export const NOTE_ASPECT_RATIO = CANVAS / (CANVAS + FASTENER_MARGIN);
+
+// Warm corkboard: a faint stipple of pits over a wood-brown wash.
+export const CORK_BG: CSSProperties = {
+  backgroundImage: [
+    "radial-gradient(circle at 20% 30%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
+    "radial-gradient(circle at 60% 70%, rgba(0,0,0,.06) 0 2px, transparent 3px)",
+    "radial-gradient(circle at 80% 20%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
+    "radial-gradient(circle at 40% 85%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
+    "linear-gradient(135deg, #c99a5b, #b07f3f)",
+  ].join(", "),
+  backgroundSize: "14px 14px, 22px 22px, 18px 18px, 16px 16px, cover",
+};
+
+// The shadow follows the paper silhouette, curl cut-outs and all: a drop-shadow
+// filter, not a rectangular box one.
+export const pinnedNoteStyle = (content: NoteContent): CSSProperties => ({
+  aspectRatio: NOTE_ASPECT_RATIO,
+  transform: `rotate(${content.rotation}deg)`,
+  filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
+});
 
 // NotePaper drops the headroom, so the bare sheet is square.
 export const NOTE_PAPER_ASPECT_RATIO = 1;
