@@ -1,9 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import type { CSSProperties } from "react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { fadeScrim, flyTo, takeFlightHome } from "./desk";
 import { loadFont } from "./note-fonts";
-import { NOTE_ASPECT_RATIO, NoteRender } from "./note-render";
+import { CORK_BG, NoteRender, pinnedNoteStyle } from "./note-render";
 import { CANVAS, type Font, type NoteContent } from "./note-schema";
 import {
   type PendingNote,
@@ -16,26 +15,6 @@ import { Spotlight } from "./Spotlight";
 export type WallNote = { id: number; author: string; content: NoteContent };
 
 type DisplayNote = { author: string; content: NoteContent; pending?: boolean };
-
-// Warm corkboard: a faint stipple of pits over a wood-brown wash.
-const CORK_BG: CSSProperties = {
-  backgroundImage: [
-    "radial-gradient(circle at 20% 30%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
-    "radial-gradient(circle at 60% 70%, rgba(0,0,0,.06) 0 2px, transparent 3px)",
-    "radial-gradient(circle at 80% 20%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
-    "radial-gradient(circle at 40% 85%, rgba(0,0,0,.05) 0 2px, transparent 3px)",
-    "linear-gradient(135deg, #c99a5b, #b07f3f)",
-  ].join(", "),
-  backgroundSize: "14px 14px, 22px 22px, 18px 18px, 16px 16px, cover",
-};
-
-// The shadow follows the paper silhouette, curl cut-outs and all: a drop-shadow
-// filter, not a rectangular box one.
-const tileStyle = (content: NoteContent): CSSProperties => ({
-  aspectRatio: NOTE_ASPECT_RATIO,
-  transform: `rotate(${content.rotation}deg)`,
-  filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
-});
 
 // A note sent from the Spotlight flies home into the newest pending tile, which
 // starts the flight as it mounts; any other tile finds no rect waiting. Module
@@ -57,7 +36,7 @@ function NoteTile({ note, onOpen }: { note: DisplayNote; onOpen: () => void }) {
       onClick={onOpen}
       aria-label={`Zoom note by ${note.author}`}
       className="relative block w-32 cursor-zoom-in select-none border-0 bg-transparent p-0"
-      style={tileStyle(note.content)}
+      style={pinnedNoteStyle(note.content)}
     >
       <NoteRender content={note.content} />
       {note.pending && <PendingBadge />}
@@ -103,11 +82,7 @@ function AddNote({ empty }: { empty: boolean }) {
       to="/sticky-notes/new"
       aria-label="Pin a note"
       className={`block select-none no-underline ${empty ? "w-56" : "w-32"}`}
-      style={{
-        aspectRatio: NOTE_ASPECT_RATIO,
-        transform: `rotate(${content.rotation}deg)`,
-        filter: "drop-shadow(2px 4px 5px rgba(0,0,0,.35))",
-      }}
+      style={pinnedNoteStyle(content)}
     >
       <NoteRender content={content} />
     </Link>

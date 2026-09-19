@@ -1,0 +1,14 @@
+import { Cover as StickyNotesCover } from "@/projects/sticky-notes/Cover";
+import { ProjectLink } from "./ProjectLink";
+
+export function Projects() {
+  return (
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-5 gap-y-6">
+      <ProjectLink
+        to="/sticky-notes"
+        title="Sticky Notes"
+        cover={<StickyNotesCover />}
+      />
+    </ul>
+  );
+}

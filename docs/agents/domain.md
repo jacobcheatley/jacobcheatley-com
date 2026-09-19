@@ -24,13 +24,15 @@ Single-context repo. One feature folder per Project plus a thin route file; fold
 ├── src/
 │   ├── routes/            file-based routes at flat URLs; _shell.* is the pathless Portfolio layout
 │   ├── portfolio/         landing-page components
-│   ├── projects/<name>/   schema.ts, *.server.ts, *.fn.ts, components, colocated tests
+│   ├── projects/<name>/   Cover.tsx, schema.ts, *.server.ts, *.fn.ts, components, colocated tests
 │   ├── db/index.server.ts the only reader of DATABASE_URL
 │   └── test/              Vitest global setup and helpers
 ├── e2e/                   Playwright smoke
 ├── scripts/               owner CLIs run with `bun run <name>` (sticky-notes approval)
 └── server.ts              Bun.serve wrapper (canonical host, assets, future WebSocket seam)
 ```
+
+Every Project has a **Cover** (`src/projects/<name>/Cover.tsx`), and the Portfolio cannot list a Project without one. A spec for a new Project includes a Cover section: the concept, how the Project's name is baked in, and which of the Project's own rendering it reuses. Covers are 3:2, fill their frame, carry no Portfolio chrome, and ignore the colour scheme unless the Project itself has one.
 
 Conventions (file roles, tests, seams policy) live alongside the Layout above and in the relevant `docs/adr/` records.
 

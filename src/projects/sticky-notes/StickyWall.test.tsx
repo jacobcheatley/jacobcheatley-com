@@ -11,19 +11,7 @@ vi.mock("./note-fonts", async (orig) => ({
   loadFont: vi.fn(() => Promise.resolve()),
 }));
 
-// TanStack's <Link> needs a router context we don't want to build here; the
-// invite note renders as a plain anchor for this seam.
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    ...rest
-  }: React.ComponentProps<"a"> & { to?: string }) => (
-    <a href={to} {...rest}>
-      {children}
-    </a>
-  ),
-}));
+vi.mock("@tanstack/react-router", () => import("@/test/router-stub"));
 
 const note = (id: number, author: string, over?: Partial<NoteContent>) => ({
   id,
