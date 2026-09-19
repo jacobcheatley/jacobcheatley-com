@@ -122,6 +122,12 @@ describe("the pending list", () => {
     expect(readPending()).toEqual([]); // no author
   });
 
+  it("reads an entry stored with keys it does not know, without them", () => {
+    const stored = { ...pendingNote("ada", 1), mood: "pleased" };
+    localStorage.setItem(KEY, JSON.stringify([stored]));
+    expect(readPending()).toEqual([pendingNote("ada", 1)]);
+  });
+
   it("keeps the valid entries out of a mixed list", () => {
     localStorage.setItem(
       KEY,
