@@ -7,10 +7,8 @@ import { type NoteContent, noteSchema } from "./note-schema";
 
 const KEY = "sticky-notes:pending";
 
-// A stored entry: the note as the write path validates it, plus when it was
-// submitted. Stripping, where the write path is strict, because an entry an
-// older build wrote may carry keys this one has no use for; the timestamp is
-// for debugging and never shown, so an entry without one still reads.
+// Stripping where the write path is strict: a stored entry may carry keys this
+// build has no use for. The timestamp is debug-only, so one without it reads.
 const pendingNoteSchema = noteSchema
   .extend({ submittedAtMs: z.number().catch(0) })
   .strip();

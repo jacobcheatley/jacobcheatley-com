@@ -1,22 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import type { NoteContent } from "./note-schema";
+import { noteContent } from "./note-fixture";
 import {
   addNote,
   listApprovedNotes,
   listPendingNotes,
 } from "./sticky-notes.server";
 
-const content: NoteContent = {
-  version: 1,
-  w: 500,
-  h: 500,
-  colour: "yellow",
-  rotation: 0,
-  curl: { bl: 0, br: 0 },
-  fastener: "none",
-  elements: [],
-};
+const content = noteContent();
 
 // The real CLI, not the module it calls: the exit code is the contract.
 function runApprove(id: number) {
