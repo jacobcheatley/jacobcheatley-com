@@ -16,6 +16,8 @@ import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as StickyNotesIndexRouteImport } from './routes/sticky-notes.index'
 import { Route as StickyNotesNewRouteImport } from './routes/sticky-notes.new'
+import { Route as BlogWriteIndexRouteImport } from './routes/blog.write.index'
+import { Route as BlogWriteIdRouteImport } from './routes/blog.write.$id'
 
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
@@ -51,6 +53,16 @@ const StickyNotesNewRoute = StickyNotesNewRouteImport.update({
   path: '/new',
   getParentRoute: () => StickyNotesRoute,
 } as any)
+const BlogWriteIndexRoute = BlogWriteIndexRouteImport.update({
+  id: '/blog/write/',
+  path: '/blog/write/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogWriteIdRoute = BlogWriteIdRouteImport.update({
+  id: '/blog/write/$id',
+  path: '/blog/write/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
@@ -59,6 +71,8 @@ export interface FileRoutesByFullPath {
   '/sticky-notes/new': typeof StickyNotesNewRoute
   '/blog/': typeof BlogIndexRoute
   '/sticky-notes/': typeof StickyNotesIndexRoute
+  '/blog/write/$id': typeof BlogWriteIdRoute
+  '/blog/write/': typeof BlogWriteIndexRoute
 }
 export interface FileRoutesByTo {
   '/blog/$slug': typeof BlogSlugRoute
@@ -66,6 +80,8 @@ export interface FileRoutesByTo {
   '/': typeof ShellIndexRoute
   '/blog': typeof BlogIndexRoute
   '/sticky-notes': typeof StickyNotesIndexRoute
+  '/blog/write/$id': typeof BlogWriteIdRoute
+  '/blog/write': typeof BlogWriteIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -76,6 +92,8 @@ export interface FileRoutesById {
   '/_shell/': typeof ShellIndexRoute
   '/blog/': typeof BlogIndexRoute
   '/sticky-notes/': typeof StickyNotesIndexRoute
+  '/blog/write/$id': typeof BlogWriteIdRoute
+  '/blog/write/': typeof BlogWriteIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -86,8 +104,17 @@ export interface FileRouteTypes {
     | '/sticky-notes/new'
     | '/blog/'
     | '/sticky-notes/'
+    | '/blog/write/$id'
+    | '/blog/write/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/blog/$slug' | '/sticky-notes/new' | '/' | '/blog' | '/sticky-notes'
+  to:
+    | '/blog/$slug'
+    | '/sticky-notes/new'
+    | '/'
+    | '/blog'
+    | '/sticky-notes'
+    | '/blog/write/$id'
+    | '/blog/write'
   id:
     | '__root__'
     | '/_shell'
@@ -97,6 +124,8 @@ export interface FileRouteTypes {
     | '/_shell/'
     | '/blog/'
     | '/sticky-notes/'
+    | '/blog/write/$id'
+    | '/blog/write/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -104,6 +133,8 @@ export interface RootRouteChildren {
   StickyNotesRoute: typeof StickyNotesRouteWithChildren
   BlogSlugRoute: typeof BlogSlugRoute
   BlogIndexRoute: typeof BlogIndexRoute
+  BlogWriteIdRoute: typeof BlogWriteIdRoute
+  BlogWriteIndexRoute: typeof BlogWriteIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -157,6 +188,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StickyNotesNewRouteImport
       parentRoute: typeof StickyNotesRoute
     }
+    '/blog/write/': {
+      id: '/blog/write/'
+      path: '/blog/write'
+      fullPath: '/blog/write/'
+      preLoaderRoute: typeof BlogWriteIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog/write/$id': {
+      id: '/blog/write/$id'
+      path: '/blog/write/$id'
+      fullPath: '/blog/write/$id'
+      preLoaderRoute: typeof BlogWriteIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -189,6 +234,8 @@ const rootRouteChildren: RootRouteChildren = {
   StickyNotesRoute: StickyNotesRouteWithChildren,
   BlogSlugRoute: BlogSlugRoute,
   BlogIndexRoute: BlogIndexRoute,
+  BlogWriteIdRoute: BlogWriteIdRoute,
+  BlogWriteIndexRoute: BlogWriteIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

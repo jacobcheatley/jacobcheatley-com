@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Lowercase words joined by single hyphens, the shape `/blog/<slug>` reads as
 // one word to a reader and to a URL.
-const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+export const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const SLUG_MAX = 80;
 
 // The one schema every save is parsed with, Draft or not: the column widths as
