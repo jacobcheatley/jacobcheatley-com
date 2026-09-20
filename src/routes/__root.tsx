@@ -1,5 +1,6 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
+import faviconUrl from "../favicon.png?url";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -12,7 +13,10 @@ export const Route = createRootRoute({
       },
       { title: "Jacob Cheatley" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: faviconUrl },
+    ],
   }),
   shellComponent: RootDocument,
 });
