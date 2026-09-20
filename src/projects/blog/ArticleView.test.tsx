@@ -8,7 +8,11 @@ import type { Article } from "./blog.server";
 // The seed reads the same file off disk; under jsdom `import.meta.url` is not
 // a file URL, so this test takes it through Vite instead.
 import kitchenSinkMarkdown from "./kitchen-sink.md?raw";
-import { type MermaidLoader, MermaidLoaderContext } from "./Mermaid";
+import {
+  ArticleSurfaceContext,
+  type MermaidLoader,
+  MermaidLoaderContext,
+} from "./Mermaid";
 
 vi.mock("@tanstack/react-router", () => import("@/test/router-stub"));
 
@@ -205,6 +209,52 @@ it("swaps a diagram's source for the drawing mermaid returns", async () => {
     await screen.findByRole("img", { name: "Draft to Published" }),
   ).toBeVisible();
   expect(screen.queryByText(/flowchart LR/)).toBeNull();
+});
+
+const brokenDiagram = article("```mermaid\nflowchart LR\n  Draft -->\n```\n");
+
+// mermaid as the owner mid-edit finds it: the diagram as first written draws,
+// what the edit left of it does not.
+const drawsAsFirstWritten: MermaidLoader = async () => ({
+  initialize: () => {},
+  render: async (_diagramId: string, source: string) => {
+    if (!source.includes("Published")) throw new Error("Parse error on line 2");
+    return { svg: '<svg role="img" aria-label="Draft to Published"></svg>' };
+  },
+});
+
+it("keeps the last good drawing, dimmed, while a diagram's source is mid-edit", async () => {
+  const room = (body: Article) => (
+    <ArticleSurfaceContext value="editor">
+      {withLoader(drawsAsFirstWritten, <ArticleView article={body} />)}
+    </ArticleSurfaceContext>
+  );
+  const { container, rerender } = render(room(diagram));
+  expect(
+    await screen.findByRole("img", { name: "Draft to Published" }),
+  ).toBeVisible();
+
+  rerender(room(brokenDiagram));
+  await act(async () => {});
+
+  const drawing = container.querySelector(".mermaid-diagram");
+  expect(drawing).toHaveClass("is-stale");
+  expect(drawing).toContainElement(
+    screen.getByRole("img", { name: "Draft to Published" }),
+  );
+  expect(container.querySelector("pre")).toBeNull();
+});
+
+it("gives a reader the source and the message of a diagram that stops drawing", async () => {
+  const page = (body: Article) =>
+    withLoader(drawsAsFirstWritten, <ArticleView article={body} />);
+  const { rerender } = render(page(diagram));
+  await screen.findByRole("img", { name: "Draft to Published" });
+
+  rerender(page(brokenDiagram));
+
+  expect(await screen.findByText("Parse error on line 2")).toBeVisible();
+  expect(screen.getByText(/Draft -->/)).toBeVisible();
 });
 
 it("hydrates the kitchen-sink Article with nothing logged to the console", async () => {

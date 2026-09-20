@@ -27,10 +27,18 @@ export const MermaidLoaderContext = createContext<MermaidLoader>(
   async () => (await import("mermaid")).default,
 );
 
+type ArticleSurface = "page" | "editor";
+
+// A diagram redraws at every keystroke in the writing room, where a reader's
+// page draws it once: the room says which surface this is.
+export const ArticleSurfaceContext = createContext<ArticleSurface>("page");
+
+// A drawing belongs to the source it was drawn from, which in the writing
+// room is not always the source the diagram now holds.
 type Drawing =
-  | { status: "source" }
-  | { status: "drawn"; svg: string }
-  | { status: "failed"; message: string };
+  | { status: "undrawn" }
+  | { status: "drawn"; source: string; svg: string }
+  | { status: "failed"; source: string; message: string };
 
 // The palette tokens are light-dark() expressions, which mermaid cannot read,
 // so a throwaway element resolves each against the scheme in force.
@@ -82,10 +90,11 @@ async function drawDiagram(
     // has loaded clips the labels.
     await document.fonts.load('16px "IBM Plex Sans"');
     const { svg } = await mermaid.render(diagramId, source);
-    return { status: "drawn", svg };
+    return { status: "drawn", source, svg };
   } catch (error) {
     return {
       status: "failed",
+      source,
       message: error instanceof Error ? error.message : String(error),
     };
   }
@@ -93,15 +102,19 @@ async function drawDiagram(
 
 export function Mermaid({ source = "", ...stamp }: MermaidProps) {
   const loadMermaid = useContext(MermaidLoaderContext);
+  const surface = useContext(ArticleSurfaceContext);
   // mermaid puts the id in selectors of the stylesheet it writes into the SVG.
   const diagramId = `mermaid-${useId().replaceAll(/[^a-zA-Z0-9]/g, "")}`;
-  const [drawing, setDrawing] = useState<Drawing>({ status: "source" });
+  const [drawing, setDrawing] = useState<Drawing>({ status: "undrawn" });
+  const [lastDrawing, setLastDrawing] = useState("");
 
   useEffect(() => {
     let showing = true;
     const draw = () => {
       void drawDiagram(loadMermaid, diagramId, source).then((next) => {
-        if (showing) setDrawing(next);
+        if (!showing) return;
+        setDrawing(next);
+        if (next.status === "drawn") setLastDrawing(next.svg);
       });
     };
 
@@ -114,13 +127,18 @@ export function Mermaid({ source = "", ...stamp }: MermaidProps) {
     };
   }, [loadMermaid, diagramId, source]);
 
-  if (drawing.status === "drawn") {
+  const isDrawn = drawing.status === "drawn" && drawing.source === source;
+  // In the writing room the last good drawing holds the diagram's place while
+  // the source it was drawn from is mid-edit or being drawn again.
+  const svg = isDrawn ? drawing.svg : surface === "editor" ? lastDrawing : "";
+
+  if (svg) {
     return (
       <div
-        className="mermaid-diagram"
+        className={isDrawn ? "mermaid-diagram" : "mermaid-diagram is-stale"}
         {...stamp}
         // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid's default securityLevel "strict" sanitises the SVG it returns, and it is markup, not children.
-        dangerouslySetInnerHTML={{ __html: drawing.svg }}
+        dangerouslySetInnerHTML={{ __html: svg }}
       />
     );
   }
