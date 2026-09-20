@@ -1,6 +1,6 @@
 import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { db } from "@/db/index.server";
-import { articles, articleTopics, topics } from "./schema";
+import { articles, articleTopics, topicNames, topics } from "./schema";
 
 export type ListedArticle = {
   slug: string;
@@ -20,9 +20,7 @@ const publishedColumns = {
   title: articles.title,
   tagline: articles.tagline,
   publishAt: sql`${articles.publishAt}`.mapWith(articles.publishAt),
-  topics: sql<
-    string[]
-  >`coalesce(array_agg(${topics.name}) filter (where ${topics.name} is not null), '{}')`,
+  topics: topicNames,
 };
 
 // The visibility rule: only a Publish date that has arrived (<= now, inclusive).
