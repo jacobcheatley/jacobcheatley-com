@@ -27,7 +27,11 @@ function NoArticle() {
     <BlogLayout heading={<BlogHomeLink />}>
       <h1 className="text-[2rem] font-medium italic">No Article here.</h1>
       <p className="mt-2">
-        <Link to="/blog" className="text-accent">
+        <Link
+          to="/blog"
+          activeOptions={{ exact: true }}
+          className="text-accent"
+        >
           All Articles
         </Link>
       </p>
