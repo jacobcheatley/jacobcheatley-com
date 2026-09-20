@@ -102,6 +102,12 @@ export function saveArticle(
   });
 }
 
+// A hard delete, whatever state the Article is in. Its Topic links go with it
+// by cascade.
+export async function deleteArticle(id: number): Promise<void> {
+  await db.delete(articles).where(eq(articles.id, id));
+}
+
 // What the editor's Local / Production label is made of. The host is server
 // only, so it travels to the browser through the index's loader.
 export const editorDatabase = (): EditorDatabase => ({

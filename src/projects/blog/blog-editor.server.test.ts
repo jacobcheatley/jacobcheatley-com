@@ -1,8 +1,10 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
+import { listPublishedArticles } from "./blog.server";
 import {
   createArticle,
+  deleteArticle,
   findArticleForEditing,
   listAllArticles,
   saveArticle,
@@ -142,5 +144,35 @@ describe("saveArticle", () => {
       ok: false,
       reason: "articleGone",
     });
+  });
+
+  it("puts the Article on the site with a Publish date and takes it off again", async () => {
+    const id = await createdArticle();
+    const now = new Date();
+
+    await saveArticle(id, { ...save, publishAt: new Date(now.getTime() - 1) });
+    expect(await listPublishedArticles(now)).toMatchObject([
+      { slug: save.slug },
+    ]);
+
+    await saveArticle(id, { ...save, publishAt: null });
+    expect(await listPublishedArticles(now)).toEqual([]);
+  });
+});
+
+describe("deleteArticle", () => {
+  it("removes the Article and its Topic links", async () => {
+    const id = await createdArticle();
+    const [topic] = await db
+      .insert(topics)
+      .values({ name: "Postgres" })
+      .returning({ id: topics.id });
+    if (!topic) throw new Error("insert returned no row");
+    await db.insert(articleTopics).values({ articleId: id, topicId: topic.id });
+
+    await deleteArticle(id);
+
+    expect(await db.select().from(articles)).toEqual([]);
+    expect(await db.select().from(articleTopics)).toEqual([]);
   });
 });

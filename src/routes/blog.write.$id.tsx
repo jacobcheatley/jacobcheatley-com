@@ -1,5 +1,9 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { saveArticleFn, writingRoomFn } from "@/projects/blog/blog-editor.fn";
+import {
+  deleteArticleFn,
+  saveArticleFn,
+  writingRoomFn,
+} from "@/projects/blog/blog-editor.fn";
 import { WritingRoom } from "@/projects/blog/WritingRoom";
 
 export const Route = createFileRoute("/blog/write/$id")({
@@ -15,5 +19,12 @@ export const Route = createFileRoute("/blog/write/$id")({
 });
 
 function WritingRoomRoute() {
-  return <WritingRoom {...Route.useLoaderData()} saveArticle={saveArticleFn} />;
+  return (
+    <WritingRoom
+      {...Route.useLoaderData()}
+      now={() => new Date()}
+      saveArticle={saveArticleFn}
+      deleteArticle={deleteArticleFn}
+    />
+  );
 }

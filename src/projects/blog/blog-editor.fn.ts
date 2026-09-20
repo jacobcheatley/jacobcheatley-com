@@ -3,6 +3,7 @@ import { z } from "zod";
 import { articleSaveSchema } from "./article-schema";
 import {
   createArticle,
+  deleteArticle,
   editorDatabase,
   findArticleForEditing,
   listAllArticles,
@@ -37,6 +38,13 @@ export const saveArticleFn = createServerFn({ method: "POST" })
   .handler(({ data }) => {
     if (!import.meta.env.DEV) throw new Error("the Blog editor is local only");
     return saveArticle(data.id, data.save);
+  });
+
+export const deleteArticleFn = createServerFn({ method: "POST" })
+  .validator(z.int())
+  .handler(({ data }) => {
+    if (!import.meta.env.DEV) throw new Error("the Blog editor is local only");
+    return deleteArticle(data);
   });
 
 export const createArticleFn = createServerFn({ method: "POST" })
