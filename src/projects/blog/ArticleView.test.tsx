@@ -68,6 +68,32 @@ it("leaves a code fence in an unimported language unhighlighted", () => {
   });
 });
 
+it("renders a callout directive with a label from its kind", () => {
+  render(
+    <ArticleView
+      article={article(':::callout{kind="warning"}\nMind the **step**.\n:::\n')}
+    />,
+  );
+
+  const callout = screen.getByRole("complementary");
+  expect(within(callout).getByText("warning")).toBeVisible();
+  expect(callout).toHaveTextContent("Mind the step.");
+});
+
+it("keeps prose that looks like a text directive as written", () => {
+  render(<ArticleView article={article("Doors at 10:30, in a:b.\n")} />);
+
+  expect(screen.getByText("Doors at 10:30, in a:b.")).toBeVisible();
+});
+
+it("keeps an unregistered directive as its source text", () => {
+  render(
+    <ArticleView article={article(":::unknown{kind=1}\nInside.\n:::\n")} />,
+  );
+
+  expect(screen.getByText(":::unknown{kind=1} Inside. :::")).toBeVisible();
+});
+
 it("shows raw HTML as text", () => {
   const { container } = render(
     <ArticleView article={article('<script>alert("hello")</script>\n')} />,

@@ -2,11 +2,14 @@ import rehypeShikiFromHighlighter from "@shikijs/rehype/core";
 import Markdown, { type Options } from "react-markdown";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeSlug from "rehype-slug";
+import remarkDirective from "remark-directive";
 import remarkGfm from "remark-gfm";
 import { createCssVariablesTheme, createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import python from "shiki/langs/python.mjs";
 import typescript from "shiki/langs/typescript.mjs";
+import { remarkDirectiveComponents } from "./article-directives";
+import { Callout } from "./Callout";
 
 const paletteThemeName = "palette";
 
@@ -25,10 +28,20 @@ const highlighter = createHighlighterCoreSync({
   engine: createJavaScriptRegexEngine(),
 });
 
+// The directive registry: an Article reaches the components named here and no
+// others, its attributes arriving as string props, and adding one is one entry.
+const directiveComponents = {
+  "directive-callout": Callout,
+} satisfies Options["components"];
+
 // The Blog's whole Markdown pipeline. It is synchronous, so the one component
 // serves the server render, hydration and the editor preview. There is no
 // rehype-raw and no sanitiser, which is what makes raw HTML come out as text.
-const remarkPlugins: Options["remarkPlugins"] = [remarkGfm];
+const remarkPlugins: Options["remarkPlugins"] = [
+  remarkGfm,
+  remarkDirective,
+  [remarkDirectiveComponents, new Set(Object.keys(directiveComponents))],
+];
 
 const rehypePlugins: Options["rehypePlugins"] = [
   rehypeSlug,
@@ -50,7 +63,11 @@ const rehypePlugins: Options["rehypePlugins"] = [
 export function ArticleBody({ markdown }: { markdown: string }) {
   return (
     <div className="prose">
-      <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins}>
+      <Markdown
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
+        components={directiveComponents}
+      >
         {markdown}
       </Markdown>
     </div>
