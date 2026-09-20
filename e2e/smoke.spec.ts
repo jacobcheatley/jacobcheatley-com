@@ -29,6 +29,13 @@ test("a slug with no Published Article gets the Blog's 404", async ({
   await expect(page.getByRole("link", { name: "All Articles" })).toBeVisible();
 });
 
+// The Blog editor is not in this build at all, so the URL is a slug with no
+// Published Article: either way, 404.
+test("the Blog editor's URL is not a page here (404)", async ({ request }) => {
+  const response = await request.get("/blog/write");
+  expect(response.status()).toBe(404);
+});
+
 test("the Sticky Notes editor loads with the mat over the wall", async ({
   page,
 }) => {

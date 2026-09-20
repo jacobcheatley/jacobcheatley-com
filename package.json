@@ -23,7 +23,8 @@
     "db:seed": "bun run scripts/db-seed.ts",
     "db:studio": "drizzle-kit studio",
     "generate-routes": "tsr generate",
-    "sticky-notes": "bun run scripts/sticky-notes.ts"
+    "sticky-notes": "bun run scripts/sticky-notes.ts",
+    "write": "DATABASE_URL=\"$(npx neon@latest connection-string --project-id cold-recipe-98352824 --branch production)\" bun --bun vite dev --port 3100 --strictPort"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "^5.3.0",
