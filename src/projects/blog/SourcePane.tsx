@@ -72,11 +72,9 @@ const siteHighlight = HighlightStyle.define([
   },
 ]);
 
-// The Markdown source of one Article. The editor owns the text: it is built
-// once, from the Article as it was loaded, and every change leaves through
-// `onChange`, which is why both props are read at mount and `onChange` has to
-// keep its identity. It builds nothing on the server, so the first render is
-// the empty div it hydrates into.
+// The editor owns the text: it is built once, so every prop is read at mount
+// and must keep its identity. Nothing is built on the server, so the first
+// render is the empty div it hydrates into.
 export function SourcePane({
   initialMarkdown,
   onChange,
