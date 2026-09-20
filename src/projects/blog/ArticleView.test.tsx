@@ -46,6 +46,28 @@ it("gives a heading an id and a # link to it", () => {
   ).toHaveAttribute("href", "#a-section-heading");
 });
 
+it("colours a code fence in an imported language", () => {
+  render(
+    <ArticleView article={article('```ts\nconst ink = "green";\n```\n')} />,
+  );
+
+  expect(screen.getByText("const")).toHaveStyle({
+    color: "var(--code-token-keyword)",
+  });
+});
+
+it("leaves a code fence in an unimported language unhighlighted", () => {
+  render(
+    <ArticleView
+      article={article('```haskell\nmain = putStrLn "hi"\n```\n')}
+    />,
+  );
+
+  expect(screen.getByText('main = putStrLn "hi"')).toHaveStyle({
+    color: "var(--code-foreground)",
+  });
+});
+
 it("shows raw HTML as text", () => {
   const { container } = render(
     <ArticleView article={article('<script>alert("hello")</script>\n')} />,
