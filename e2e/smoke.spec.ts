@@ -11,6 +11,13 @@ test("the retired /guestbook route is gone (404)", async ({ request }) => {
   expect(response.status()).toBe(404);
 });
 
+// Neither environment is seeded, so this passes on a Blog with no Articles.
+test("/blog responds 200 and the h1 is the Blog", async ({ page }) => {
+  const response = await page.goto("/blog");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Blog");
+});
+
 test("the Sticky Notes editor loads with the mat over the wall", async ({
   page,
 }) => {

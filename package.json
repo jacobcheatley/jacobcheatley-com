@@ -20,6 +20,7 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "bun run scripts/db-seed.ts",
     "db:studio": "drizzle-kit studio",
     "generate-routes": "tsr generate",
     "sticky-notes": "bun run scripts/sticky-notes.ts"
