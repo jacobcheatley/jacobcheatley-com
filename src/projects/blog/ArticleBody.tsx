@@ -8,7 +8,7 @@ import { createCssVariablesTheme, createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import python from "shiki/langs/python.mjs";
 import typescript from "shiki/langs/typescript.mjs";
-import { remarkDirectiveComponents } from "./article-directives";
+import { remarkArticleComponents } from "./article-components";
 import { Callout } from "./Callout";
 
 const paletteThemeName = "palette";
@@ -40,7 +40,7 @@ const directiveComponents = {
 const remarkPlugins: Options["remarkPlugins"] = [
   remarkGfm,
   remarkDirective,
-  [remarkDirectiveComponents, new Set(Object.keys(directiveComponents))],
+  [remarkArticleComponents, new Set(Object.keys(directiveComponents))],
 ];
 
 const rehypePlugins: Options["rehypePlugins"] = [

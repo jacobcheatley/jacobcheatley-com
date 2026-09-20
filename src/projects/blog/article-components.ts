@@ -4,7 +4,7 @@ import { SKIP, visit } from "unist-util-visit";
 // A directive an Article names reaches a component through the tag its
 // registry key spells. Everything else is prose, because `10:30` and `a:b`
 // parse as text directives too, so it goes back exactly as it was written.
-export function remarkDirectiveComponents(
+export function remarkArticleComponents(
   registeredTagNames: ReadonlySet<string>,
 ) {
   return (tree: Root, file: { value: unknown }) => {
