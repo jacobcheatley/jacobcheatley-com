@@ -8,8 +8,9 @@ import { createCssVariablesTheme, createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import python from "shiki/langs/python.mjs";
 import typescript from "shiki/langs/typescript.mjs";
-import { remarkDirectiveComponents } from "./article-directives";
+import { remarkArticleComponents } from "./article-components";
 import { Callout } from "./Callout";
+import { Mermaid } from "./Mermaid";
 
 const paletteThemeName = "palette";
 
@@ -32,6 +33,7 @@ const highlighter = createHighlighterCoreSync({
 // others, its attributes arriving as string props, and adding one is one entry.
 const directiveComponents = {
   "directive-callout": Callout,
+  "directive-mermaid": Mermaid,
 } satisfies Options["components"];
 
 // The Blog's whole Markdown pipeline. It is synchronous, so the one component
@@ -40,7 +42,7 @@ const directiveComponents = {
 const remarkPlugins: Options["remarkPlugins"] = [
   remarkGfm,
   remarkDirective,
-  [remarkDirectiveComponents, new Set(Object.keys(directiveComponents))],
+  [remarkArticleComponents, new Set(Object.keys(directiveComponents))],
 ];
 
 const rehypePlugins: Options["rehypePlugins"] = [

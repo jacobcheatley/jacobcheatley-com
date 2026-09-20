@@ -252,6 +252,29 @@ body {
   font-size: 0.875rem;
 }
 
+/* mermaid sizes the SVG to the diagram; the column decides how wide it lands. */
+.prose .mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 1.25em;
+}
+
+.prose .mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* mermaid's complaint about a diagram it could not draw, pulled up against the
+   source it belongs to. It is machine output and points at a column with a
+   caret, so it keeps its own line breaks. */
+.prose .mermaid-error {
+  margin-top: -0.75em;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  color: var(--color-muted);
+}
+
 .prose table {
   width: 100%;
   border-collapse: collapse;

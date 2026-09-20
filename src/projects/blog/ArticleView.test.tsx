@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { expect, it, vi } from "vitest";
@@ -8,8 +8,18 @@ import type { Article } from "./blog.server";
 // The seed reads the same file off disk; under jsdom `import.meta.url` is not
 // a file URL, so this test takes it through Vite instead.
 import kitchenSinkMarkdown from "./kitchen-sink.md?raw";
+import { type MermaidLoader, MermaidLoaderContext } from "./Mermaid";
 
 vi.mock("@tanstack/react-router", () => import("@/test/router-stub"));
+
+// The two browser seams the diagram component reaches for, neither of which
+// jsdom implements.
+Object.defineProperty(document, "fonts", {
+  value: { load: () => Promise.resolve([]) },
+});
+Object.defineProperty(window, "matchMedia", {
+  value: () => ({ addEventListener: () => {}, removeEventListener: () => {} }),
+});
 
 const article = (body: string): Article => ({
   slug: "an-article",
@@ -103,8 +113,67 @@ it("shows raw HTML as text", () => {
   expect(container.querySelector("script")).toBeNull();
 });
 
+const diagram = article(
+  "```mermaid\nflowchart LR\n  Draft --> Published\n```\n",
+);
+
+const withLoader = (loadMermaid: MermaidLoader, children: ReactNode) => (
+  <MermaidLoaderContext value={loadMermaid}>{children}</MermaidLoaderContext>
+);
+
+const neverLoads: MermaidLoader = () => new Promise(() => {});
+
+it("shows a diagram's source as one code block while mermaid loads", () => {
+  const { container } = render(
+    withLoader(neverLoads, <ArticleView article={diagram} />),
+  );
+
+  expect(screen.getByText(/flowchart LR/)).toBeVisible();
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
+});
+
+it("keeps a diagram's source when mermaid cannot be loaded", async () => {
+  const loadMermaid = () => Promise.reject(new Error("mermaid is not here"));
+
+  render(withLoader(loadMermaid, <ArticleView article={diagram} />));
+
+  expect(await screen.findByText("mermaid is not here")).toBeVisible();
+  expect(screen.getByText(/flowchart LR/)).toBeVisible();
+});
+
+it("keeps a diagram's source when it does not draw", async () => {
+  const loadMermaid = async () => ({
+    initialize: () => {},
+    render: () => Promise.reject(new Error("Parse error on line 2")),
+  });
+
+  render(withLoader(loadMermaid, <ArticleView article={diagram} />));
+
+  expect(await screen.findByText("Parse error on line 2")).toBeVisible();
+  expect(screen.getByText(/flowchart LR/)).toBeVisible();
+});
+
+it("swaps a diagram's source for the drawing mermaid returns", async () => {
+  const loadMermaid = async () => ({
+    initialize: () => {},
+    render: async () => ({
+      svg: '<svg role="img" aria-label="Draft to Published"></svg>',
+    }),
+  });
+
+  render(withLoader(loadMermaid, <ArticleView article={diagram} />));
+
+  expect(
+    await screen.findByRole("img", { name: "Draft to Published" }),
+  ).toBeVisible();
+  expect(screen.queryByText(/flowchart LR/)).toBeNull();
+});
+
 it("hydrates the kitchen-sink Article with nothing logged to the console", async () => {
-  const view = <ArticleView article={article(kitchenSinkMarkdown)} />;
+  const view = withLoader(
+    neverLoads,
+    <ArticleView article={article(kitchenSinkMarkdown)} />,
+  );
   const container = document.createElement("div");
   container.innerHTML = renderToString(view);
   document.body.append(container);
