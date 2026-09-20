@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { act, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -243,6 +243,26 @@ it("keeps the last good drawing, dimmed, while a diagram's source is mid-edit", 
     screen.getByRole("img", { name: "Draft to Published" }),
   );
   expect(container.querySelector("pre")).toBeNull();
+});
+
+it("draws under an id of its own each time, which mermaid is free to clear out", async () => {
+  const drawnUnder: string[] = [];
+  const loadMermaid: MermaidLoader = async () => ({
+    initialize: () => {},
+    render: async (diagramId: string) => {
+      drawnUnder.push(diagramId);
+      return { svg: `<svg role="img" aria-label="${diagramId}"></svg>` };
+    },
+  });
+  const page = (body: Article) =>
+    withLoader(loadMermaid, <ArticleView article={body} />);
+  const { rerender } = render(page(diagram));
+  await screen.findByRole("img");
+
+  rerender(page(brokenDiagram));
+
+  await waitFor(() => expect(drawnUnder).toHaveLength(2));
+  expect(new Set(drawnUnder).size).toBe(2);
 });
 
 it("gives a reader the source and the message of a diagram that stops drawing", async () => {

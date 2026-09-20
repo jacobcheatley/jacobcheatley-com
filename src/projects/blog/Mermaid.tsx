@@ -1,5 +1,12 @@
 import type { MermaidConfig } from "mermaid";
-import { createContext, useContext, useEffect, useId, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import type { SourceStamp } from "./source-lines";
 
 type MermaidProps = { source?: string } & SourceStamp;
@@ -107,11 +114,16 @@ export function Mermaid({ source = "", ...stamp }: MermaidProps) {
   const diagramId = `mermaid-${useId().replaceAll(/[^a-zA-Z0-9]/g, "")}`;
   const [drawing, setDrawing] = useState<Drawing>({ status: "undrawn" });
   const [lastDrawing, setLastDrawing] = useState("");
+  const draws = useRef(0);
 
   useEffect(() => {
     let showing = true;
     const draw = () => {
-      void drawDiagram(loadMermaid, diagramId, source).then((next) => {
+      // mermaid clears out whatever already holds the id it is about to draw
+      // into, so a drawing on the page keeps the id of the draw that made it.
+      draws.current += 1;
+      const drawId = `${diagramId}-${draws.current}`;
+      void drawDiagram(loadMermaid, drawId, source).then((next) => {
         if (!showing) return;
         setDrawing(next);
         if (next.status === "drawn") setLastDrawing(next.svg);
