@@ -15,6 +15,8 @@
 @font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); }
 @font-face { font-family: "IBM Plex Sans"; font-weight: 600; src: url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); }
 
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url(https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+
 /* The site's tokens, copied from src/styles.css */
 :root {
   color-scheme: light dark;
@@ -28,7 +30,7 @@
   --color-surface: light-dark(#ffffff, #232524);
   --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* Shiki's CSS-variables theme, mapped onto the palette */
   --code-foreground: var(--color-ink);
@@ -77,7 +79,7 @@ a { color: inherit; }
 .topics { font-family: var(--font-sans); }
 
 /* ---------- Variant A: quiet column ---------- */
-[data-variant="A"] .page { max-width: 36rem; margin: 0 auto; padding: clamp(2rem, 6vw, 4rem) 1rem 0; }
+[data-variant="A"] .page { max-width: calc(var(--measure, 40rem) + 2rem); margin: 0 auto; padding: clamp(2rem, 6vw, 4rem) 1rem 0; }
 [data-variant="A"] .mast { display: flex; gap: 0.6rem; align-items: baseline; font-size: 1.25rem; margin-bottom: clamp(2.5rem, 6vw, 4rem); }
 [data-variant="A"] .mast .here { font-style: italic; text-decoration: none; }
 [data-variant="A"] .mast .here:hover { text-decoration: underline; }
@@ -211,15 +213,18 @@ a { color: inherit; }
 const VARIANTS = { A: "Quiet column", B: "Margin column", C: "Index + title block" };
 const VIEWS = { listing: "Listing", article: "Article", cover: "Cover", "not-found": "404" };
 const SCHEMES = ["auto", "light", "dark"];
+const MEASURES = ["36", "38", "40", "42", "44"];
 
 const params = new URLSearchParams(location.search);
 const variant = params.get("variant") in VARIANTS ? params.get("variant") : "A";
 const view = params.get("view") in VIEWS ? params.get("view") : "listing";
 const scheme = SCHEMES.includes(params.get("scheme")) ? params.get("scheme") : "auto";
+const measure = MEASURES.includes(params.get("measure")) ? params.get("measure") : "40";
+document.body.style.setProperty("--measure", measure + "rem");
 document.body.dataset.variant = variant;
 if (scheme !== "auto") document.documentElement.style.colorScheme = scheme;
 
-const go = (next) => { location.search = new URLSearchParams({ variant, view, scheme, ...next }); };
+const go = (next) => { location.search = new URLSearchParams({ variant, view, scheme, measure, ...next }); };
 
 const ARTICLES = [
   { slug: "one-scalable-picture", title: "Every Note is one scalable picture", tagline: "Why the wall draws its Notes as SVG.", date: "2026-09-14", topics: ["svg", "react"] },
@@ -230,9 +235,9 @@ const ARTICLES = [
 const fmt = (iso, opts) => new Intl.DateTimeFormat("en-NZ", opts).format(new Date(iso));
 const longDate = (iso) => fmt(iso, { day: "numeric", month: "long", year: "numeric" });
 const shortDate = (iso) => fmt(iso, { day: "numeric", month: "short" });
-const articleHref = "?" + new URLSearchParams({ variant, view: "article", scheme });
-const listingHref = "?" + new URLSearchParams({ variant, view: "listing", scheme });
-const portfolioHref = "?" + new URLSearchParams({ variant, view: "cover", scheme });
+const articleHref = "?" + new URLSearchParams({ variant, view: "article", scheme, measure });
+const listingHref = "?" + new URLSearchParams({ variant, view: "listing", scheme, measure });
+const portfolioHref = "?" + new URLSearchParams({ variant, view: "cover", scheme, measure });
 
 /* rehype-autolink-headings can append (A), prepend (B) or wrap (C) */
 function heading(level, id, text) {
@@ -315,10 +320,9 @@ function notFound() {
 
 function cover() {
   const art = {
-    A: `<div class="cover-A">Blog</div>`,
     B: `<div class="cover-B"><b>Blog</b><i></i><i style="width:92%"></i><i style="width:60%"></i><i class="call"></i><i class="code"></i></div>`,
     C: `<div class="cover-C"><span class="pilcrow">¶</span><span class="word">Blog</span></div>`,
-  }[variant];
+  }[variant === "C" ? "C" : "B"];
   return `<main class="portfolio"><header><h1>Jacob Cheatley</h1><p>Games, puzzles and other small projects.</p></header>
     <ul class="covers">
       <li><a href="#" aria-label="Sticky Notes"><div class="frame"><div class="cork"><i style="left:-22%;top:-8%;rotate:-6deg"></i><i style="right:-22%;bottom:-10%;rotate:5deg;background:#f4a9c0"></i><i style="left:50%;top:50%;translate:-50% -50%;height:85%;rotate:2deg;background:#a8dcf0"></i></div></div></a></li>
@@ -335,12 +339,14 @@ const step = (d) => go({ variant: keys[(keys.indexOf(variant) + d + keys.length)
 const bar = document.getElementById("bar");
 bar.innerHTML = Object.entries(VIEWS).map(([k, v]) => `<button data-view="${k}" aria-pressed="${k === view}">${v}</button>`).join("")
   + `<span class="sep"></span><button data-step="-1" aria-label="Previous variant">←</button><span class="label">${variant} — ${VARIANTS[variant]}</span><button data-step="1" aria-label="Next variant">→</button>`
-  + `<span class="sep"></span><button data-scheme>${scheme}</button>`;
+  + `<span class="sep"></span><button data-scheme>${scheme}</button>`
+  + (variant === "A" ? `<button data-measure>${measure}rem</button>` : "");
 bar.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.dataset.view) go({ view: b.dataset.view });
   else if (b.dataset.step) step(Number(b.dataset.step));
+  else if ("measure" in b.dataset) go({ measure: MEASURES[(MEASURES.indexOf(measure) + 1) % MEASURES.length] });
   else go({ scheme: SCHEMES[(SCHEMES.indexOf(scheme) + 1) % SCHEMES.length] });
 });
 addEventListener("keydown", (e) => {
