@@ -149,7 +149,7 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .b-list td button:hover { color: var(--color-accent); text-decoration: underline; }
 .b-room { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
 .b-bar { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-line); }
-.b-bar .big-title { flex: 1; font-family: var(--font-serif) !important; font-size: 1.375rem !important; background: none; border: none; padding: 0.2rem 0; min-width: 0; }
+.b-bar .big-title { flex: 1; font-family: var(--font-serif) !important; font-size: 1.375rem !important; background: none; border: none; border-bottom: 1px dashed var(--color-line); padding: 0.2rem 0; min-width: 0; }
 .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 22rem; background: var(--color-paper); border-left: 1px solid var(--color-line); box-shadow: -12px 0 24px rgb(0 0 0 / 0.08); padding: 1.25rem; display: grid; gap: 1.1rem; align-content: start; overflow-y: auto; z-index: 2; }
 .drawer[hidden] { display: none; }
 .drawer textarea { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.35rem 0.5rem; resize: vertical; }
@@ -303,7 +303,6 @@ const VARIANTS = { A: "Three panes", B: "Index, then a writing room", C: "The Ar
 const SCHEMES = ["auto", "light", "dark"];
 const STORAGE_KEY = "PROTOTYPE-blog-editor-wipe-me";
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const MAX_TOPICS = 5;
 
 const params = new URLSearchParams(location.search);
 const variant = params.get("variant") in VARIANTS ? params.get("variant") : "A";
@@ -362,7 +361,7 @@ function normaliseTopics(names) {
     const spelling = allTopics().find((t) => t.toLowerCase() === name.toLowerCase()) ?? name;
     if (!topics.some((t) => t.toLowerCase() === spelling.toLowerCase())) topics.push(spelling);
   }
-  return topics.slice(0, MAX_TOPICS);
+  return topics;
 }
 
 function createArticle({ title, slug, tagline }) {
@@ -381,6 +380,8 @@ function save() {
   draft.title = draft.title.trim();
   draft.tagline = draft.tagline.trim();
   problem = !draft.title ? "A title is required." : !draft.tagline ? "A Tagline is required." : "";
+  if (!problem && !SLUG_PATTERN.test(draft.slug)) problem = SLUG_PROBLEMS.slugInvalid;
+  if (!problem && store.articles.some((a) => a.slug === draft.slug && a.id !== draft.id)) problem = SLUG_PROBLEMS.slugTaken;
   if (!problem && draft.id === null) {
     const result = createArticle(draft);
     if (result.ok) draft.id = result.article.id;
@@ -645,7 +646,7 @@ const shellA = () => `
       </div>
       <div class="row">
         <div class="field"><span>Slug</span><span class="slug">/blog/${escapeHtml(store.draft.slug)}</span></div>
-        <div class="field grow2"><span>Topics, up to ${MAX_TOPICS}</span><div class="chipbox"><span data-slot="topics"></span><input id="topic-add" list="topic-options" maxlength="30" placeholder="Add a Topic"></div></div>
+        <div class="field grow2"><span>Topics</span><div class="chipbox"><span data-slot="topics"></span><input id="topic-add" list="topic-options" maxlength="30" placeholder="Add a Topic"></div></div>
         <div class="field"><span>Publish date</span><span class="inline"><input type="datetime-local" data-field="publishAt" value="${store.draft.publishAt}"><button class="btn" data-action="now">Now</button><button class="btn quiet" data-action="clear-date">Clear</button></span></div>
         <div class="field end"><span data-slot="dirty"></span><span class="inline"><span data-slot="status"></span><button class="btn quiet" data-action="delete">Delete</button><button class="btn primary" data-action="save">Save</button></span></div>
       </div>
@@ -682,9 +683,9 @@ const shellB = () => (store.isListShown ? `
   </div>
   ${panes(`<header class="head" data-slot="head"></header>`).replace(/<\/div>$/, "")}
     <aside class="drawer" id="drawer" hidden>
-      <div class="field"><span>Slug</span><span class="slug">/blog/${escapeHtml(store.draft.slug)}</span></div>
+      <label class="field"><span>Slug</span><input data-field="slug" maxlength="80" style="font-family: var(--font-mono)" value="${escapeHtml(store.draft.slug)}"><span class="dirty" data-slot="slug-note"></span></label>
       <label class="field"><span>Tagline</span><textarea data-field="tagline" rows="3" maxlength="160">${escapeHtml(store.draft.tagline)}</textarea></label>
-      <div class="field"><span>Topics, up to ${MAX_TOPICS}</span><div class="inline" data-slot="topics"></div><input id="topic-add" maxlength="30" placeholder="A new Topic, then Enter"></div>
+      <div class="field"><span>Topics</span><div class="inline" data-slot="topics"></div><input id="topic-add" maxlength="30" placeholder="A new Topic, then Enter"></div>
       <div class="field"><span>Publishing</span><div data-slot="publishing"></div>
         <div class="inline"><button class="btn" data-action="now">Publish now</button><button class="btn" data-action="schedule">Schedule…</button><button class="btn" data-action="clear-date">Back to Draft</button></div>
         <input type="datetime-local" data-field="publishAt" value="${store.draft.publishAt}" aria-label="Publish date"></div>
@@ -732,7 +733,7 @@ const shellC = () => `
 </div>`;
 const suggestionsHtml = () => {
   const unused = allTopics().filter((t) => !store.draft.topics.some((d) => d.toLowerCase() === t.toLowerCase()));
-  return unused.length && store.draft.topics.length < MAX_TOPICS ? `Existing Topics: ${unused.map((t) => `<button data-add-topic="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(" ")}` : "";
+  return unused.length ? `Existing Topics: ${unused.map((t) => `<button data-add-topic="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(" ")}` : "";
 };
 
 /* ---------- render ---------- */
@@ -760,6 +761,7 @@ function refresh() {
     topics: { A: chipsHtml, B: togglesHtml, C: suggestionsHtml }[variant],
     publishing: publishingSentence,
     "save-label": saveLabel,
+    "slug-note": () => (stored() && statusOf(stored().publishAt) === "Published" && stored().slug !== store.draft.slug ? `Published at /blog/${escapeHtml(stored().slug)}: that URL will stop working.` : ""),
   };
   if (store.draft) for (const el of document.querySelectorAll("[data-slot]")) if (slots[el.dataset.slot]) el.innerHTML = slots[el.dataset.slot]();
   $("#topic-options").innerHTML = allTopics().map((t) => `<option value="${escapeHtml(t)}">`).join("");
