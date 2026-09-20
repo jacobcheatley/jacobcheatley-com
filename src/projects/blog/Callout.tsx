@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
+import type { SourceStamp } from "./source-lines";
 
 const calloutKinds = ["note", "warning"] as const;
 
-type CalloutProps = { kind?: string; children?: ReactNode };
+type CalloutProps = { kind?: string; children?: ReactNode } & SourceStamp;
 
 declare module "react" {
   namespace JSX {
@@ -18,9 +19,9 @@ function calloutLabel(kind: string | undefined) {
   return calloutKinds.find((known) => known === kind) ?? "note";
 }
 
-export function Callout({ kind, children }: CalloutProps) {
+export function Callout({ kind, children, ...stamp }: CalloutProps) {
   return (
-    <aside className="callout">
+    <aside className="callout" {...stamp}>
       <p className="callout-label">{calloutLabel(kind)}</p>
       {children}
     </aside>

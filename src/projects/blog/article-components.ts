@@ -23,6 +23,9 @@ export function remarkArticleComponents(
           type: "leafDirective",
           name: "mermaid",
           children: [],
+          // The fence's own lines, so the diagram is stamped with them like
+          // every other block.
+          position: node.position,
           data: {
             hName: "directive-mermaid",
             hProperties: { source: node.value },

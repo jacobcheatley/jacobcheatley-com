@@ -11,6 +11,7 @@ import typescript from "shiki/langs/typescript.mjs";
 import { remarkArticleComponents } from "./article-components";
 import { Callout } from "./Callout";
 import { Mermaid } from "./Mermaid";
+import { rehypeHoldSourceLines, rehypeStampSourceLines } from "./source-lines";
 
 const paletteThemeName = "palette";
 
@@ -46,6 +47,7 @@ const remarkPlugins: Options["remarkPlugins"] = [
 ];
 
 const rehypePlugins: Options["rehypePlugins"] = [
+  rehypeHoldSourceLines,
   rehypeSlug,
   [
     rehypeAutolinkHeadings,
@@ -60,6 +62,7 @@ const rehypePlugins: Options["rehypePlugins"] = [
     highlighter,
     { theme: paletteThemeName, fallbackLanguage: "text" },
   ],
+  rehypeStampSourceLines,
 ];
 
 export function ArticleBody({ markdown }: { markdown: string }) {

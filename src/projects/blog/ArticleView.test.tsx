@@ -134,6 +134,33 @@ const withLoader = (loadMermaid: MermaidLoader, children: ReactNode) => (
 
 const neverLoads: MermaidLoader = () => new Promise(() => {});
 
+it("stamps every top-level block with the source lines it was written on", () => {
+  const { container } = render(
+    withLoader(
+      neverLoads,
+      <ArticleView
+        article={article(
+          'A paragraph.\n\n```ts\nconst ink = "green";\n```\n\n:::callout{kind="warning"}\nMind the step.\n:::\n\n```mermaid\nflowchart LR\n  Draft --> Published\n```\n',
+        )}
+      />,
+    ),
+  );
+
+  const blocks = [...container.querySelectorAll("[data-source-start]")];
+  expect(
+    blocks.map((block) => [
+      block.tagName,
+      block.getAttribute("data-source-start"),
+      block.getAttribute("data-source-end"),
+    ]),
+  ).toEqual([
+    ["P", "1", "1"],
+    ["PRE", "3", "5"],
+    ["ASIDE", "7", "9"],
+    ["PRE", "11", "14"],
+  ]);
+});
+
 it("shows a diagram's source as one code block while mermaid loads", () => {
   const { container } = render(
     withLoader(neverLoads, <ArticleView article={diagram} />),

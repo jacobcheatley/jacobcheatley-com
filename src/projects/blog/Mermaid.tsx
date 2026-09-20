@@ -1,7 +1,8 @@
 import type { MermaidConfig } from "mermaid";
 import { createContext, useContext, useEffect, useId, useState } from "react";
+import type { SourceStamp } from "./source-lines";
 
-type MermaidProps = { source?: string };
+type MermaidProps = { source?: string } & SourceStamp;
 
 declare module "react" {
   namespace JSX {
@@ -90,7 +91,7 @@ async function drawDiagram(
   }
 }
 
-export function Mermaid({ source = "" }: MermaidProps) {
+export function Mermaid({ source = "", ...stamp }: MermaidProps) {
   const loadMermaid = useContext(MermaidLoaderContext);
   // mermaid puts the id in selectors of the stylesheet it writes into the SVG.
   const diagramId = `mermaid-${useId().replaceAll(/[^a-zA-Z0-9]/g, "")}`;
@@ -117,6 +118,7 @@ export function Mermaid({ source = "" }: MermaidProps) {
     return (
       <div
         className="mermaid-diagram"
+        {...stamp}
         // biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid's default securityLevel "strict" sanitises the SVG it returns, and it is markup, not children.
         dangerouslySetInnerHTML={{ __html: drawing.svg }}
       />
@@ -125,7 +127,7 @@ export function Mermaid({ source = "" }: MermaidProps) {
 
   return (
     <>
-      <pre>
+      <pre {...stamp}>
         <code>{source}</code>
       </pre>
       {drawing.status === "failed" && (
