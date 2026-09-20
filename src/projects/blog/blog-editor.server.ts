@@ -39,14 +39,15 @@ export type CreateArticleResult =
   | { ok: true; id: number }
   | { ok: false; reason: "slugTaken" };
 
-// A new Article is a Draft: the owner's three fields, an empty body and no
-// Publish date. The unique slug decides the refusal, so no read races the write.
+// A new Article is whatever the create form parsed: the owner's three fields,
+// an empty body and no Publish date. The unique slug decides the refusal, so
+// no read races the write.
 export async function createArticle(
   save: ArticleSave,
 ): Promise<CreateArticleResult> {
   const [article] = await db
     .insert(articles)
-    .values({ ...save, publishAt: null })
+    .values(save)
     .onConflictDoNothing({ target: articles.slug })
     .returning({ id: articles.id });
   return article

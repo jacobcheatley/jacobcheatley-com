@@ -9,6 +9,7 @@ const save = {
   slug: "type-safe-sql",
   tagline: "Where the types stop and the database begins.",
   body: "",
+  publishAt: null,
 };
 
 describe("createArticle", () => {
@@ -20,7 +21,7 @@ describe("createArticle", () => {
       .select()
       .from(articles)
       .where(eq(articles.id, created.id));
-    expect(article).toMatchObject({ ...save, publishAt: null });
+    expect(article).toMatchObject(save);
   });
 
   it("refuses a slug another Article already has, and writes nothing", async () => {

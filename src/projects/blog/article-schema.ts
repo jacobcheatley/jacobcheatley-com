@@ -12,6 +12,9 @@ export const articleSaveSchema = z.object({
   slug: z.string().max(SLUG_MAX).regex(SLUG_PATTERN),
   tagline: z.string().trim().min(1).max(160),
   body: z.string(),
+  // The Article's whole state: none is a Draft, and a save may set, move or
+  // clear it freely.
+  publishAt: z.date().nullable(),
 });
 
 export type ArticleSave = z.infer<typeof articleSaveSchema>;

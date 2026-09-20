@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ArticleIndex } from "./ArticleIndex";
+import type { ArticleSave } from "./article-schema";
 import type { CreateArticleResult, EditorArticle } from "./blog-editor.server";
 
 // The router and the create endpoint don't belong in jsdom: stub them at the
@@ -31,7 +32,7 @@ const article = (fields: Partial<EditorArticle>): EditorArticle => ({
 const index = (
   articles: EditorArticle[],
   createArticle: (options: {
-    data: { title: string; slug: string; tagline: string; body: string };
+    data: ArticleSave;
   }) => Promise<CreateArticleResult> = async () => ({ ok: true, id: 12 }),
 ) =>
   render(
@@ -139,6 +140,7 @@ it("opens the new Draft's writing room once it is created", async () => {
       slug: "type-safe-sql",
       tagline: "Where the types stop.",
       body: "",
+      publishAt: null,
     },
   });
   expect(navigate).toHaveBeenCalledWith({
