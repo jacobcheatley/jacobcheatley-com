@@ -6,6 +6,16 @@ test("/ responds 200 and the h1 is the name", async ({ page }) => {
   await expect(page.locator("h1")).toHaveText("Jacob Cheatley");
 });
 
+test("the favicon link in the head serves a PNG", async ({ page, request }) => {
+  await page.goto("/");
+  const faviconUrl = await page
+    .locator('link[rel="icon"]')
+    .evaluate((link: HTMLLinkElement) => link.href);
+  const response = await request.get(faviconUrl);
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toBe("image/png");
+});
+
 test("the retired /guestbook route is gone (404)", async ({ request }) => {
   const response = await request.get("/guestbook");
   expect(response.status()).toBe(404);
