@@ -38,6 +38,7 @@
     "@tanstack/react-start": "^1.168.52",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
+    "mermaid": "^12.0.0",
     "perfect-freehand": "^1.2.3",
     "pg": "^8.23.0",
     "react": "^19.3.0",

@@ -10,6 +10,7 @@ import python from "shiki/langs/python.mjs";
 import typescript from "shiki/langs/typescript.mjs";
 import { remarkArticleComponents } from "./article-components";
 import { Callout } from "./Callout";
+import { Mermaid } from "./Mermaid";
 
 const paletteThemeName = "palette";
 
@@ -32,6 +33,7 @@ const highlighter = createHighlighterCoreSync({
 // others, its attributes arriving as string props, and adding one is one entry.
 const directiveComponents = {
   "directive-callout": Callout,
+  "directive-mermaid": Mermaid,
 } satisfies Options["components"];
 
 // The Blog's whole Markdown pipeline. It is synchronous, so the one component

@@ -11,6 +11,26 @@ export function remarkArticleComponents(
     const source = String(file.value);
 
     visit(tree, (node, index, parent) => {
+      // A diagram is drawn in the browser, so its fence becomes the component
+      // holding the source rather than going on to the highlighter as code.
+      if (
+        node.type === "code" &&
+        node.lang === "mermaid" &&
+        parent &&
+        index !== undefined
+      ) {
+        parent.children[index] = {
+          type: "leafDirective",
+          name: "mermaid",
+          children: [],
+          data: {
+            hName: "directive-mermaid",
+            hProperties: { source: node.value },
+          },
+        };
+        return SKIP;
+      }
+
       if (
         node.type !== "containerDirective" &&
         node.type !== "leafDirective" &&
