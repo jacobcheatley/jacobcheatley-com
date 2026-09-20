@@ -1,18 +1,19 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
+import { saveArticleFn, writingRoomFn } from "@/projects/blog/blog-editor.fn";
+import { WritingRoom } from "@/projects/blog/WritingRoom";
 
 export const Route = createFileRoute("/blog/write/$id")({
-  component: WritingRoom,
+  loader: async ({ params }) => {
+    // The room is keyed on the Article's id, because the slug is editable.
+    const id = Number(params.id);
+    if (!Number.isInteger(id)) throw notFound();
+    const room = await writingRoomFn({ data: id });
+    if (!room.article) throw notFound();
+    return { article: room.article, database: room.database };
+  },
+  component: WritingRoomRoute,
 });
 
-function WritingRoom() {
-  return (
-    <main className="mx-auto w-full max-w-[58rem] px-4 py-10 font-sans text-[0.875rem]">
-      <Link to="/blog/write" className="text-muted">
-        ← Articles
-      </Link>
-      <p className="mt-6">
-        Article {Route.useParams().id} has no writing room yet.
-      </p>
-    </main>
-  );
+function WritingRoomRoute() {
+  return <WritingRoom {...Route.useLoaderData()} saveArticle={saveArticleFn} />;
 }

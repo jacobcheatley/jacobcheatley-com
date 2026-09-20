@@ -1,6 +1,11 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type SubmitEvent, useState } from "react";
-import { articleSaveSchema, SLUG_PATTERN, slugify } from "./article-schema";
+import {
+  type ArticleSave,
+  articleSaveSchema,
+  SLUG_PATTERN,
+  slugify,
+} from "./article-schema";
 import { type ArticleState, articleState } from "./article-state";
 import type {
   CreateArticleResult,
@@ -51,7 +56,7 @@ export function ArticleIndex({
   database: EditorDatabase;
   now: Date;
   createArticle: (options: {
-    data: { title: string; slug: string; tagline: string; body: string };
+    data: ArticleSave;
   }) => Promise<CreateArticleResult>;
 }) {
   const navigate = useNavigate();
@@ -70,6 +75,7 @@ export function ArticleIndex({
       slug,
       tagline,
       body: "",
+      publishAt: null,
     });
     // The fields' own required and maxLength refuse the rest before a submit;
     // the slug's shape is what the schema is left to catch.

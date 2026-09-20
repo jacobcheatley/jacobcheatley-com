@@ -4,9 +4,15 @@ import { ArticleMeta } from "./ArticleMeta";
 import { BlogHomeLink, BlogLayout } from "./BlogLayout";
 import type { Article } from "./blog.server";
 
+// What the view reads: an Article, except that the editor's preview feeds it
+// unsaved writing, and a Draft has no Publish date yet.
+export type ArticleInView = Omit<Article, "publishAt"> & {
+  publishAt: Date | null;
+};
+
 // The whole Article as a reader gets it, from an Article value alone: the
 // route hands it the loaded row, the editor preview the unsaved form state.
-export function ArticleView({ article }: { article: Article }) {
+export function ArticleView({ article }: { article: ArticleInView }) {
   return (
     <BlogLayout heading={<BlogHomeLink />}>
       <article>

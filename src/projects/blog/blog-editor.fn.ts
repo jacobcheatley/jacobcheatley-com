@@ -1,9 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { articleSaveSchema } from "./article-schema";
 import {
   createArticle,
   editorDatabase,
+  findArticleForEditing,
   listAllArticles,
+  saveArticle,
 } from "./blog-editor.server";
 
 // The editor's endpoints, in a file nothing public imports: server functions
@@ -19,6 +22,22 @@ export const editorIndexFn = createServerFn({ method: "GET" }).handler(
     now: new Date(),
   }),
 );
+
+// Everything the writing room opens with: the Article and the label that says
+// which Blog this session is writing to.
+export const writingRoomFn = createServerFn({ method: "GET" })
+  .validator(z.int())
+  .handler(async ({ data }) => ({
+    article: await findArticleForEditing(data),
+    database: editorDatabase(),
+  }));
+
+export const saveArticleFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id: z.int(), save: articleSaveSchema }))
+  .handler(({ data }) => {
+    if (!import.meta.env.DEV) throw new Error("the Blog editor is local only");
+    return saveArticle(data.id, data.save);
+  });
 
 export const createArticleFn = createServerFn({ method: "POST" })
   .validator(articleSaveSchema)

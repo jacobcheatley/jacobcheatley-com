@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { articleSaveSchema, slugify } from "./article-schema";
 
-const save = (fields: Partial<Record<string, string>> = {}) => ({
+const save = (fields: Partial<Record<string, unknown>> = {}) => ({
   title: "An Article",
   slug: "an-article",
   tagline: "One line about it.",
   body: "",
+  publishAt: null,
   ...fields,
 });
-const accepts = (fields: Partial<Record<string, string>>) =>
+const accepts = (fields: Partial<Record<string, unknown>>) =>
   articleSaveSchema.safeParse(save(fields)).success;
 const repeat = (length: number) => "a".repeat(length);
 
@@ -50,6 +51,13 @@ describe("articleSaveSchema", () => {
 
   it("takes an empty body, because a new Draft has one", () => {
     expect(accepts({ body: "" })).toBe(true);
+  });
+
+  it("takes a Publish date or none, and nothing standing in for a date", () => {
+    expect(accepts({ publishAt: new Date("2026-09-14T03:00:00Z") })).toBe(true);
+    expect(accepts({ publishAt: null })).toBe(true);
+    expect(accepts({ publishAt: "2026-09-14T03:00:00Z" })).toBe(false);
+    expect(accepts({ publishAt: undefined })).toBe(false);
   });
 });
 
