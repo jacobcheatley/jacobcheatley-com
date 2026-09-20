@@ -10,9 +10,8 @@ export type ListedArticle = {
   topics: string[];
 };
 
-// The visibility rule lives here: a Publish date that has arrived (<= now, so a
-// Scheduled Article appears on the first request past it) and nothing else. A
-// Draft's null date fails the comparison, which is why publishAt is a Date in
+// The visibility rule: only a Publish date that has arrived (<= now, inclusive).
+// A Draft's null date fails the comparison, which is why publishAt is a Date in
 // the result. Topics come back in no order; the reader sorts them.
 export function listPublishedArticles(now: Date): Promise<ListedArticle[]> {
   return db
