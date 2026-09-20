@@ -1,3 +1,4 @@
+import { Cover as BlogCover } from "@/projects/blog/Cover";
 import { Cover as StickyNotesCover } from "@/projects/sticky-notes/Cover";
 import { ProjectLink } from "./ProjectLink";
 
@@ -9,6 +10,7 @@ export function Projects() {
         title="Sticky Notes"
         cover={<StickyNotesCover />}
       />
+      <ProjectLink to="/blog" title="Blog" cover={<BlogCover />} />
     </ul>
   );
 }
