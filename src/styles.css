@@ -264,6 +264,11 @@ body {
   height: auto;
 }
 
+/* A drawing in the writing room's preview whose source has moved on since. */
+.prose .mermaid-diagram.is-stale {
+  opacity: 0.45;
+}
+
 /* mermaid's complaint about a diagram it could not draw, pulled up against the
    source it belongs to. It is machine output and points at a column with a
    caret, so it keeps its own line breaks. */

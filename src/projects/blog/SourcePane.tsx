@@ -6,6 +6,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
+import type { SourceScroll } from "./source-lines";
 
 // CodeMirror writes its own stylesheet, so the pane takes the palette as the
 // tokens themselves: light and dark then come from the page, not from a
@@ -78,9 +79,11 @@ const siteHighlight = HighlightStyle.define([
 export function SourcePane({
   initialMarkdown,
   onChange,
+  onScroll,
 }: {
   initialMarkdown: string;
   onChange: (markdown: string) => void;
+  onScroll: (source: SourceScroll) => void;
 }) {
   const pane = useRef<HTMLDivElement>(null);
 
@@ -100,8 +103,26 @@ export function SourcePane({
         }),
       ],
     });
-    return () => view.destroy();
-  }, [initialMarkdown, onChange]);
+
+    const scroller = view.scrollDOM;
+    const report = () => {
+      // Line heights are measured from the top of the first line, which sits
+      // below the pane's own padding.
+      const topOfPane = scroller.getBoundingClientRect().top - view.documentTop;
+      const topBlock = view.lineBlockAtHeight(topOfPane);
+      onScroll({
+        topLine: view.state.doc.lineAt(topBlock.from).number,
+        scrollTop: scroller.scrollTop,
+        maxScrollTop: scroller.scrollHeight - scroller.clientHeight,
+      });
+    };
+    scroller.addEventListener("scroll", report);
+
+    return () => {
+      scroller.removeEventListener("scroll", report);
+      view.destroy();
+    };
+  }, [initialMarkdown, onChange, onScroll]);
 
   return <div ref={pane} className="h-full overflow-hidden" />;
 }

@@ -10,7 +10,9 @@ import type {
 } from "./blog-editor.server";
 import { DatabaseLabel } from "./DatabaseLabel";
 import { DetailsDrawer } from "./DetailsDrawer";
+import { ArticleSurfaceContext } from "./Mermaid";
 import { SourcePane } from "./SourcePane";
+import { followSourceScroll, type SourceScroll } from "./source-lines";
 
 const LAYOUTS = ["source", "split", "preview"] as const;
 type RoomLayout = (typeof LAYOUTS)[number];
@@ -71,6 +73,8 @@ export function WritingRoom({
   // fields own their text, so a Save always sends the latest keystroke even
   // when the frame that renders it has not come round yet.
   const written = useRef(savedFields(article));
+  // The pane the preview scrolls in, which the source pane steers.
+  const preview = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(written.current);
   const previewFrame = useRef(0);
   // The form as the last Save sent it: the slug the site is serving and the
@@ -98,6 +102,9 @@ export function WritingRoom({
 
   const writeBody = useCallback((body: string) => edit({ body }), [edit]);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const followSource = useCallback((source: SourceScroll) => {
+    if (preview.current) followSourceScroll(preview.current, source);
+  }, []);
 
   const save = useCallback(async () => {
     setProblem("");
@@ -248,13 +255,20 @@ export function WritingRoom({
           hidden={layout === "preview"}
           className="min-h-0 min-w-0 overflow-hidden border-line border-r"
         >
-          <SourcePane initialMarkdown={article.body} onChange={writeBody} />
+          <SourcePane
+            initialMarkdown={article.body}
+            onChange={writeBody}
+            onScroll={followSource}
+          />
         </div>
         <div
+          ref={preview}
           hidden={layout === "source"}
           className="min-h-0 min-w-0 overflow-y-auto font-serif text-[1.0625rem] leading-[1.5]"
         >
-          <ArticleView article={{ ...article, ...shown }} />
+          <ArticleSurfaceContext value="editor">
+            <ArticleView article={{ ...article, ...shown }} />
+          </ArticleSurfaceContext>
         </div>
         {isDrawerOpen && (
           <DetailsDrawer

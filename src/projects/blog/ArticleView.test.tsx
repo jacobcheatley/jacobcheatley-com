@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { act, type ReactNode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -8,7 +8,11 @@ import type { Article } from "./blog.server";
 // The seed reads the same file off disk; under jsdom `import.meta.url` is not
 // a file URL, so this test takes it through Vite instead.
 import kitchenSinkMarkdown from "./kitchen-sink.md?raw";
-import { type MermaidLoader, MermaidLoaderContext } from "./Mermaid";
+import {
+  ArticleSurfaceContext,
+  type MermaidLoader,
+  MermaidLoaderContext,
+} from "./Mermaid";
 
 vi.mock("@tanstack/react-router", () => import("@/test/router-stub"));
 
@@ -134,6 +138,33 @@ const withLoader = (loadMermaid: MermaidLoader, children: ReactNode) => (
 
 const neverLoads: MermaidLoader = () => new Promise(() => {});
 
+it("stamps every top-level block with the source lines it was written on", () => {
+  const { container } = render(
+    withLoader(
+      neverLoads,
+      <ArticleView
+        article={article(
+          'A paragraph.\n\n```ts\nconst ink = "green";\n```\n\n:::callout{kind="warning"}\nMind the step.\n:::\n\n```mermaid\nflowchart LR\n  Draft --> Published\n```\n',
+        )}
+      />,
+    ),
+  );
+
+  const blocks = [...container.querySelectorAll("[data-source-start]")];
+  expect(
+    blocks.map((block) => [
+      block.tagName,
+      block.getAttribute("data-source-start"),
+      block.getAttribute("data-source-end"),
+    ]),
+  ).toEqual([
+    ["P", "1", "1"],
+    ["PRE", "3", "5"],
+    ["ASIDE", "7", "9"],
+    ["PRE", "11", "14"],
+  ]);
+});
+
 it("shows a diagram's source as one code block while mermaid loads", () => {
   const { container } = render(
     withLoader(neverLoads, <ArticleView article={diagram} />),
@@ -178,6 +209,72 @@ it("swaps a diagram's source for the drawing mermaid returns", async () => {
     await screen.findByRole("img", { name: "Draft to Published" }),
   ).toBeVisible();
   expect(screen.queryByText(/flowchart LR/)).toBeNull();
+});
+
+const brokenDiagram = article("```mermaid\nflowchart LR\n  Draft -->\n```\n");
+
+// mermaid as the owner mid-edit finds it: the diagram as first written draws,
+// what the edit left of it does not.
+const drawsAsFirstWritten: MermaidLoader = async () => ({
+  initialize: () => {},
+  render: async (_diagramId: string, source: string) => {
+    if (!source.includes("Published")) throw new Error("Parse error on line 2");
+    return { svg: '<svg role="img" aria-label="Draft to Published"></svg>' };
+  },
+});
+
+it("keeps the last good drawing, dimmed, while a diagram's source is mid-edit", async () => {
+  const room = (body: Article) => (
+    <ArticleSurfaceContext value="editor">
+      {withLoader(drawsAsFirstWritten, <ArticleView article={body} />)}
+    </ArticleSurfaceContext>
+  );
+  const { container, rerender } = render(room(diagram));
+  expect(
+    await screen.findByRole("img", { name: "Draft to Published" }),
+  ).toBeVisible();
+
+  rerender(room(brokenDiagram));
+  await act(async () => {});
+
+  const drawing = container.querySelector(".mermaid-diagram");
+  expect(drawing).toHaveClass("is-stale");
+  expect(drawing).toContainElement(
+    screen.getByRole("img", { name: "Draft to Published" }),
+  );
+  expect(container.querySelector("pre")).toBeNull();
+});
+
+it("draws under an id of its own each time, which mermaid is free to clear out", async () => {
+  const drawnUnder: string[] = [];
+  const loadMermaid: MermaidLoader = async () => ({
+    initialize: () => {},
+    render: async (diagramId: string) => {
+      drawnUnder.push(diagramId);
+      return { svg: `<svg role="img" aria-label="${diagramId}"></svg>` };
+    },
+  });
+  const page = (body: Article) =>
+    withLoader(loadMermaid, <ArticleView article={body} />);
+  const { rerender } = render(page(diagram));
+  await screen.findByRole("img");
+
+  rerender(page(brokenDiagram));
+
+  await waitFor(() => expect(drawnUnder).toHaveLength(2));
+  expect(new Set(drawnUnder).size).toBe(2);
+});
+
+it("gives a reader the source and the message of a diagram that stops drawing", async () => {
+  const page = (body: Article) =>
+    withLoader(drawsAsFirstWritten, <ArticleView article={body} />);
+  const { rerender } = render(page(diagram));
+  await screen.findByRole("img", { name: "Draft to Published" });
+
+  rerender(page(brokenDiagram));
+
+  expect(await screen.findByText("Parse error on line 2")).toBeVisible();
+  expect(screen.getByText(/Draft -->/)).toBeVisible();
 });
 
 it("hydrates the kitchen-sink Article with nothing logged to the console", async () => {
