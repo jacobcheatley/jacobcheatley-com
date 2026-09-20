@@ -1,0 +1,893 @@
+<!doctype html>
+<!--
+  PROTOTYPE, throwaway. Wayfinder ticket "What is writing in the editor like?"
+  Three variants (?variant=A|B|C) of the local-only editor screen, optional ?scheme=light|dark.
+  Real CodeMirror 6 and a real remark/rehype + Shiki + mermaid preview, from a CDN.
+  Articles live in sessionStorage so text survives a variant switch; Save writes nowhere else.
+  The beforeunload guard is left out because switching variants reloads the page.
+  Run: python3 -m http.server 8116 in this folder.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blog editor prototype</title>
+<style>
+@font-face { font-family: "Newsreader Variable"; font-style: normal; font-weight: 200 800; src: url(fonts/newsreader-latin-wght-normal.woff2) format("woff2"); }
+@font-face { font-family: "Newsreader Variable"; font-style: italic; font-weight: 200 800; src: url(fonts/newsreader-latin-wght-italic.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; src: url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url(https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+
+/* The site's tokens, copied from src/styles.css */
+:root {
+  color-scheme: light dark;
+  --color-paper: light-dark(#f7f7f4, #1a1b1a);
+  --color-ink: light-dark(#202523, #e8e9e6);
+  --color-accent: light-dark(#28714a, #7dd69a);
+  --color-accent-2: light-dark(#d96c1e, #f2a05a);
+  --color-name: light-dark(#d63a2f, #f26b5e);
+  --color-muted: light-dark(#626864, #9aa09c);
+  --color-line: light-dark(#dcddd8, #2e302e);
+  --color-surface: light-dark(#ffffff, #232524);
+  --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --code-foreground: var(--color-ink);
+  --code-background: var(--color-surface);
+  --code-token-keyword: var(--color-accent);
+  --code-token-function: var(--color-ink);
+  --code-token-string: var(--color-accent-2);
+  --code-token-string-expression: var(--color-accent-2);
+  --code-token-constant: var(--color-accent-2);
+  --code-token-parameter: var(--color-ink);
+  --code-token-comment: var(--color-muted);
+  --code-token-punctuation: var(--color-muted);
+  --code-token-link: var(--color-accent);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-serif); font-size: 1.0625rem; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+.muted { color: var(--color-muted); }
+
+/* ---------- The Article as readers see it (the chosen quiet 44rem column) ---------- */
+.page { max-width: calc(44rem + 2rem); margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+.mast { display: flex; gap: 0.6rem; align-items: baseline; font-size: 1.25rem; margin-bottom: 2.5rem; }
+.mast .name { color: var(--color-name); font-style: italic; font-weight: 500; }
+.mast .here { font-style: italic; }
+.head { margin-bottom: 2.5rem; }
+.title { font-size: clamp(2rem, 5vw, 2.5rem); font-weight: 500; line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 0.5rem; }
+.tagline { font-size: 1.3125rem; font-style: italic; color: var(--color-muted); margin: 0; }
+.meta { font-family: var(--font-sans); font-size: 0.875rem; color: var(--color-muted); margin: 0.35rem 0 0; }
+.prose { font-size: 1.1875rem; line-height: 1.6; }
+.prose p, .prose ul, .prose ol, .prose blockquote, .prose table, .prose pre, .prose aside, .prose figure { margin: 0 0 1.25em; }
+.prose h2 { font-size: 1.5rem; font-weight: 600; line-height: 1.25; margin: 2.25em 0 0.6em; position: relative; }
+.prose h3 { font-size: 1.1875rem; font-weight: 600; font-style: italic; margin: 1.75em 0 0.5em; position: relative; }
+.prose a { color: var(--color-accent); text-underline-offset: 0.15em; }
+.prose code { font-family: var(--font-mono); font-size: 0.85em; }
+.prose :not(pre) > code { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.05em 0.3em; }
+.prose pre { background: var(--color-surface) !important; border: 1px solid var(--color-line); border-radius: 2px; padding: 1rem 1.125rem; overflow-x: auto; line-height: 1.55; font-size: 0.9375rem; }
+.prose pre code { font-size: 0.875rem; }
+.prose blockquote { border-left: 2px solid var(--color-line); padding-left: 1.125rem; font-style: italic; color: var(--color-muted); }
+.prose table { border-collapse: collapse; font-family: var(--font-sans); font-size: 0.9375rem; width: 100%; }
+.prose th, .prose td { text-align: left; padding: 0.4rem 0.75rem 0.4rem 0; border-bottom: 1px solid var(--color-line); }
+.prose sup a { font-family: var(--font-sans); font-size: 0.75rem; text-decoration: none; padding: 0 0.1em; }
+.prose .footnotes { margin-top: 3rem; border-top: 1px solid var(--color-line); padding-top: 1rem; font-size: 1rem; color: var(--color-muted); }
+.prose .footnotes h2 { display: none; }
+.prose .footnotes ol { padding-left: 1.25rem; margin: 0; }
+.prose .mermaid-out { display: flex; justify-content: center; margin: 0 0 1.25em; }
+.prose .mermaid-out svg { max-width: 100%; height: auto; }
+.prose .mermaid-out.is-stale { opacity: 0.45; }
+.prose .callout { border-left: 3px solid var(--color-accent-2); padding-left: 1.125rem; }
+.prose .callout-label { font-family: var(--font-sans); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-accent-2); margin: 0 0 0.25rem; }
+.prose .callout > :last-child { margin-bottom: 0; }
+.prose .anchor { position: absolute; left: -1.1em; text-decoration: none; color: var(--color-muted); opacity: 0; }
+.prose :is(h2, h3):hover .anchor { opacity: 1; }
+
+/* ---------- Editor chrome shared by the variants ---------- */
+.app { height: 100dvh; padding-bottom: 3.75rem; display: grid; }
+.chrome { font-family: var(--font-sans); font-size: 0.875rem; line-height: 1.35; }
+.chrome :is(input, textarea, select, button) { font: inherit; color: inherit; }
+.field { display: grid; gap: 0.2rem; min-width: 0; align-content: start; }
+.field > span:first-child { font-size: 0.75rem; color: var(--color-muted); }
+.field :is(input, select), .create input { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.35rem 0.5rem; min-width: 0; }
+.inline { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
+.btn { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.35rem 0.7rem; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--color-muted); }
+.btn.primary { background: var(--color-accent); color: var(--color-paper); border-color: transparent; font-weight: 600; }
+.btn.quiet { border-color: transparent; background: none; color: var(--color-muted); }
+.btn[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+.status { font-weight: 600; }
+.status[data-status="Draft"] { color: var(--color-muted); }
+.status[data-status="Scheduled"] { color: var(--color-accent-2); }
+.status[data-status="Published"] { color: var(--color-accent); }
+.dirty { color: var(--color-accent-2); }
+.problem { color: var(--color-name); }
+.slug { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--color-muted); padding: 0.4rem 0; }
+.chip { display: inline-flex; gap: 0.25rem; align-items: center; border: 1px solid var(--color-line); border-radius: 999px; padding: 0.1rem 0.2rem 0.1rem 0.6rem; background: var(--color-surface); }
+.chip button { all: unset; cursor: pointer; padding: 0 0.35rem; color: var(--color-muted); }
+.panes { display: grid; grid-template-columns: 1fr 1fr; min-height: 0; position: relative; }
+.panes[data-layout="source"] { grid-template-columns: 1fr; }
+.panes[data-layout="source"] .preview, .panes[data-layout="preview"] .source { display: none; }
+.panes[data-layout="preview"] { grid-template-columns: 1fr; }
+.source { min-width: 0; min-height: 0; border-right: 1px solid var(--color-line); overflow: hidden; }
+.preview { min-width: 0; min-height: 0; overflow-y: auto; font-family: var(--font-serif); font-size: 1.0625rem; line-height: 1.5; }
+.create { display: grid; gap: 0.6rem; }
+.create label { display: grid; gap: 0.2rem; }
+.create label > span { font-size: 0.75rem; color: var(--color-muted); }
+
+/* ---------- Variant A: three panes, every field always in view ---------- */
+.a-grid { display: grid; grid-template-columns: 15rem 1fr; min-height: 0; }
+.rail { border-right: 1px solid var(--color-line); padding: 1rem; overflow-y: auto; display: grid; gap: 1rem; align-content: start; }
+.rail h2 { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-muted); margin: 0 0 0.35rem; }
+.rail ul { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 0.1rem; }
+.rail li button { all: unset; cursor: pointer; display: block; width: 100%; padding: 0.35rem 0.5rem; border-radius: 2px; box-sizing: border-box; }
+.rail li button:hover { background: var(--color-surface); }
+.rail li button[aria-current="true"] { background: var(--color-surface); box-shadow: inset 2px 0 0 var(--color-accent); }
+.rail li small { display: block; color: var(--color-muted); }
+.a-main { display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; }
+.a-fields { display: grid; gap: 0.6rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-line); }
+.a-fields .row { display: flex; gap: 0.75rem; align-items: start; }
+.grow2 { flex: 2; } .grow3 { flex: 3; }
+.end { margin-left: auto; justify-items: end; }
+.chipbox { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
+.chipbox > span { display: contents; }
+.chipbox input { width: 8rem; }
+dialog { background: var(--color-paper); color: var(--color-ink); border: 1px solid var(--color-line); border-radius: 2px; padding: 1.25rem; width: 26rem; }
+dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+
+/* ---------- Variant B: an index, then a writing room with the details in a drawer ---------- */
+.b-list { max-width: 58rem; margin: 0 auto; padding: 2.5rem 1rem; overflow-y: auto; width: 100%; }
+.b-list h1 { font-family: var(--font-serif); font-style: italic; font-weight: 500; font-size: 2rem; margin: 0 0 1.5rem; }
+.b-list .create { grid-template-columns: 2fr 1.5fr 3fr auto; align-items: end; margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-line); }
+.b-list table { width: 100%; border-collapse: collapse; }
+.b-list th { text-align: left; font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-muted); padding: 1.25rem 0 0.35rem; }
+.b-list td { padding: 0.6rem 1rem 0.6rem 0; border-top: 1px solid var(--color-line); vertical-align: baseline; }
+.b-list td button { all: unset; cursor: pointer; font-family: var(--font-serif); font-size: 1.1875rem; }
+.b-list td button:hover { color: var(--color-accent); text-decoration: underline; }
+.b-room { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.b-bar { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-line); }
+.b-bar .big-title { flex: 1; font-family: var(--font-serif) !important; font-size: 1.375rem !important; background: none; border: none; padding: 0.2rem 0; min-width: 0; }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 22rem; background: var(--color-paper); border-left: 1px solid var(--color-line); box-shadow: -12px 0 24px rgb(0 0 0 / 0.08); padding: 1.25rem; display: grid; gap: 1.1rem; align-content: start; overflow-y: auto; z-index: 2; }
+.drawer[hidden] { display: none; }
+.drawer textarea { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.35rem 0.5rem; resize: vertical; }
+
+/* ---------- Variant C: the Article is the form ---------- */
+.c-grid { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.c-bar { display: flex; gap: 0.75rem; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--color-line); }
+.c-bar select { max-width: 24rem; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.35rem 0.5rem; }
+.c-bar .slug-input { font-family: var(--font-mono); font-size: 0.8125rem; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 2px; padding: 0.35rem 0.5rem; width: 18rem; }
+.c-bar .spacer { flex: 1; }
+.head.editable textarea { display: block; width: 100%; font-family: inherit; color: inherit; background: none; border: none; border-bottom: 1px dashed transparent; padding: 0; resize: none; field-sizing: content; }
+.head.editable textarea.title { font-size: clamp(2rem, 5vw, 2.5rem); font-weight: 500; line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 0.5rem; }
+.head.editable textarea.tagline { font-size: 1.3125rem; font-style: italic; line-height: 1.5; color: var(--color-muted); }
+.head.editable :is(textarea, input):hover, .head.editable :is(textarea, input):focus { border-bottom-color: var(--color-line); outline: none; }
+.head.editable .meta { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.head.editable .meta input { font: inherit; color: inherit; background: none; border: none; border-bottom: 1px dashed transparent; padding: 0.1rem 0; }
+.head.editable .meta .topics-text { flex: 1; min-width: 12rem; }
+.head.editable .meta button { all: unset; cursor: pointer; text-decoration: underline; text-underline-offset: 0.15em; }
+.head.editable .meta button:hover { color: var(--color-accent); }
+
+/* ---------- Prototype switcher, not part of the design ---------- */
+.proto-bar { position: fixed; bottom: 0.6rem; left: 50%; translate: -50% 0; display: flex; gap: 0.25rem; align-items: center; background: #111; color: #fff; font: 13px/1 system-ui, sans-serif; padding: 0.4rem; border-radius: 999px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.35); z-index: 10; white-space: nowrap; max-width: calc(100vw - 1rem); overflow-x: auto; }
+.proto-bar button { all: unset; cursor: pointer; padding: 0.45rem 0.7rem; border-radius: 999px; }
+.proto-bar button:hover { background: #333; }
+.proto-bar button[aria-pressed="true"] { background: #fff; color: #111; }
+.proto-bar .label { padding: 0 0.5rem; min-width: 11rem; text-align: center; font-weight: 600; }
+.proto-bar .sep { width: 1px; height: 1.25rem; background: #444; margin: 0 0.25rem; }
+.proto-bar .readout { padding: 0 0.6rem; color: #bbb; }
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<nav class="proto-bar" id="bar" aria-label="Prototype switcher"></nav>
+<datalist id="topic-options"></datalist>
+
+<script type="text/markdown" id="sample-body">
+An Article is a row: a title, a Tagline, some Markdown and a Publish date. Nothing is built when one is published. The page is rendered from the row on every request[^1], which keeps the moving parts to a minimum.
+
+Standup is at 10:30 and the screenshots are 16:9. Neither of those is a directive, and both must survive.
+
+## Visibility is one comparison
+
+Draft, Scheduled and Published are not stored. They fall out of the Publish date, and the rule lives in the query.
+
+```ts
+// Only Published Articles leave the server.
+export async function findPublishedArticle(slug: string, now: Date) {
+  const [article] = await db
+    .select()
+    .from(articles)
+    .where(and(eq(articles.slug, slug), lte(articles.publishedAt, now)));
+  return article ?? null;
+}
+```
+
+:::callout{kind="warning"}
+The editor points at the production database. Saving is publishing, if the Publish date has passed.
+:::
+
+## Three states, no status column
+
+```mermaid
+flowchart LR
+  D[Draft] -->|set a Publish date| S[Scheduled]
+  S -->|the date passes| P[Published]
+  P -->|clear the date| D
+```
+
+A Scheduled Article appears on the first request after its date[^2]. There is no job that flips it.
+
+### The whole rule
+
+| Publish date  | State     | Visible |
+| ------------- | --------- | ------- |
+| none          | Draft     | no      |
+| in the future | Scheduled | no      |
+| in the past   | Published | yes     |
+
+## The same rule, from the Python I would have written
+
+Coming from Python, the derived state reads the same. Indentation inside a fence is where a plain textarea hurts most, so try adding a branch here.
+
+```python
+from datetime import datetime
+
+
+def status_of(publish_date: datetime | None, now: datetime) -> str:
+    if publish_date is None:
+        return "Draft"
+    if publish_date > now:
+        return "Scheduled"
+    return "Published"
+```
+
+And the table behind it:
+
+```sql
+create table articles (
+  id integer generated always as identity primary key,
+  slug varchar(80) not null unique,
+  title varchar(120) not null,
+  tagline varchar(160) not null,
+  body text not null,
+  published_at timestamptz
+);
+```
+
+> The best code is the code that is not there.
+
+- No cache to invalidate.
+- No rendered HTML to go stale.
+- No release to publish.
+
+The renderer is one React component, so the preview beside the source is the page itself:
+
+```tsx
+export function ArticleView({ article }: { article: Article }) {
+  return (
+    <article>
+      <h1>{article.title}</h1>
+      <p className="tagline">{article.tagline}</p>
+      <ArticleBody markdown={article.body} />
+    </article>
+  );
+}
+```
+
+[^1]: Server-side for the first load, then again in the browser when navigating from the listing.
+[^2]: Dates are entered in the browser's zone and shown in Pacific/Auckland.
+</script>
+
+<script type="module">
+import { EditorView, basicSetup } from "https://esm.sh/codemirror@6.0.2";
+import { keymap } from "https://esm.sh/@codemirror/view@6";
+import { indentWithTab } from "https://esm.sh/@codemirror/commands@6";
+import { Compartment } from "https://esm.sh/@codemirror/state@6";
+import { HighlightStyle, syntaxHighlighting } from "https://esm.sh/@codemirror/language@6";
+import { tags } from "https://esm.sh/@lezer/highlight@1";
+import { markdown, markdownLanguage } from "https://esm.sh/@codemirror/lang-markdown@6";
+import { languages } from "https://esm.sh/@codemirror/language-data@6";
+import { unified } from "https://esm.sh/unified@11";
+import remarkParse from "https://esm.sh/remark-parse@11";
+import remarkGfm from "https://esm.sh/remark-gfm@4";
+import remarkDirective from "https://esm.sh/remark-directive@4";
+import remarkRehype from "https://esm.sh/remark-rehype@11";
+import rehypeSlug from "https://esm.sh/rehype-slug@6";
+import rehypeAutolinkHeadings from "https://esm.sh/rehype-autolink-headings@7";
+import rehypeStringify from "https://esm.sh/rehype-stringify@10";
+
+const VARIANTS = { A: "Three panes", B: "Index, then a writing room", C: "The Article is the form" };
+const SCHEMES = ["auto", "light", "dark"];
+const STORAGE_KEY = "PROTOTYPE-blog-editor-wipe-me";
+const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const MAX_TOPICS = 5;
+
+const params = new URLSearchParams(location.search);
+const variant = params.get("variant") in VARIANTS ? params.get("variant") : "A";
+const scheme = SCHEMES.includes(params.get("scheme")) ? params.get("scheme") : "auto";
+if (scheme !== "auto") document.documentElement.style.colorScheme = scheme;
+const go = (next) => { location.search = new URLSearchParams({ variant, scheme, ...next }); };
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const slugify = (title) => title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+const toLocalInput = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const shownDate = (publishAt) => new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "long", year: "numeric", timeZone: "Pacific/Auckland" }).format(new Date(publishAt));
+const statusOf = (publishAt) => (!publishAt ? "Draft" : new Date(publishAt) > new Date() ? "Scheduled" : "Published");
+
+/* ---------- the stubbed write model ---------- */
+function seed() {
+  const body = $("#sample-body").textContent.trim() + "\n";
+  return {
+    nextId: 6,
+    draft: null,
+    isListShown: true,
+    isSlugTouched: false,
+    isVim: false,
+    isScrollSynced: true,
+    articles: [
+      { id: 1, slug: "fly-on-a-budget", title: "Fly on a budget", tagline: "One small machine and a Postgres that sleeps.", topics: ["fly", "postgres"], publishAt: "2025-11-30T09:00", body: "One small machine.\n" },
+      { id: 2, slug: "one-scalable-picture", title: "Every Note is one scalable picture", tagline: "Why the wall draws its Notes as SVG.", topics: ["react", "svg"], publishAt: "2026-09-14T09:00", body: "A Note is one `<svg>`.\n" },
+      { id: 3, slug: "no-build-step", title: "A blog with no build step", tagline: "Markdown in a database row, rendered per request.", topics: ["markdown", "tanstack"], publishAt: "2026-09-02T09:00", body },
+      { id: 4, slug: "typescript-from-python", title: "Learning TypeScript from Python", tagline: "What carried over, and what did not.", topics: ["python", "typescript"], publishAt: "2026-10-05T08:00", body: "## What carried over\n\nMost of it.\n" },
+      { id: 5, slug: "notes-on-codemirror", title: "Notes on CodeMirror", tagline: "An editor that is a library, not a product.", topics: [], publishAt: "", body: "" },
+    ],
+  };
+}
+const store = JSON.parse(sessionStorage.getItem(STORAGE_KEY)) ?? seed();
+const persist = () => sessionStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+const stored = () => store.articles.find((a) => a.id === store.draft?.id);
+const isDirty = () => store.draft !== null && (store.draft.id === null || JSON.stringify(store.draft) !== JSON.stringify(stored()));
+const allTopics = () => [...new Set([...store.articles.flatMap((a) => a.topics), ...(store.draft?.topics ?? [])])].sort((a, b) => a.localeCompare(b));
+const blankDraft = () => ({ id: null, slug: "", title: "", tagline: "", topics: [], publishAt: "", body: "" });
+
+function articleGroups() {
+  const by = Object.groupBy(store.articles, (a) => statusOf(a.publishAt));
+  return [
+    ["Drafts", (by.Draft ?? []).sort((a, b) => b.id - a.id)],
+    ["Scheduled", (by.Scheduled ?? []).sort((a, b) => a.publishAt.localeCompare(b.publishAt))],
+    ["Published", (by.Published ?? []).sort((a, b) => b.publishAt.localeCompare(a.publishAt))],
+  ].filter(([, articles]) => articles.length > 0);
+}
+
+/** The existing spelling of a Topic wins, as the save will do in the database. */
+function normaliseTopics(names) {
+  const topics = [];
+  for (const raw of names) {
+    const name = raw.trim().slice(0, 30);
+    if (!name) continue;
+    const spelling = allTopics().find((t) => t.toLowerCase() === name.toLowerCase()) ?? name;
+    if (!topics.some((t) => t.toLowerCase() === spelling.toLowerCase())) topics.push(spelling);
+  }
+  return topics.slice(0, MAX_TOPICS);
+}
+
+function createArticle({ title, slug, tagline }) {
+  if (!SLUG_PATTERN.test(slug)) return { ok: false, reason: "slugInvalid" };
+  if (store.articles.some((a) => a.slug === slug)) return { ok: false, reason: "slugTaken" };
+  const article = { ...blankDraft(), id: store.nextId++, title, slug, tagline };
+  store.articles.push(article);
+  return { ok: true, article };
+}
+const SLUG_PROBLEMS = { slugInvalid: "Lowercase letters, digits and single hyphens only.", slugTaken: "Another Article already has this slug." };
+
+let problem = "";
+function save() {
+  const draft = store.draft;
+  if (!draft) return;
+  draft.title = draft.title.trim();
+  draft.tagline = draft.tagline.trim();
+  problem = !draft.title ? "A title is required." : !draft.tagline ? "A Tagline is required." : "";
+  if (!problem && draft.id === null) {
+    const result = createArticle(draft);
+    if (result.ok) draft.id = result.article.id;
+    else problem = SLUG_PROBLEMS[result.reason];
+  }
+  if (problem) return refresh();
+  draft.topics = normaliseTopics(draft.topics).sort((a, b) => a.localeCompare(b));
+  store.articles[store.articles.findIndex((a) => a.id === draft.id)] = structuredClone(draft);
+  persist();
+  if (variant === "C") return renderShell();
+  refresh();
+}
+
+function open(id) {
+  if (isDirty() && !confirm("Discard unsaved changes?")) return refresh();
+  store.draft = structuredClone(store.articles.find((a) => a.id === id));
+  store.isListShown = false;
+  problem = "";
+  renderShell();
+}
+
+/* ---------- the renderer: remark/rehype as decided, minus React ---------- */
+function registeredDirectives() {
+  return (tree, file) => {
+    const source = String(file);
+    const walk = (parent) => {
+      parent.children = parent.children.map((node) => {
+        if (!node.type.endsWith("Directive")) {
+          if (node.children) walk(node);
+          return node;
+        }
+        if (node.type === "containerDirective" && node.name === "callout") {
+          walk(node);
+          const kind = node.attributes?.kind ?? "note";
+          node.data = { hName: "aside", hProperties: { className: ["callout"], dataKind: kind } };
+          node.children.unshift({ type: "paragraph", data: { hProperties: { className: ["callout-label"] } }, children: [{ type: "text", value: kind }] });
+          return node;
+        }
+        // remark-directive reads prose such as 10:30 as a directive; an unregistered one goes back to its source text
+        const text = { type: "text", value: source.slice(node.position.start.offset, node.position.end.offset) };
+        return node.type === "textDirective" ? text : { type: "paragraph", children: [text] };
+      });
+    };
+    walk(tree);
+  };
+}
+function sourceLines() {
+  return (tree) => {
+    for (const node of tree.children) {
+      if (node.type !== "element" || !node.position) continue;
+      node.properties.dataLine = node.position.start.line;
+      node.properties.dataLineEnd = node.position.end.line;
+    }
+  };
+}
+const processor = unified()
+  .use(remarkParse).use(remarkGfm).use(remarkDirective).use(registeredDirectives)
+  .use(remarkRehype).use(rehypeSlug)
+  .use(rehypeAutolinkHeadings, { behavior: "append", properties: { className: ["anchor"], ariaLabel: "Link to this heading" }, content: { type: "text", value: "#" } })
+  .use(sourceLines).use(rehypeStringify);
+
+const shiki = import("https://esm.sh/shiki").then(async ({ createHighlighter, createCssVariablesTheme, bundledLanguages }) => {
+  const theme = createCssVariablesTheme({ name: "css-variables", variablePrefix: "--code-", fontStyle: true });
+  return { highlighter: await createHighlighter({ themes: [theme], langs: [] }), bundledLanguages };
+});
+async function highlight(lang, code) {
+  const { highlighter, bundledLanguages } = await shiki;
+  if (!(lang in bundledLanguages)) return null;
+  await highlighter.loadLanguage(lang);
+  return highlighter.codeToHtml(code, { lang, theme: "css-variables" });
+}
+
+const mermaidReady = import("https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.esm.min.mjs").then(async ({ default: mermaid }) => {
+  // mermaid takes hex only, so resolve each light-dark() token through a probe element
+  const probe = document.body.appendChild(document.createElement("span"));
+  const hex = (token) => {
+    probe.style.color = `var(${token})`;
+    const [r, g, b] = getComputedStyle(probe).color.match(/\d+/g).map(Number);
+    return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+  };
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "base",
+    themeVariables: {
+      fontFamily: '"IBM Plex Sans", system-ui, sans-serif', fontSize: "15px",
+      background: hex("--color-paper"), primaryColor: hex("--color-surface"), primaryTextColor: hex("--color-ink"),
+      primaryBorderColor: hex("--color-accent"), lineColor: hex("--color-muted"),
+      secondaryColor: hex("--color-paper"), tertiaryColor: hex("--color-paper"), edgeLabelBackground: hex("--color-paper"),
+    },
+  });
+  // mermaid sizes its labels by measuring text, so the face must be loaded first
+  await document.fonts.load('15px "IBM Plex Sans"');
+  return mermaid;
+});
+let diagramCount = 0;
+async function drawDiagram(code) {
+  const mermaid = await mermaidReady;
+  if (!(await mermaid.parse(code, { suppressErrors: true }))) return null;
+  return (await mermaid.render(`diagram-${diagramCount++}`, code)).svg;
+}
+
+const renderedBlocks = new Map();
+const lastDiagramAtPosition = [];
+let previewMs = 0;
+
+function swap(element, html, className) {
+  const next = document.createRange().createContextualFragment(html).firstElementChild;
+  Object.assign(next.dataset, element.dataset);
+  if (className) next.classList.add(className);
+  element.replaceWith(next);
+  return next;
+}
+
+function renderPreview() {
+  const prose = $("#prose");
+  if (!prose) return;
+  const started = performance.now();
+  prose.innerHTML = String(processor.processSync(store.draft.body));
+  previewMs = performance.now() - started;
+
+  let diagramPosition = 0;
+  for (const codeEl of prose.querySelectorAll("pre > code[class*='language-']")) {
+    const lang = [...codeEl.classList].find((c) => c.startsWith("language-")).slice("language-".length);
+    const code = codeEl.textContent.replace(/\n$/, "");
+    const key = `${lang}\0${code}`;
+    let target = codeEl.parentElement;
+    if (renderedBlocks.has(key)) {
+      if (lang === "mermaid") diagramPosition++;
+      swap(target, renderedBlocks.get(key));
+      continue;
+    }
+    if (lang !== "mermaid") {
+      highlight(lang, code).then((html) => {
+        if (!html) return;
+        renderedBlocks.set(key, html);
+        if (target.isConnected) swap(target, html);
+      });
+      continue;
+    }
+    // while a diagram is mid-edit the last good drawing stays, dimmed, instead of flashing back to source
+    const position = diagramPosition++;
+    if (lastDiagramAtPosition[position]) target = swap(target, lastDiagramAtPosition[position], "is-stale");
+    drawDiagram(code).then((svg) => {
+      if (!svg) return;
+      const html = `<div class="mermaid-out">${svg}</div>`;
+      renderedBlocks.set(key, html);
+      lastDiagramAtPosition[position] = html;
+      if (target.isConnected) swap(target, html);
+    }).catch((error) => console.error("mermaid failed, source stays", error));
+  }
+  syncPreviewToSource();
+}
+let isPreviewQueued = false;
+function queuePreview() {
+  if (isPreviewQueued) return;
+  isPreviewQueued = true;
+  requestAnimationFrame(() => { isPreviewQueued = false; renderPreview(); renderBar(); });
+}
+
+/* ---------- the source pane: CodeMirror 6, no wrapper ---------- */
+const siteTheme = EditorView.theme({
+  "&": { height: "100%", fontSize: "0.9375rem", backgroundColor: "var(--color-surface)", color: "var(--color-ink)" },
+  "&.cm-focused": { outline: "none" },
+  ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.6" },
+  ".cm-content": { padding: "1.5rem 0.5rem 1.5rem 0", caretColor: "var(--color-ink)" },
+  ".cm-cursor": { borderLeftColor: "var(--color-ink)" },
+  ".cm-gutters": { backgroundColor: "transparent", color: "var(--color-muted)", border: "none" },
+  ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--color-line) 40%, transparent)" },
+  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { backgroundColor: "color-mix(in srgb, var(--color-accent) 25%, transparent) !important" },
+});
+const siteHighlight = HighlightStyle.define([
+  { tag: tags.heading, fontWeight: "600" },
+  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: tags.strong, fontWeight: "600" },
+  { tag: [tags.link, tags.url], color: "var(--color-accent)" },
+  { tag: tags.monospace, color: "var(--color-accent-2)" },
+  { tag: [tags.processingInstruction, tags.meta, tags.punctuation, tags.bracket, tags.labelName], color: "var(--color-muted)" },
+  { tag: [tags.comment, tags.quote], color: "var(--color-muted)", fontStyle: "italic" },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.definitionKeyword], color: "var(--color-accent)" },
+  { tag: [tags.string, tags.number, tags.bool, tags.atom, tags.null], color: "var(--color-accent-2)" },
+]);
+const vimKeys = new Compartment();
+let sourceView = null;
+
+function mountSource() {
+  sourceView?.destroy();
+  sourceView = new EditorView({
+    parent: $("#source"),
+    doc: store.draft.body,
+    extensions: [
+      vimKeys.of([]),
+      basicSetup,
+      keymap.of([indentWithTab]),
+      markdown({ base: markdownLanguage, codeLanguages: languages }),
+      syntaxHighlighting(siteHighlight),
+      EditorView.lineWrapping,
+      siteTheme,
+      EditorView.updateListener.of((update) => {
+        if (!update.docChanged) return;
+        store.draft.body = update.state.doc.toString();
+        queuePreview();
+        refresh();
+      }),
+    ],
+  });
+  sourceView.scrollDOM.addEventListener("scroll", syncPreviewToSource);
+  if (store.isVim) enableVim();
+}
+async function enableVim() {
+  const { vim, Vim } = await import("https://esm.sh/@replit/codemirror-vim@6");
+  Vim.defineEx("write", "w", save);
+  sourceView.dispatch({ effects: vimKeys.reconfigure(vim()) });
+}
+
+function syncPreviewToSource() {
+  const pane = $("#preview");
+  if (!store.isScrollSynced || !sourceView || !pane) return;
+  const scroller = sourceView.scrollDOM;
+  if (scroller.scrollTop === 0) return void (pane.scrollTop = 0);
+  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return void (pane.scrollTop = pane.scrollHeight);
+  const topLine = sourceView.state.doc.lineAt(sourceView.lineBlockAtHeight(scroller.scrollTop).from).number;
+  const blocks = [...pane.querySelectorAll("[data-line]")];
+  const block = blocks.findLast((el) => Number(el.dataset.line) <= topLine) ?? blocks[0];
+  if (!block) return;
+  const start = Number(block.dataset.line);
+  const end = Number(block.dataset.lineEnd);
+  const progress = Math.min(1, (topLine - start) / (end - start + 1));
+  const blockTop = block.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
+  const breathingRoomPx = 24;
+  pane.scrollTop = blockTop + block.offsetHeight * progress - breathingRoomPx;
+}
+
+/* ---------- pieces shared by the variants ---------- */
+const mast = `<nav class="mast"><span class="name">Jacob Cheatley</span><span class="muted">/</span><span class="here">Blog</span></nav>`;
+function readerHead() {
+  const { title, tagline, publishAt, topics } = store.draft;
+  const when = publishAt ? shownDate(publishAt) : "Draft";
+  return `<h1 class="title">${escapeHtml(title) || "&nbsp;"}</h1><p class="tagline">${escapeHtml(tagline)}</p>
+    <p class="meta">${[when, [...topics].sort((a, b) => a.localeCompare(b)).join(", ")].filter(Boolean).join(" · ")}</p>`;
+}
+const panes = (head) => `<div class="panes" data-layout="split"><div class="source" id="source"></div>
+  <div class="preview" id="preview"><div class="page">${mast}<article>${head}<div class="prose" id="prose"></div></article></div></div></div>`;
+const statusHtml = () => {
+  const status = statusOf(store.draft.publishAt);
+  const shownAs = variant === "C" && store.draft.publishAt ? ` <span>shown as ${shownDate(store.draft.publishAt)}, from</span>` : "";
+  return `<span class="status" data-status="${status}">${status}</span>${shownAs}`;
+};
+const createFields = `
+  <label><span>Title</span><input name="title" required maxlength="120"></label>
+  <label><span>Slug, fixed once created</span><input name="slug" required maxlength="80" style="font-family: var(--font-mono)"></label>
+  <label><span>Tagline</span><input name="tagline" required maxlength="160"></label>`;
+
+/* ---------- Variant A ---------- */
+const shellA = () => `
+<div class="a-grid chrome">
+  <aside class="rail"><button class="btn" data-action="new">New Article</button><div data-slot="rail"></div></aside>
+  <main class="a-main">
+    <div class="a-fields">
+      <div class="row">
+        <label class="field grow2"><span>Title</span><input data-field="title" maxlength="120" value="${escapeHtml(store.draft.title)}"></label>
+        <label class="field grow3"><span>Tagline</span><input data-field="tagline" maxlength="160" value="${escapeHtml(store.draft.tagline)}"></label>
+      </div>
+      <div class="row">
+        <div class="field"><span>Slug</span><span class="slug">/blog/${escapeHtml(store.draft.slug)}</span></div>
+        <div class="field grow2"><span>Topics, up to ${MAX_TOPICS}</span><div class="chipbox"><span data-slot="topics"></span><input id="topic-add" list="topic-options" maxlength="30" placeholder="Add a Topic"></div></div>
+        <div class="field"><span>Publish date</span><span class="inline"><input type="datetime-local" data-field="publishAt" value="${store.draft.publishAt}"><button class="btn" data-action="now">Now</button><button class="btn quiet" data-action="clear-date">Clear</button></span></div>
+        <div class="field end"><span data-slot="dirty"></span><span class="inline"><span data-slot="status"></span><button class="btn quiet" data-action="delete">Delete</button><button class="btn primary" data-action="save">Save</button></span></div>
+      </div>
+      <div class="problem" data-slot="problem"></div>
+    </div>
+    ${panes(`<header class="head" data-slot="head"></header>`)}
+  </main>
+</div>
+<dialog id="create"><form class="create chrome" data-form="create">${createFields}<div class="problem" data-slot="create-problem"></div>
+  <div class="inline"><button class="btn primary">Create Draft</button><button class="btn quiet" type="button" data-action="close-dialog">Cancel</button></div></form></dialog>`;
+
+const railHtml = () => articleGroups().map(([name, articles]) => `<h2>${name}</h2><ul>${articles.map((a) => `
+  <li><button data-open="${a.id}" aria-current="${a.id === store.draft.id}">${escapeHtml(a.title)}${a.id === store.draft.id && isDirty() ? ` <span class="dirty">●</span>` : ""}
+  ${a.publishAt ? `<small>${shownDate(a.publishAt)}</small>` : ""}</button></li>`).join("")}</ul>`).join("");
+const chipsHtml = () => store.draft.topics.map((t) => `<span class="chip">${escapeHtml(t)}<button data-remove-topic="${escapeHtml(t)}" aria-label="Remove ${escapeHtml(t)}">×</button></span>`).join("");
+
+/* ---------- Variant B ---------- */
+const shellB = () => (store.isListShown ? `
+<div class="b-list chrome">
+  <h1>Articles</h1>
+  <form class="create" data-form="create">${createFields}<button class="btn primary">Create Draft</button><div class="problem" data-slot="create-problem" style="grid-column: 1 / -1"></div></form>
+  <table>${articleGroups().map(([name, articles]) => `<tbody><tr><th colspan="3">${name}</th></tr>${articles.map((a) => `
+    <tr><td><button data-open="${a.id}">${escapeHtml(a.title)}</button><div class="muted">${escapeHtml(a.tagline)}</div></td>
+    <td>${a.publishAt ? shownDate(a.publishAt) : ""}</td><td class="muted">${a.topics.map(escapeHtml).join(", ")}</td></tr>`).join("")}</tbody>`).join("")}</table>
+</div>` : `
+<div class="b-room chrome">
+  <div class="b-bar">
+    <button class="btn quiet" data-action="list">← Articles</button>
+    <input class="big-title" data-field="title" maxlength="120" aria-label="Title" value="${escapeHtml(store.draft.title)}">
+    <span class="problem" data-slot="problem"></span><span data-slot="dirty"></span>
+    <span class="inline">${["source", "split", "preview"].map((l) => `<button class="btn" data-layout-to="${l}" aria-pressed="${l === "split"}">${l[0].toUpperCase() + l.slice(1)}</button>`).join("")}</span>
+    <button class="btn" data-action="drawer"><span data-slot="status"></span> · Details</button>
+    <button class="btn primary" data-action="save" data-slot="save-label">Save</button>
+  </div>
+  ${panes(`<header class="head" data-slot="head"></header>`).replace(/<\/div>$/, "")}
+    <aside class="drawer" id="drawer" hidden>
+      <div class="field"><span>Slug</span><span class="slug">/blog/${escapeHtml(store.draft.slug)}</span></div>
+      <label class="field"><span>Tagline</span><textarea data-field="tagline" rows="3" maxlength="160">${escapeHtml(store.draft.tagline)}</textarea></label>
+      <div class="field"><span>Topics, up to ${MAX_TOPICS}</span><div class="inline" data-slot="topics"></div><input id="topic-add" maxlength="30" placeholder="A new Topic, then Enter"></div>
+      <div class="field"><span>Publishing</span><div data-slot="publishing"></div>
+        <div class="inline"><button class="btn" data-action="now">Publish now</button><button class="btn" data-action="schedule">Schedule…</button><button class="btn" data-action="clear-date">Back to Draft</button></div>
+        <input type="datetime-local" data-field="publishAt" value="${store.draft.publishAt}" aria-label="Publish date"></div>
+      <div><button class="btn quiet" data-action="delete">Delete this Article</button></div>
+    </aside>
+  </div>
+</div>`);
+
+const togglesHtml = () => allTopics().map((t) => `<button class="btn" data-toggle-topic="${escapeHtml(t)}" aria-pressed="${store.draft.topics.includes(t)}">${escapeHtml(t)}</button>`).join("");
+function publishingSentence() {
+  const { publishAt } = store.draft;
+  const status = statusOf(publishAt);
+  if (status === "Draft") return "A Draft: not on the site.";
+  return status === "Scheduled" ? `Scheduled: appears on ${shownDate(publishAt)}.` : `Published: on the site, dated ${shownDate(publishAt)}.`;
+}
+/** The Save button names what saving will do to the live site. */
+function saveLabel() {
+  const before = stored() ? statusOf(stored().publishAt) : "Draft";
+  const after = statusOf(store.draft.publishAt);
+  if (after === "Published") return before === "Published" ? "Save to the live site" : "Save and publish";
+  if (before === "Published") return "Save and unpublish";
+  return after === "Scheduled" ? "Save and schedule" : "Save Draft";
+}
+
+/* ---------- Variant C ---------- */
+const shellC = () => `
+<div class="c-grid chrome">
+  <div class="c-bar">
+    <select data-action="pick" aria-label="Open an Article">${store.draft.id === null ? `<option selected>New Article</option>` : ""}${articleGroups().map(([name, articles]) => `
+      <optgroup label="${name}">${articles.map((a) => `<option value="${a.id}" ${a.id === store.draft.id ? "selected" : ""}>${escapeHtml(a.title)}</option>`).join("")}</optgroup>`).join("")}</select>
+    <button class="btn" data-action="new">New Article</button>
+    ${store.draft.id === null
+      ? `<label class="inline"><span class="muted">/blog/</span><input class="slug-input" data-field="slug" maxlength="80" placeholder="slug, fixed once saved" value="${escapeHtml(store.draft.slug)}"></label>`
+      : `<span class="slug">/blog/${escapeHtml(store.draft.slug)}</span>`}
+    <span class="spacer"></span><span class="problem" data-slot="problem"></span><span data-slot="dirty"></span>
+    <button class="btn quiet" data-action="delete">Delete</button><button class="btn primary" data-action="save">Save</button>
+  </div>
+  ${panes(`<header class="head editable">
+    <textarea class="title" data-field="title" rows="1" maxlength="120" placeholder="Title">${escapeHtml(store.draft.title)}</textarea>
+    <textarea class="tagline" data-field="tagline" rows="1" maxlength="160" placeholder="Tagline">${escapeHtml(store.draft.tagline)}</textarea>
+    <p class="meta"><span data-slot="status"></span><input type="datetime-local" data-field="publishAt" value="${store.draft.publishAt}" aria-label="Publish date"><button data-action="now">now</button>
+      <span>·</span><input class="topics-text" data-field="topicsText" placeholder="Topics, separated by commas" value="${escapeHtml(store.draft.topics.join(", "))}"></p>
+    <p class="meta" data-slot="topics"></p>
+  </header>`)}
+</div>`;
+const suggestionsHtml = () => {
+  const unused = allTopics().filter((t) => !store.draft.topics.some((d) => d.toLowerCase() === t.toLowerCase()));
+  return unused.length && store.draft.topics.length < MAX_TOPICS ? `Existing Topics: ${unused.map((t) => `<button data-add-topic="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(" ")}` : "";
+};
+
+/* ---------- render ---------- */
+function renderShell() {
+  if (!store.draft && !(variant === "B" && store.isListShown)) {
+    const codeHeavySample = store.articles.find((a) => a.slug === "no-build-step") ?? store.articles[0];
+    store.draft = codeHeavySample ? structuredClone(codeHeavySample) : blankDraft();
+  }
+  if (variant !== "B") store.isListShown = false;
+  $("#app").innerHTML = { A: shellA, B: shellB, C: shellC }[variant]();
+  if ($("#source")) {
+    mountSource();
+    renderPreview();
+  }
+  refresh();
+}
+
+function refresh() {
+  const slots = {
+    rail: railHtml,
+    head: readerHead,
+    status: statusHtml,
+    dirty: () => (isDirty() ? `<span class="dirty">● Unsaved changes</span>` : `<span class="muted">Saved</span>`),
+    problem: () => escapeHtml(problem),
+    topics: { A: chipsHtml, B: togglesHtml, C: suggestionsHtml }[variant],
+    publishing: publishingSentence,
+    "save-label": saveLabel,
+  };
+  if (store.draft) for (const el of document.querySelectorAll("[data-slot]")) if (slots[el.dataset.slot]) el.innerHTML = slots[el.dataset.slot]();
+  $("#topic-options").innerHTML = allTopics().map((t) => `<option value="${escapeHtml(t)}">`).join("");
+  persist();
+  renderBar();
+}
+
+function setPublishAt(value) {
+  store.draft.publishAt = value;
+  for (const input of document.querySelectorAll('[data-field="publishAt"]')) input.value = value;
+  refresh();
+}
+function setTopics(names) {
+  store.draft.topics = normaliseTopics(names);
+  const text = $('[data-field="topicsText"]');
+  if (text) text.value = store.draft.topics.join(", ");
+  refresh();
+}
+
+const app = $("#app");
+app.addEventListener("input", (e) => {
+  const form = e.target.closest("[data-form=create]");
+  if (form) {
+    if (e.target.name === "slug") form.dataset.slugTouched = "true";
+    if (e.target.name === "title" && !form.dataset.slugTouched) form.elements.slug.value = slugify(e.target.value);
+    return;
+  }
+  const field = e.target.dataset.field;
+  if (!field) return;
+  if (field === "topicsText") store.draft.topics = normaliseTopics(e.target.value.split(","));
+  else store.draft[field] = e.target.value.replace(/\n/g, " ");
+  if (field === "slug") store.isSlugTouched = true;
+  if (field === "title" && store.draft.id === null && !store.isSlugTouched) {
+    store.draft.slug = slugify(store.draft.title);
+    $('[data-field="slug"]').value = store.draft.slug;
+  }
+  refresh();
+});
+app.addEventListener("keydown", (e) => {
+  if (e.target.id === "topic-add" && (e.key === "Enter" || e.key === ",")) {
+    e.preventDefault();
+    setTopics([...store.draft.topics, e.target.value]);
+    e.target.value = "";
+  }
+  if (e.key === "Enter" && e.target.matches(".head.editable textarea")) e.preventDefault();
+});
+app.addEventListener("change", (e) => {
+  if (e.target.id === "topic-add" && e.target.value) {
+    setTopics([...store.draft.topics, e.target.value]);
+    e.target.value = "";
+  }
+  if (e.target.dataset.action === "pick") open(Number(e.target.value));
+  if (e.target.dataset.field === "topicsText") setTopics(store.draft.topics);
+});
+app.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const { title, slug, tagline } = Object.fromEntries(new FormData(e.target));
+  const result = createArticle({ title: title.trim(), slug, tagline: tagline.trim() });
+  if (!result.ok) return void ($('[data-slot="create-problem"]').textContent = SLUG_PROBLEMS[result.reason]);
+  persist();
+  open(result.article.id);
+});
+app.addEventListener("click", (e) => {
+  const el = e.target.closest("button");
+  if (!el) return;
+  const { action, open: openId, removeTopic, toggleTopic, addTopic, layoutTo } = el.dataset;
+  if (openId) open(Number(openId));
+  if (removeTopic) setTopics(store.draft.topics.filter((t) => t !== removeTopic));
+  if (toggleTopic) setTopics(store.draft.topics.includes(toggleTopic) ? store.draft.topics.filter((t) => t !== toggleTopic) : [...store.draft.topics, toggleTopic]);
+  if (addTopic) setTopics([...store.draft.topics, addTopic]);
+  if (layoutTo) {
+    $(".panes").dataset.layout = layoutTo;
+    for (const b of document.querySelectorAll("[data-layout-to]")) b.setAttribute("aria-pressed", b === el);
+  }
+  if (action === "save") save();
+  if (action === "now") setPublishAt(toLocalInput(new Date()));
+  if (action === "clear-date") setPublishAt("");
+  if (action === "schedule") { const input = $('.drawer [data-field="publishAt"]'); input.focus(); input.showPicker(); }
+  if (action === "drawer") $("#drawer").hidden = !$("#drawer").hidden;
+  if (action === "close-dialog") $("#create").close();
+  if (action === "list" && (!isDirty() || confirm("Discard unsaved changes?"))) { store.draft = null; store.isListShown = true; renderShell(); }
+  if (action === "new") {
+    if (variant === "A") return $("#create").showModal();
+    if (isDirty() && !confirm("Discard unsaved changes?")) return;
+    store.draft = blankDraft();
+    store.isSlugTouched = false;
+    renderShell();
+  }
+  if (action === "delete" && confirm(`Delete "${store.draft.title}"? This cannot be undone.`)) {
+    store.articles = store.articles.filter((a) => a.id !== store.draft.id);
+    store.draft = null;
+    store.isListShown = true;
+    renderShell();
+  }
+});
+addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+    e.preventDefault();
+    save();
+  }
+});
+
+/* ---------- switcher ---------- */
+const keys = Object.keys(VARIANTS);
+const step = (d) => go({ variant: keys[(keys.indexOf(variant) + d + keys.length) % keys.length] });
+function renderBar() {
+  const readout = store.draft ? `${statusOf(store.draft.publishAt)} · ${isDirty() ? "unsaved" : "saved"} · ${store.draft.body.length.toLocaleString()} chars · preview ${previewMs.toFixed(1)} ms` : "no Article open";
+  $("#bar").innerHTML = `<button data-step="-1" aria-label="Previous variant">←</button><span class="label">${variant} — ${VARIANTS[variant]}</span><button data-step="1" aria-label="Next variant">→</button>
+    <span class="sep"></span><button data-bar="scheme">${scheme}</button><button data-bar="vim" aria-pressed="${store.isVim}">vim</button><button data-bar="sync" aria-pressed="${store.isScrollSynced}">scroll sync</button><button data-bar="reset">reset data</button>
+    <span class="sep"></span><span class="readout">${readout}</span>`;
+}
+$("#bar").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.step) return step(Number(b.dataset.step));
+  if (b.dataset.bar === "scheme") return go({ scheme: SCHEMES[(SCHEMES.indexOf(scheme) + 1) % SCHEMES.length] });
+  if (b.dataset.bar === "reset") { sessionStorage.removeItem(STORAGE_KEY); return location.reload(); }
+  if (b.dataset.bar === "sync") store.isScrollSynced = !store.isScrollSynced;
+  if (b.dataset.bar === "vim") { store.isVim = !store.isVim; persist(); return location.reload(); }
+  refresh();
+});
+addEventListener("keydown", (e) => {
+  if (e.target.closest("input, textarea, select, [contenteditable]")) return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+
+renderShell();
+</script>
+</body>
+</html>
