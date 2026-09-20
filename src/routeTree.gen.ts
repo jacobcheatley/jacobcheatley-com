@@ -10,13 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as BlogRouteImport } from './routes/blog'
 import { Route as StickyNotesRouteImport } from './routes/sticky-notes'
 import { Route as ShellIndexRouteImport } from './routes/_shell.index'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as StickyNotesIndexRouteImport } from './routes/sticky-notes.index'
 import { Route as StickyNotesNewRouteImport } from './routes/sticky-notes.new'
 
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogRoute = BlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StickyNotesRoute = StickyNotesRouteImport.update({
@@ -28,6 +35,11 @@ const ShellIndexRoute = ShellIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ShellRoute,
+} as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BlogRoute,
 } as any)
 const StickyNotesIndexRoute = StickyNotesIndexRouteImport.update({
   id: '/',
@@ -42,39 +54,53 @@ const StickyNotesNewRoute = StickyNotesNewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
+  '/blog': typeof BlogRouteWithChildren
   '/sticky-notes': typeof StickyNotesRouteWithChildren
   '/sticky-notes/new': typeof StickyNotesNewRoute
+  '/blog/': typeof BlogIndexRoute
   '/sticky-notes/': typeof StickyNotesIndexRoute
 }
 export interface FileRoutesByTo {
   '/sticky-notes/new': typeof StickyNotesNewRoute
   '/': typeof ShellIndexRoute
+  '/blog': typeof BlogIndexRoute
   '/sticky-notes': typeof StickyNotesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shell': typeof ShellRouteWithChildren
+  '/blog': typeof BlogRouteWithChildren
   '/sticky-notes': typeof StickyNotesRouteWithChildren
   '/sticky-notes/new': typeof StickyNotesNewRoute
   '/_shell/': typeof ShellIndexRoute
+  '/blog/': typeof BlogIndexRoute
   '/sticky-notes/': typeof StickyNotesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sticky-notes' | '/sticky-notes/new' | '/sticky-notes/'
+  fullPaths:
+    | '/'
+    | '/blog'
+    | '/sticky-notes'
+    | '/sticky-notes/new'
+    | '/blog/'
+    | '/sticky-notes/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/sticky-notes/new' | '/' | '/sticky-notes'
+  to: '/sticky-notes/new' | '/' | '/blog' | '/sticky-notes'
   id:
     | '__root__'
     | '/_shell'
+    | '/blog'
     | '/sticky-notes'
     | '/sticky-notes/new'
     | '/_shell/'
+    | '/blog/'
     | '/sticky-notes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   ShellRoute: typeof ShellRouteWithChildren
+  BlogRoute: typeof BlogRouteWithChildren
   StickyNotesRoute: typeof StickyNotesRouteWithChildren
 }
 
@@ -85,6 +111,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog': {
+      id: '/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof BlogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sticky-notes': {
@@ -100,6 +133,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof ShellIndexRouteImport
       parentRoute: typeof ShellRoute
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof BlogRoute
     }
     '/sticky-notes/': {
       id: '/sticky-notes/'
@@ -128,6 +168,16 @@ const ShellRouteChildren: ShellRouteChildren = {
 
 const ShellRouteWithChildren = ShellRoute._addFileChildren(ShellRouteChildren)
 
+interface BlogRouteChildren {
+  BlogIndexRoute: typeof BlogIndexRoute
+}
+
+const BlogRouteChildren: BlogRouteChildren = {
+  BlogIndexRoute: BlogIndexRoute,
+}
+
+const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
+
 interface StickyNotesRouteChildren {
   StickyNotesNewRoute: typeof StickyNotesNewRoute
   StickyNotesIndexRoute: typeof StickyNotesIndexRoute
@@ -144,6 +194,7 @@ const StickyNotesRouteWithChildren = StickyNotesRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   ShellRoute: ShellRouteWithChildren,
+  BlogRoute: BlogRouteWithChildren,
   StickyNotesRoute: StickyNotesRouteWithChildren,
 }
 export const routeTree = rootRouteImport

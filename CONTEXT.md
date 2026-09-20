@@ -96,3 +96,23 @@ _Avoid_: author field, form, submit button
 **Spotlight**:
 The wall darkened with one Note lifted out of it, straight and large. Zooming in on an approved Note is a Spotlight; pinning a new one up is a Spotlight with the nine **Fasteners** laid in a row beneath the Note, the **Tag** below those, and the way back to the desk taped above it.
 _Avoid_: lightbox, landing, preview, modal
+
+### Blog
+
+The Project where the owner's writing lives (`/blog`). It is a Project with a **Cover** like any other, but it is the one Project that shares the **Portfolio**'s design instead of bringing its own.
+
+**Article**:
+One piece of writing on the Blog, at its own URL under it (`/blog/<slug>`). Written in Markdown.
+_Avoid_: post, entry
+
+**Tagline**:
+The one-line summary shown with an **Article** wherever Articles are listed.
+_Avoid_: description, excerpt, summary
+
+**Topic**:
+A label shared across **Articles**, shown with each one it is on. An Article may have several.
+_Avoid_: tag (a **Tag** is the Sticky Notes name tag), category
+
+**Publish date**:
+The moment an **Article** becomes public, and the date shown with it. An Article with none is a **Draft**; with one still in the future it is **Scheduled**; once it has arrived it is **Published**. Only Published Articles are visible on the site.
+_Avoid_: status, published flag
