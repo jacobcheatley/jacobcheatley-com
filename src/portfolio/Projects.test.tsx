@@ -12,3 +12,11 @@ it("links the Sticky Notes Cover to its Project by name", () => {
     within(link).getAllByRole("img", { name: "sticky note" }).length,
   ).toBeGreaterThan(0);
 });
+
+it("links the Blog Cover to the Blog by name", () => {
+  render(<Projects />);
+  expect(screen.getByRole("link", { name: "Blog" })).toHaveAttribute(
+    "href",
+    "/blog",
+  );
+});
