@@ -30,6 +30,17 @@ const article = (body: string): Article => ({
   topics: ["Markdown"],
 });
 
+it("leaves the date out of the meta line of an Article with no Publish date", () => {
+  render(
+    <ArticleView
+      article={{ ...article("Half a paragraph.\n"), publishAt: null }}
+    />,
+  );
+
+  expect(screen.getByText("Markdown")).toBeVisible();
+  expect(screen.queryByText(/September/)).toBeNull();
+});
+
 it("links a footnote reference to its footnote and back", () => {
   render(
     <ArticleView article={article("A claim.[^1]\n\n[^1]: The proof.\n")} />,
