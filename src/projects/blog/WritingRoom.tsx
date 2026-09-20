@@ -1,13 +1,15 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArticleView } from "./ArticleView";
 import { type ArticleSave, articleSaveSchema } from "./article-schema";
+import { type ArticleState, articleState, saveLabel } from "./article-state";
 import type {
   EditingArticle,
   EditorDatabase,
   SaveArticleResult,
 } from "./blog-editor.server";
 import { DatabaseLabel } from "./DatabaseLabel";
+import { DetailsDrawer } from "./DetailsDrawer";
 import { SourcePane } from "./SourcePane";
 
 const LAYOUTS = ["source", "split", "preview"] as const;
@@ -16,6 +18,12 @@ const LAYOUT_LABELS: Record<RoomLayout, string> = {
   source: "Source",
   split: "Split",
   preview: "Preview",
+};
+
+const STATE_WORDS: Record<ArticleState, string> = {
+  draft: "Draft",
+  scheduled: "Scheduled",
+  published: "Published",
 };
 
 const SAVE_PROBLEMS: Record<
@@ -41,23 +49,35 @@ const savedFields = (article: EditingArticle): ArticleSave => ({
 export function WritingRoom({
   article,
   database,
+  now,
   saveArticle,
+  deleteArticle,
 }: {
   article: EditingArticle;
   database: EditorDatabase;
+  // Read at every render: a Scheduled date that arrives while the room is open
+  // renames the Save button without a reload.
+  now: () => Date;
   saveArticle: (options: {
     data: { id: number; save: ArticleSave };
   }) => Promise<SaveArticleResult>;
+  deleteArticle: (options: { data: number }) => Promise<void>;
 }) {
+  const navigate = useNavigate();
   // What the owner has written, against what the preview is showing: the
   // fields own their text, so a Save always sends the latest keystroke even
   // when the frame that renders it has not come round yet.
   const written = useRef(savedFields(article));
   const [shown, setShown] = useState(written.current);
   const previewFrame = useRef(0);
+  // The form as the last Save sent it: the slug the site is serving and the
+  // Publish date it is going by.
+  const [stored, setStored] = useState(written.current);
   const [hasUnsavedChanges, setUnsavedChanges] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [problem, setProblem] = useState("");
+  const [isSlugTaken, setSlugTaken] = useState(false);
+  const [isDrawerOpen, setDrawerOpen] = useState(false);
   const [layout, setLayout] = useState<RoomLayout>("split");
 
   const edit = useCallback((fields: Partial<ArticleSave>) => {
@@ -71,14 +91,19 @@ export function WritingRoom({
   }, []);
 
   const writeBody = useCallback((body: string) => edit({ body }), [edit]);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   const save = useCallback(async () => {
     setProblem("");
+    setSlugTaken(false);
     const sending = written.current;
     const parsed = articleSaveSchema.safeParse(sending);
-    // Every other field came from the database and is edited in the Details
-    // drawer; an emptied title is what this room is left to catch.
-    if (!parsed.success) return setProblem("A title is required.");
+    // The three fields the owner can leave in a shape the schema refuses; the
+    // body and the Publish date cannot be malformed.
+    if (!parsed.success)
+      return setProblem(
+        "An Article needs a title, a Tagline and a slug of lowercase words.",
+      );
 
     setSaving(true);
     let saved: SaveArticleResult;
@@ -94,11 +119,33 @@ export function WritingRoom({
     } finally {
       setSaving(false);
     }
-    if (!saved.ok) return setProblem(SAVE_PROBLEMS[saved.reason]);
+    if (!saved.ok) {
+      setProblem(SAVE_PROBLEMS[saved.reason]);
+      setSlugTaken(saved.reason === "slugTaken");
+      // The slug is the drawer's field: open it so the refusal is where the
+      // fix is.
+      if (saved.reason === "slugTaken") setDrawerOpen(true);
+      return;
+    }
+    setStored(sending);
     // An edit that landed while the Save was in flight is still unsaved: every
     // edit replaces the written fields with a new object.
     setUnsavedChanges(written.current !== sending);
   }, [article.id, saveArticle]);
+
+  const remove = useCallback(async () => {
+    if (!window.confirm(`Delete “${article.title}”? This cannot be undone.`))
+      return;
+    try {
+      await deleteArticle({ data: article.id });
+    } catch (error) {
+      // The same one failure a Save has: the editor could not reach its
+      // database, and the message is the whole report.
+      if (!(error instanceof Error)) throw error;
+      return setProblem(error.message);
+    }
+    await navigate({ to: "/blog/write" });
+  }, [article.id, article.title, deleteArticle, navigate]);
 
   useEffect(() => {
     const saveOnKey = (event: KeyboardEvent) => {
@@ -117,6 +164,10 @@ export function WritingRoom({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [hasUnsavedChanges]);
+
+  // One clock a render, so the drawer's sentence and the Save button agree.
+  const clock = now();
+  const formState = articleState(shown.publishAt, clock);
 
   return (
     <div className="grid h-dvh grid-rows-[auto_1fr] font-sans text-[0.875rem] leading-[1.35]">
@@ -159,17 +210,25 @@ export function WritingRoom({
         </span>
         <button
           type="button"
+          aria-expanded={isDrawerOpen}
+          onClick={() => setDrawerOpen(!isDrawerOpen)}
+          className={`${BUTTON} whitespace-nowrap`}
+        >
+          {STATE_WORDS[formState]} · Details
+        </button>
+        <button
+          type="button"
           onClick={() => void save()}
           disabled={isSaving}
-          className="rounded-sm border border-transparent bg-accent px-3 py-[0.35rem] font-semibold text-paper disabled:opacity-60"
+          className="whitespace-nowrap rounded-sm border border-transparent bg-accent px-3 py-[0.35rem] font-semibold text-paper disabled:opacity-60"
         >
-          Save
+          {saveLabel(articleState(stored.publishAt, clock), formState)}
         </button>
         <DatabaseLabel {...database} />
       </header>
 
       <div
-        className={`grid min-h-0 ${layout === "split" ? "grid-cols-2" : "grid-cols-1"}`}
+        className={`relative grid min-h-0 ${layout === "split" ? "grid-cols-2" : "grid-cols-1"}`}
       >
         <div
           hidden={layout === "preview"}
@@ -183,6 +242,17 @@ export function WritingRoom({
         >
           <ArticleView article={{ ...article, ...shown }} />
         </div>
+        {isDrawerOpen && (
+          <DetailsDrawer
+            save={shown}
+            stored={stored}
+            now={clock}
+            slugProblem={isSlugTaken ? SAVE_PROBLEMS.slugTaken : ""}
+            edit={edit}
+            deleteArticle={() => void remove()}
+            close={closeDrawer}
+          />
+        )}
       </div>
     </div>
   );

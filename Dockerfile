@@ -7,7 +7,7 @@ RUN bun run build
 # The Blog editor is local only: the build drops its route files, and with
 # them its server functions and its screens. Nothing it is made of may reach
 # the image.
-RUN ! grep -rqE 'blog-editor\.(fn|server)|Create Draft|Unsaved changes' dist
+RUN ! grep -rqE 'blog-editor\.(fn|server)|Create Draft|Unsaved changes|Delete this Article' dist
 RUN rm -rf node_modules && bun install --frozen-lockfile --production
 
 FROM oven/bun:1.4.2-slim
