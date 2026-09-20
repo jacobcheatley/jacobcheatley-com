@@ -42,7 +42,12 @@ export function rehypeHoldSourceLines() {
 
 export function rehypeStampSourceLines() {
   return (tree: Root) => {
-    const held = heldLines.get(tree) ?? [];
+    const held = heldLines.get(tree);
+    if (!held) {
+      throw new Error(
+        "rehypeStampSourceLines ran without rehypeHoldSourceLines before it",
+      );
+    }
     tree.children.forEach((child, index) => {
       const lines = sourceLinesOf(child) ?? held[index];
       if (!lines) return;
