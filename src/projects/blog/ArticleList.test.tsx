@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { ArticleList } from "./ArticleList";
+
+vi.mock("@tanstack/react-router", () => import("@/test/router-stub"));
 
 it("gives a row the Article's title, Tagline, Publish date and Topics in alphabetical order", () => {
   render(
