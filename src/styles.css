@@ -6,6 +6,7 @@
 @import "@fontsource-variable/newsreader/wght-italic.css";
 @import "@fontsource/ibm-plex-sans/index.css";
 @import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/index.css";
 
 @theme {
   --color-paper: light-dark(#f7f7f4, #1a1b1a);
@@ -19,11 +20,26 @@
   --color-surface: light-dark(#ffffff, #232524);
   --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --radius-sm: 2px;
 }
 
 :root {
   color-scheme: light dark;
+
+  /* Shiki's css-variables theme writes these into the code it highlights, and
+     nothing else; they are the palette seen through its eleven token roles. */
+  --code-foreground: var(--color-ink);
+  --code-background: var(--color-surface);
+  --code-token-keyword: var(--color-accent);
+  --code-token-link: var(--color-accent);
+  --code-token-string: var(--color-accent-2);
+  --code-token-string-expression: var(--color-accent-2);
+  --code-token-constant: var(--color-accent-2);
+  --code-token-comment: var(--color-muted);
+  --code-token-punctuation: var(--color-muted);
+  --code-token-function: var(--color-ink);
+  --code-token-parameter: var(--color-ink);
 }
 
 * {
@@ -210,9 +226,30 @@ body {
   height: auto;
 }
 
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.prose :not(pre) > code {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0.05em 0.3em;
+}
+
 /* Long lines scroll inside the column rather than widening the page. */
 .prose pre {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.125rem;
   overflow-x: auto;
+  line-height: 1.55;
+}
+
+.prose pre code {
+  font-size: 0.875rem;
 }
 
 .prose table {
