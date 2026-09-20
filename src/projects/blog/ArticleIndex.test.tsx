@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ArticleIndex } from "./ArticleIndex";
-import type { ArticleSave } from "./article-schema";
+import type { ArticleDraft } from "./article-schema";
 import type { CreateArticleResult, EditorArticle } from "./blog-editor.server";
 
 // The router and the create endpoint don't belong in jsdom: stub them at the
@@ -32,7 +32,7 @@ const article = (fields: Partial<EditorArticle>): EditorArticle => ({
 const index = (
   articles: EditorArticle[],
   createArticle: (options: {
-    data: ArticleSave;
+    data: ArticleDraft;
   }) => Promise<CreateArticleResult> = async () => ({ ok: true, id: 12 }),
 ) =>
   render(

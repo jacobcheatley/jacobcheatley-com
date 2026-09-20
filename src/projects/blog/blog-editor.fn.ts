@@ -1,12 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { articleSaveSchema } from "./article-schema";
+import { articleDraftSchema, articleSaveSchema } from "./article-schema";
 import {
   createArticle,
   deleteArticle,
   editorDatabase,
   findArticleForEditing,
   listAllArticles,
+  listTopics,
   saveArticle,
 } from "./blog-editor.server";
 
@@ -24,12 +25,13 @@ export const editorIndexFn = createServerFn({ method: "GET" }).handler(
   }),
 );
 
-// Everything the writing room opens with: the Article and the label that says
-// which Blog this session is writing to.
+// Everything the writing room opens with: the Article, every Topic its
+// toggles offer, and the label that says which Blog this session is writing to.
 export const writingRoomFn = createServerFn({ method: "GET" })
   .validator(z.int())
   .handler(async ({ data }) => ({
     article: await findArticleForEditing(data),
+    allTopics: await listTopics(),
     database: editorDatabase(),
   }));
 
@@ -48,7 +50,7 @@ export const deleteArticleFn = createServerFn({ method: "POST" })
   });
 
 export const createArticleFn = createServerFn({ method: "POST" })
-  .validator(articleSaveSchema)
+  .validator(articleDraftSchema)
   .handler(({ data }) => {
     // The second layer under the route exclusion: were this endpoint ever to
     // reach production, this is all the build leaves of it.

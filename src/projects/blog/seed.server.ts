@@ -1,7 +1,7 @@
-import { sql } from "drizzle-orm";
 import { db, dbHost, isLocalDatabase } from "@/db/index.server";
+import { linkTopics } from "./blog-editor.server";
 import { kitchenSinkMarkdown } from "./kitchen-sink";
-import { articles, articleTopics, topics } from "./schema";
+import { articles } from "./schema";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -55,23 +55,5 @@ async function upsertArticle({ topics: topicNames, ...values }: SeedArticle) {
     .onConflictDoUpdate({ target: articles.slug, set: values })
     .returning({ id: articles.id });
   if (!article) throw new Error(`upsert of ${values.slug} returned no row`);
-
-  for (const name of topicNames) {
-    await db
-      .insert(articleTopics)
-      .values({ articleId: article.id, topicId: await upsertTopic(name) })
-      .onConflictDoNothing();
-  }
-}
-
-async function upsertTopic(name: string) {
-  // Bare `do nothing`: the Topic's uniqueness is an index over lower(name),
-  // which is not a conflict target drizzle can name.
-  await db.insert(topics).values({ name }).onConflictDoNothing();
-  const [topic] = await db
-    .select({ id: topics.id })
-    .from(topics)
-    .where(sql`lower(${topics.name}) = lower(${name})`);
-  if (!topic) throw new Error(`upsert of Topic ${name} returned no row`);
-  return topic.id;
+  await db.transaction((tx) => linkTopics(tx, article.id, topicNames));
 }

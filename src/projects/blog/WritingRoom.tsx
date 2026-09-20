@@ -37,24 +37,27 @@ const SAVE_PROBLEMS: Record<
 const BUTTON =
   "rounded-sm border border-line bg-surface px-[0.7rem] py-[0.35rem] hover:border-muted";
 
-// What the room may write back: the Article's own fields, its Topics apart.
+// What the room may write back: everything a Save sends.
 const savedFields = (article: EditingArticle): ArticleSave => ({
   title: article.title,
   slug: article.slug,
   tagline: article.tagline,
   body: article.body,
   publishAt: article.publishAt,
+  topics: article.topics,
 });
 
 export function WritingRoom({
   article,
   database,
+  allTopics,
   now,
   saveArticle,
   deleteArticle,
 }: {
   article: EditingArticle;
   database: EditorDatabase;
+  allTopics: string[];
   // Read at every render: a Scheduled date that arrives while the room is open
   // renames the Save button without a reload.
   now: () => Date;
@@ -73,6 +76,9 @@ export function WritingRoom({
   // The form as the last Save sent it: the slug the site is serving and the
   // Publish date it is going by.
   const [stored, setStored] = useState(written.current);
+  // Every Topic on the Blog as the last Save left them: one it took off the
+  // Blog is gone from the toggles without a reload.
+  const [blogTopics, setBlogTopics] = useState(allTopics);
   const [hasUnsavedChanges, setUnsavedChanges] = useState(false);
   const [isSaving, setSaving] = useState(false);
   const [problem, setProblem] = useState("");
@@ -127,10 +133,18 @@ export function WritingRoom({
       if (saved.reason === "slugTaken") setDrawerOpen(true);
       return;
     }
-    setStored(sending);
+    // The Blog's own spelling of a Topic won, so the form takes it back.
+    const settled = { ...sending, topics: saved.topics };
     // An edit that landed while the Save was in flight is still unsaved: every
     // edit replaces the written fields with a new object.
-    setUnsavedChanges(written.current !== sending);
+    const isStale = written.current !== sending;
+    if (!isStale) {
+      written.current = settled;
+      setShown(settled);
+    }
+    setStored(settled);
+    setUnsavedChanges(isStale);
+    setBlogTopics(saved.allTopics);
   }, [article.id, saveArticle]);
 
   const remove = useCallback(async () => {
@@ -246,6 +260,7 @@ export function WritingRoom({
           <DetailsDrawer
             save={shown}
             stored={stored}
+            allTopics={blogTopics}
             now={clock}
             slugProblem={isSlugTaken ? SAVE_PROBLEMS.slugTaken : ""}
             edit={edit}

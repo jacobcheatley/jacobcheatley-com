@@ -7,6 +7,7 @@ const save = (fields: Partial<Record<string, unknown>> = {}) => ({
   tagline: "One line about it.",
   body: "",
   publishAt: null,
+  topics: [],
   ...fields,
 });
 const accepts = (fields: Partial<Record<string, unknown>>) =>
@@ -51,6 +52,19 @@ describe("articleSaveSchema", () => {
 
   it("takes an empty body, because a new Draft has one", () => {
     expect(accepts({ body: "" })).toBe(true);
+  });
+
+  it("takes a Topic of 1 character and of 30, and no more", () => {
+    expect(accepts({ topics: [repeat(1)] })).toBe(true);
+    expect(accepts({ topics: [repeat(30)] })).toBe(true);
+    expect(accepts({ topics: [""] })).toBe(false);
+    expect(accepts({ topics: ["   "] })).toBe(false);
+    expect(accepts({ topics: [repeat(31)] })).toBe(false);
+  });
+
+  it("rejects a Topic the Article already holds in another case", () => {
+    expect(accepts({ topics: ["TypeScript", "Postgres"] })).toBe(true);
+    expect(accepts({ topics: ["TypeScript", "typescript"] })).toBe(false);
   });
 
   it("takes a Publish date or none, and nothing standing in for a date", () => {
