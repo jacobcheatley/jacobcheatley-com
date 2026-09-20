@@ -79,7 +79,7 @@ a { color: inherit; }
 .topics { font-family: var(--font-sans); }
 
 /* ---------- Variant A: quiet column ---------- */
-[data-variant="A"] .page { max-width: calc(var(--measure, 40rem) + 2rem); margin: 0 auto; padding: clamp(2rem, 6vw, 4rem) 1rem 0; }
+[data-variant="A"] .page { max-width: calc(var(--measure, 44rem) + 2rem); margin: 0 auto; padding: clamp(2rem, 6vw, 4rem) 1rem 0; }
 [data-variant="A"] .mast { display: flex; gap: 0.6rem; align-items: baseline; font-size: 1.25rem; margin-bottom: clamp(2.5rem, 6vw, 4rem); }
 [data-variant="A"] .mast .here { font-style: italic; text-decoration: none; }
 [data-variant="A"] .mast .here:hover { text-decoration: underline; }
@@ -219,7 +219,7 @@ const params = new URLSearchParams(location.search);
 const variant = params.get("variant") in VARIANTS ? params.get("variant") : "A";
 const view = params.get("view") in VIEWS ? params.get("view") : "listing";
 const scheme = SCHEMES.includes(params.get("scheme")) ? params.get("scheme") : "auto";
-const measure = MEASURES.includes(params.get("measure")) ? params.get("measure") : "40";
+const measure = MEASURES.includes(params.get("measure")) ? params.get("measure") : "44";
 document.body.style.setProperty("--measure", measure + "rem");
 document.body.dataset.variant = variant;
 if (scheme !== "auto") document.documentElement.style.colorScheme = scheme;
