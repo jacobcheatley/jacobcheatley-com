@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* remark-gfm labels its footnotes section with a class Tailwind never sees in
+   source, because the Article body is markup the renderer makes at runtime. */
+@source inline("sr-only");
 @import "@fontsource-variable/newsreader/index.css";
 @import "@fontsource-variable/newsreader/wght-italic.css";
 @import "@fontsource/ibm-plex-sans/index.css";
@@ -31,6 +34,13 @@ html,
 body,
 #app {
   min-height: 100%;
+}
+
+/* A short listing has no scrollbar and a long Article does, which would shift
+   the centred column between them. The writing room nests this layout in its
+   preview pane, so only a Blog page of its own reserves the gutter. */
+html:has(> body > .blog-layout) {
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -140,4 +150,113 @@ body {
   .pad-stacks {
     grid-template-rows: max(48px, 100cqh - var(--pad) - var(--lean)) var(--pad);
   }
+}
+
+/* The Article body. Element rules rather than utilities, because this markup
+   is Markdown the renderer turns into elements at request time. */
+.prose {
+  font-size: 1.1875rem;
+  line-height: 1.6;
+}
+
+.prose :is(p, ul, ol, blockquote, table, pre) {
+  margin: 0 0 1.25em;
+}
+
+.prose :is(h1, h2, h3, h4, h5, h6) {
+  position: relative;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.prose h2 {
+  font-size: 1.5rem;
+  margin: 2.25em 0 0.6em;
+}
+
+.prose h3 {
+  font-size: 1.1875rem;
+  font-style: italic;
+  margin: 1.75em 0 0.5em;
+}
+
+.prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.prose :is(ul, ol) {
+  padding-left: 1.25rem;
+}
+
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose blockquote {
+  border-left: 2px solid var(--color-line);
+  padding-left: 1.125rem;
+  font-style: italic;
+  color: var(--color-muted);
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Long lines scroll inside the column rather than widening the page. */
+.prose pre {
+  overflow-x: auto;
+}
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+}
+
+.prose :is(th, td) {
+  text-align: left;
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.prose th {
+  font-weight: 600;
+}
+
+.prose sup a {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  text-decoration: none;
+  padding: 0 0.1em;
+}
+
+.prose .footnotes {
+  margin-top: 3rem;
+  border-top: 1px solid var(--color-line);
+  padding-top: 1rem;
+  font-size: 1rem;
+  color: var(--color-muted);
+}
+
+/* The heading's own link, in the gutter beside it. */
+.prose .anchor {
+  position: absolute;
+  left: -1.1em;
+  color: var(--color-muted);
+  text-decoration: none;
+  opacity: 0;
+}
+
+.prose :is(h1, h2, h3, h4, h5, h6):hover .anchor,
+.prose .anchor:focus {
+  opacity: 1;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
-import { listPublishedArticles } from "./blog.server";
+import { findPublishedArticle, listPublishedArticles } from "./blog.server";
 import { articles, articleTopics, topics } from "./schema";
 
 const now = new Date("2026-09-20T12:00:00.000Z");
@@ -87,6 +87,47 @@ describe("listPublishedArticles", () => {
       tagline: "Tagline of one-article",
       publishAt: now,
       topics: [],
+    });
+  });
+});
+
+describe("findPublishedArticle", () => {
+  it("finds an Article once its Publish date has arrived, and not a millisecond before", async () => {
+    await insertArticle("draft", null);
+    await insertArticle("scheduled", new Date(now.getTime() + 1));
+    await insertArticle("on-the-dot", now);
+    await insertArticle("past", new Date("2026-09-01T00:00:00.000Z"));
+
+    const found = await Promise.all(
+      ["draft", "scheduled", "on-the-dot", "past"].map((slug) =>
+        findPublishedArticle(slug, now),
+      ),
+    );
+
+    expect(found.map((article) => article?.slug)).toEqual([
+      undefined,
+      undefined,
+      "on-the-dot",
+      "past",
+    ]);
+  });
+
+  it("finds nothing at a slug no Article has", async () => {
+    await insertArticle("one-article", now);
+
+    expect(await findPublishedArticle("never-written", now)).toBeUndefined();
+  });
+
+  it("returns the Article's body, title, Tagline, Publish date and Topics", async () => {
+    await insertArticle("one-article", now, ["Postgres"]);
+
+    expect(await findPublishedArticle("one-article", now)).toEqual({
+      slug: "one-article",
+      title: "The one-article Article",
+      tagline: "Tagline of one-article",
+      body: "Body.",
+      publishAt: now,
+      topics: ["Postgres"],
     });
   });
 });

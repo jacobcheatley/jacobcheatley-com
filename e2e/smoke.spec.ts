@@ -18,6 +18,17 @@ test("/blog responds 200 and the h1 is the Blog", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Blog");
 });
 
+test("a slug with no Published Article gets the Blog's 404", async ({
+  page,
+}) => {
+  const response = await page.goto("/blog/no-article-has-this-slug");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "No Article here.",
+  );
+  await expect(page.getByRole("link", { name: "All Articles" })).toBeVisible();
+});
+
 test("the Sticky Notes editor loads with the mat over the wall", async ({
   page,
 }) => {
