@@ -1,7 +1,7 @@
 import { desc, eq, inArray, notExists, sql } from "drizzle-orm";
 import { db, dbHost, isLocalDatabase } from "@/db/index.server";
 import type { ArticleDraft, ArticleSave } from "./article-schema";
-import { articles, articleTopics, topics } from "./schema";
+import { articles, articleTopics, topicNames, topics } from "./schema";
 
 export type EditorArticle = {
   id: number;
@@ -24,9 +24,7 @@ const editorColumns = {
   title: articles.title,
   tagline: articles.tagline,
   publishAt: articles.publishAt,
-  topics: sql<
-    string[]
-  >`coalesce(array_agg(${topics.name}) filter (where ${topics.name} is not null), '{}')`,
+  topics: topicNames,
 };
 
 // The editor's own read: every Article whatever its state, which no public

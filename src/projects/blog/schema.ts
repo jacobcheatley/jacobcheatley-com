@@ -43,3 +43,9 @@ export const articleTopics = pgTable(
   },
   (table) => [primaryKey({ columns: [table.articleId, table.topicId] })],
 );
+
+// An Article's Topics as one array column, for a select that left-joins both
+// Topic tables and groups by the Article. Empty, not [null], for no Topics.
+export const topicNames = sql<
+  string[]
+>`coalesce(array_agg(${topics.name}) filter (where ${topics.name} is not null), '{}')`;
