@@ -8,11 +8,6 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import python from "shiki/langs/python.mjs";
 import typescript from "shiki/langs/typescript.mjs";
 
-// Every fence in an Article is highlighted with a grammar listed here; a fence
-// in any other language falls back to plain text. Adding a language is one
-// import plus one entry.
-const codeLanguages = [typescript, python];
-
 const paletteThemeName = "palette";
 
 // Tokens come out as `var(--code-*)` references, which src/styles.css maps onto
@@ -22,10 +17,11 @@ const paletteTheme = createCssVariablesTheme({
   variablePrefix: "--code-",
 });
 
-// Sync, because the whole pipeline has to stay synchronous.
+// A fence in any language not listed here falls back to plain text, so adding
+// a language is one import and one entry.
 const highlighter = createHighlighterCoreSync({
   themes: [paletteTheme],
-  langs: codeLanguages,
+  langs: [typescript, python],
   engine: createJavaScriptRegexEngine(),
 });
 
