@@ -36,6 +36,13 @@ body,
   min-height: 100%;
 }
 
+/* A short listing has no scrollbar and a long Article does, which would shift
+   the centred column between them. The writing room nests this layout in its
+   preview pane, so only a Blog page of its own reserves the gutter. */
+html:has(> body > .blog-layout) {
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   background: var(--color-paper);

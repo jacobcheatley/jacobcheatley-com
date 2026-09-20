@@ -12,7 +12,7 @@ export function BlogLayout({
   children: ReactNode;
 }) {
   return (
-    <main className="mx-auto max-w-[calc(44rem+2rem)] px-4 pt-[clamp(2rem,6vw,4rem)] pb-24">
+    <main className="blog-layout mx-auto max-w-[calc(44rem+2rem)] px-4 pt-[clamp(2rem,6vw,4rem)] pb-24">
       <nav className="mb-[clamp(2.5rem,6vw,4rem)] flex items-baseline gap-[0.6rem] text-[1.25rem]">
         <Link
           to="/"
