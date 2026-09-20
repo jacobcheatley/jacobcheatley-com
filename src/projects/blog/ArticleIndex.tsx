@@ -1,8 +1,8 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type SubmitEvent, useState } from "react";
 import {
-  type ArticleSave,
-  articleSaveSchema,
+  type ArticleDraft,
+  articleDraftSchema,
   SLUG_PATTERN,
   slugify,
 } from "./article-schema";
@@ -56,7 +56,7 @@ export function ArticleIndex({
   database: EditorDatabase;
   now: Date;
   createArticle: (options: {
-    data: ArticleSave;
+    data: ArticleDraft;
   }) => Promise<CreateArticleResult>;
 }) {
   const navigate = useNavigate();
@@ -70,7 +70,7 @@ export function ArticleIndex({
   async function create(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setSlugProblem("");
-    const save = articleSaveSchema.safeParse({
+    const save = articleDraftSchema.safeParse({
       title,
       slug,
       tagline,

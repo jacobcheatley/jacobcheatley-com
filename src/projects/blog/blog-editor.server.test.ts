@@ -19,6 +19,10 @@ const save = {
   publishAt: null,
 };
 
+// What the writing room sends: the create form's fields and the Topics only it
+// can put on an Article.
+const roomSave = { ...save, topics: [] };
+
 describe("createArticle", () => {
   it("inserts a Draft: the owner's fields, an empty body and no Publish date", async () => {
     const created = await createArticle(save);
@@ -76,6 +80,11 @@ const createdArticle = async (fields: Partial<typeof save> = {}) => {
   return created.id;
 };
 
+const topicNames = async () => {
+  const rows = await db.select({ name: topics.name }).from(topics);
+  return rows.map((row) => row.name);
+};
+
 const storedArticle = async (id: number) => {
   const [article] = await db.select().from(articles).where(eq(articles.id, id));
   return article;
@@ -106,11 +115,11 @@ describe("saveArticle", () => {
 
     expect(
       await saveArticle(id, {
-        ...save,
+        ...roomSave,
         title: "Type-safe SQL, revisited",
         body: "# Again\n",
       }),
-    ).toEqual({ ok: true });
+    ).toMatchObject({ ok: true });
     expect(await storedArticle(id)).toMatchObject({
       title: "Type-safe SQL, revisited",
       body: "# Again\n",
@@ -122,16 +131,16 @@ describe("saveArticle", () => {
     await createdArticle({ slug: "another-article" });
     const id = await createdArticle();
 
-    expect(await saveArticle(id, { ...save, title: "Its own slug" })).toEqual({
-      ok: true,
-    });
+    expect(
+      await saveArticle(id, { ...roomSave, title: "Its own slug" }),
+    ).toMatchObject({ ok: true });
   });
 
   it("refuses a slug another Article already has, and writes nothing", async () => {
     const taken = await createdArticle({ slug: "taken" });
     const id = await createdArticle();
 
-    expect(await saveArticle(id, { ...save, slug: "taken" })).toEqual({
+    expect(await saveArticle(id, { ...roomSave, slug: "taken" })).toEqual({
       ok: false,
       reason: "slugTaken",
     });
@@ -140,7 +149,7 @@ describe("saveArticle", () => {
   });
 
   it("reports an Article that is no longer in the database", async () => {
-    expect(await saveArticle(404, save)).toEqual({
+    expect(await saveArticle(404, roomSave)).toEqual({
       ok: false,
       reason: "articleGone",
     });
@@ -150,13 +159,63 @@ describe("saveArticle", () => {
     const id = await createdArticle();
     const now = new Date();
 
-    await saveArticle(id, { ...save, publishAt: new Date(now.getTime() - 1) });
+    await saveArticle(id, {
+      ...roomSave,
+      publishAt: new Date(now.getTime() - 1),
+    });
     expect(await listPublishedArticles(now)).toMatchObject([
       { slug: save.slug },
     ]);
 
-    await saveArticle(id, { ...save, publishAt: null });
+    await saveArticle(id, { ...roomSave, publishAt: null });
     expect(await listPublishedArticles(now)).toEqual([]);
+  });
+
+  it("links a Topic to the spelling the Blog already holds", async () => {
+    const first = await createdArticle({ slug: "first" });
+    await saveArticle(first, {
+      ...roomSave,
+      slug: "first",
+      topics: ["TypeScript"],
+    });
+    const second = await createdArticle({ slug: "second" });
+
+    expect(
+      await saveArticle(second, {
+        ...roomSave,
+        slug: "second",
+        topics: ["typescript"],
+      }),
+    ).toEqual({ ok: true, topics: ["TypeScript"], allTopics: ["TypeScript"] });
+    expect(await topicNames()).toEqual(["TypeScript"]);
+    expect(await db.select().from(articleTopics)).toHaveLength(2);
+  });
+
+  it("deletes a Topic the save leaves with no Article", async () => {
+    const id = await createdArticle();
+    await saveArticle(id, { ...roomSave, topics: ["Markdown"] });
+
+    expect(await saveArticle(id, { ...roomSave, topics: [] })).toEqual({
+      ok: true,
+      topics: [],
+      allTopics: [],
+    });
+    expect(await topicNames()).toEqual([]);
+  });
+
+  it("keeps a Topic another Article still holds", async () => {
+    const kept = await createdArticle({ slug: "kept" });
+    await saveArticle(kept, { ...roomSave, slug: "kept", topics: ["Writing"] });
+    const dropping = await createdArticle({ slug: "dropping" });
+    await saveArticle(dropping, {
+      ...roomSave,
+      slug: "dropping",
+      topics: ["Writing"],
+    });
+
+    await saveArticle(dropping, { ...roomSave, slug: "dropping", topics: [] });
+
+    expect(await topicNames()).toEqual(["Writing"]);
   });
 });
 
@@ -174,5 +233,29 @@ describe("deleteArticle", () => {
 
     expect(await db.select().from(articles)).toEqual([]);
     expect(await db.select().from(articleTopics)).toEqual([]);
+  });
+
+  it("deletes a Topic the Article was the last to hold", async () => {
+    const id = await createdArticle();
+    await saveArticle(id, { ...roomSave, topics: ["Markdown"] });
+
+    await deleteArticle(id);
+
+    expect(await topicNames()).toEqual([]);
+  });
+
+  it("keeps a Topic another Article still holds", async () => {
+    const kept = await createdArticle({ slug: "kept" });
+    await saveArticle(kept, { ...roomSave, slug: "kept", topics: ["Writing"] });
+    const going = await createdArticle({ slug: "going" });
+    await saveArticle(going, {
+      ...roomSave,
+      slug: "going",
+      topics: ["Writing"],
+    });
+
+    await deleteArticle(going);
+
+    expect(await topicNames()).toEqual(["Writing"]);
   });
 });

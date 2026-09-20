@@ -25,6 +25,7 @@ function publishingSentence(publishAt: Date | null, now: Date) {
 export function DetailsDrawer({
   save,
   stored,
+  allTopics,
   now,
   slugProblem,
   edit,
@@ -33,6 +34,7 @@ export function DetailsDrawer({
 }: {
   save: ArticleSave;
   stored: ArticleSave;
+  allTopics: string[];
   now: Date;
   slugProblem: string;
   edit: (fields: Partial<ArticleSave>) => void;
@@ -55,6 +57,32 @@ export function DetailsDrawer({
     save.slug !== stored.slug
       ? `Published at /blog/${stored.slug}: that URL will stop working.`
       : "";
+
+  // Every Topic the owner can switch on: the Blog's, and any typed in since.
+  const toggles = [...new Set([...allTopics, ...save.topics])].sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  const toggleTopic = (name: string) =>
+    edit({
+      topics: save.topics.includes(name)
+        ? save.topics.filter((topic) => topic !== name)
+        : [...save.topics, name],
+    });
+
+  function addTopic(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    const field = event.currentTarget;
+    const typed = field.value.trim();
+    if (!typed) return;
+    field.value = "";
+    // A Topic the Blog already holds keeps its spelling, as the save would
+    // give it back anyway.
+    const name =
+      toggles.find((topic) => topic.toLowerCase() === typed.toLowerCase()) ??
+      typed;
+    if (!save.topics.includes(name)) edit({ topics: [...save.topics, name] });
+  }
 
   function schedule() {
     const field = publishField.current;
@@ -110,6 +138,30 @@ export function DetailsDrawer({
           onChange={(event) => edit({ tagline: event.target.value })}
         />
       </label>
+
+      <div className={FIELD}>
+        <span className={LABEL}>Topics</span>
+        <span className="flex flex-wrap gap-[0.35rem] py-[0.15rem]">
+          {toggles.map((name) => (
+            <button
+              key={name}
+              type="button"
+              aria-pressed={save.topics.includes(name)}
+              onClick={() => toggleTopic(name)}
+              className={`${BUTTON} ${save.topics.includes(name) ? "border-accent! text-accent" : "text-muted"}`}
+            >
+              {name}
+            </button>
+          ))}
+        </span>
+        <input
+          aria-label="A new Topic"
+          className={INPUT}
+          placeholder="A new Topic, then Enter"
+          maxLength={30}
+          onKeyDown={addTopic}
+        />
+      </div>
 
       <div className={FIELD}>
         <span className={LABEL}>Publishing</span>

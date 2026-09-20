@@ -13,7 +13,11 @@ export const Route = createFileRoute("/blog/write/$id")({
     if (!Number.isInteger(id)) throw notFound();
     const room = await writingRoomFn({ data: id });
     if (!room.article) throw notFound();
-    return { article: room.article, database: room.database };
+    return {
+      article: room.article,
+      allTopics: room.allTopics,
+      database: room.database,
+    };
   },
   component: WritingRoomRoute,
 });

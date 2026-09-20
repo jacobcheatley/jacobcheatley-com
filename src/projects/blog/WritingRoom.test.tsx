@@ -40,9 +40,16 @@ type SaveArticle = (options: {
 }) => Promise<SaveArticleResult>;
 type DeleteArticle = (options: { data: number }) => Promise<void>;
 
+// The Blog's Topics: the Draft holds one of them.
+const blogTopics = ["Markdown", "Writing"];
+
 const room = ({
   article = draft,
-  saveArticle = async () => ({ ok: true }),
+  saveArticle = async () => ({
+    ok: true,
+    topics: article.topics,
+    allTopics: blogTopics,
+  }),
   deleteArticle = async () => {},
 }: {
   article?: EditingArticle;
@@ -52,6 +59,7 @@ const room = ({
   render(
     <WritingRoom
       article={article}
+      allTopics={blogTopics}
       database={{ host: "localhost:5432", isLocal: true }}
       now={() => now}
       saveArticle={saveArticle}
@@ -120,7 +128,11 @@ it("reports a Save that never reached the database", async () => {
 
 it("saves every field of the Article and clears the marker", async () => {
   const owner = userEvent.setup();
-  const saveArticle = vi.fn<SaveArticle>(async () => ({ ok: true }));
+  const saveArticle = vi.fn<SaveArticle>(async () => ({
+    ok: true,
+    topics: draft.topics,
+    allTopics: blogTopics,
+  }));
   room({ saveArticle });
 
   await owner.clear(titleField());
@@ -136,6 +148,7 @@ it("saves every field of the Article and clears the marker", async () => {
         tagline: draft.tagline,
         body: draft.body,
         publishAt: null,
+        topics: draft.topics,
       },
     },
   });
@@ -150,7 +163,7 @@ it("keeps the marker when an edit lands while a Save is in flight", async () => 
   await owner.type(titleField(), "!");
   await owner.click(saveButton());
   await owner.type(titleField(), " and more");
-  finishSave({ ok: true });
+  finishSave({ ok: true, topics: draft.topics, allTopics: blogTopics });
   await waitFor(() => expect(saveButton()).toBeEnabled());
 
   expect(screen.getByText("● Unsaved changes")).toBeVisible();
@@ -158,7 +171,11 @@ it("keeps the marker when an edit lands while a Save is in flight", async () => 
 
 it("saves on Ctrl+S", async () => {
   const owner = userEvent.setup();
-  const saveArticle = vi.fn<SaveArticle>(async () => ({ ok: true }));
+  const saveArticle = vi.fn<SaveArticle>(async () => ({
+    ok: true,
+    topics: draft.topics,
+    allTopics: blogTopics,
+  }));
   room({ saveArticle });
 
   await owner.type(titleField(), "!");
@@ -222,7 +239,11 @@ it("lands a taken slug on the slug field, drawer and all", async () => {
 
 it("publishes now into the form, naming the Save, without saving", async () => {
   const owner = userEvent.setup();
-  const saveArticle = vi.fn<SaveArticle>(async () => ({ ok: true }));
+  const saveArticle = vi.fn<SaveArticle>(async () => ({
+    ok: true,
+    topics: draft.topics,
+    allTopics: blogTopics,
+  }));
   room({ saveArticle });
   await openDrawer(owner, "Draft");
 
@@ -235,7 +256,11 @@ it("publishes now into the form, naming the Save, without saving", async () => {
 
 it("clears a Published Article's date back to a Draft, without saving", async () => {
   const owner = userEvent.setup();
-  const saveArticle = vi.fn<SaveArticle>(async () => ({ ok: true }));
+  const saveArticle = vi.fn<SaveArticle>(async () => ({
+    ok: true,
+    topics: draft.topics,
+    allTopics: blogTopics,
+  }));
   room({ article: published, saveArticle });
   await openDrawer(owner, "Published");
 
@@ -255,6 +280,100 @@ it("schedules a date the owner fills in, naming the Save", async () => {
 
   await waitFor(() =>
     expect(saveButton()).toHaveAccessibleName("Save and schedule"),
+  );
+});
+
+it("shows every Topic on the Blog as a toggle, the Article's own switched on", async () => {
+  const owner = userEvent.setup();
+  room();
+
+  await openDrawer(owner, "Draft");
+
+  expect(
+    screen.getByRole("button", { name: "Writing", pressed: true }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Markdown", pressed: false }),
+  ).toBeVisible();
+});
+
+it("adds a Topic typed into the drawer, switched on", async () => {
+  const owner = userEvent.setup();
+  room();
+  await openDrawer(owner, "Draft");
+
+  await owner.type(field("A new Topic"), "Postgres{Enter}");
+
+  expect(
+    await screen.findByRole("button", { name: "Postgres", pressed: true }),
+  ).toBeVisible();
+  expect(field("A new Topic")).toHaveValue("");
+});
+
+it("switches on the Topic the Blog already has when its spelling is typed", async () => {
+  const owner = userEvent.setup();
+  room();
+  await openDrawer(owner, "Draft");
+
+  await owner.type(field("A new Topic"), "markdown{Enter}");
+
+  expect(
+    await screen.findByRole("button", { name: "Markdown", pressed: true }),
+  ).toBeVisible();
+  expect(screen.getAllByRole("button", { name: /markdown/i })).toHaveLength(1);
+});
+
+it("marks unsaved changes and shows a toggled Topic in the preview", async () => {
+  const owner = userEvent.setup();
+  room();
+  await openDrawer(owner, "Draft");
+
+  await owner.click(screen.getByRole("button", { name: "Markdown" }));
+
+  expect(await screen.findByText("Markdown, Writing")).toBeVisible();
+  expect(screen.getByText("\u25cf Unsaved changes")).toBeVisible();
+});
+
+it("takes the Blog's spelling of a Topic into the form on a Save", async () => {
+  const owner = userEvent.setup();
+  room({
+    saveArticle: async () => ({
+      ok: true,
+      topics: ["Writing", "Postgres"],
+      allTopics: [...blogTopics, "Postgres"],
+    }),
+  });
+  await openDrawer(owner, "Draft");
+  await owner.type(field("A new Topic"), "postgres{Enter}");
+
+  await owner.click(saveButton());
+
+  expect(
+    await screen.findByRole("button", { name: "Postgres", pressed: true }),
+  ).toBeVisible();
+  expect(screen.getByText("Saved")).toBeVisible();
+  expect(screen.getAllByRole("button", { name: /postgres/i })).toHaveLength(1);
+});
+
+it("drops a Topic the Save left on no Article from the toggles", async () => {
+  const owner = userEvent.setup();
+  room({
+    article: { ...draft, topics: ["Markdown", "Writing"] },
+    saveArticle: async () => ({
+      ok: true,
+      topics: ["Writing"],
+      allTopics: ["Writing"],
+    }),
+  });
+  await openDrawer(owner, "Draft");
+  await owner.click(screen.getByRole("button", { name: "Markdown" }));
+
+  await owner.click(saveButton());
+
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Markdown" }),
+    ).not.toBeInTheDocument(),
   );
 });
 
