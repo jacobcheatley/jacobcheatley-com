@@ -26,18 +26,32 @@ function sourceLinesOf(node: RootContent): SourceLines | undefined {
   return position && { start: position.start.line, end: position.end.line };
 }
 
-export function rehypeHoldSourceLines() {
-  return (tree: Root) => {
-    heldLines.set(tree, tree.children.map(sourceLinesOf));
-  };
-}
-
 // A fragment Shiki left behind holds the one element the fence became.
 function blocksOf(node: RootContent | Root): Element[] {
   if (node.type === "element") return [node];
   if (node.type === "root")
     return node.children.filter((child) => child.type === "element");
   return [];
+}
+
+export function rehypeHoldSourceLines() {
+  return (tree: Root) => {
+    heldLines.set(tree, tree.children.map(sourceLinesOf));
+  };
+}
+
+export function rehypeStampSourceLines() {
+  return (tree: Root) => {
+    const held = heldLines.get(tree) ?? [];
+    tree.children.forEach((child, index) => {
+      const lines = sourceLinesOf(child) ?? held[index];
+      if (!lines) return;
+      for (const block of blocksOf(child)) {
+        block.properties[sourceStartAttribute] = lines.start;
+        block.properties[sourceEndAttribute] = lines.end;
+      }
+    });
+  };
 }
 
 // One stamped block of the preview, measured in the pane it scrolls in.
@@ -101,18 +115,4 @@ export function previewScrollTop(
   const lines = block.endLine - block.startLine + 1;
   const through = Math.min(1, (source.topLine - block.startLine) / lines);
   return block.offsetTop + block.height * Math.max(0, through);
-}
-
-export function rehypeStampSourceLines() {
-  return (tree: Root) => {
-    const held = heldLines.get(tree) ?? [];
-    tree.children.forEach((child, index) => {
-      const lines = sourceLinesOf(child) ?? held[index];
-      if (!lines) return;
-      for (const block of blocksOf(child)) {
-        block.properties[sourceStartAttribute] = lines.start;
-        block.properties[sourceEndAttribute] = lines.end;
-      }
-    });
-  };
 }
