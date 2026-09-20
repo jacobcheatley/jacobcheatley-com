@@ -74,7 +74,8 @@ export function WritingRoom({
 
   const save = useCallback(async () => {
     setProblem("");
-    const parsed = articleSaveSchema.safeParse(written.current);
+    const sending = written.current;
+    const parsed = articleSaveSchema.safeParse(sending);
     // Every other field came from the database and is edited in the Details
     // drawer; an emptied title is what this room is left to catch.
     if (!parsed.success) return setProblem("A title is required.");
@@ -94,7 +95,9 @@ export function WritingRoom({
       setSaving(false);
     }
     if (!saved.ok) return setProblem(SAVE_PROBLEMS[saved.reason]);
-    setUnsavedChanges(false);
+    // An edit that landed while the Save was in flight is still unsaved: every
+    // edit replaces the written fields with a new object.
+    setUnsavedChanges(written.current !== sending);
   }, [article.id, saveArticle]);
 
   useEffect(() => {

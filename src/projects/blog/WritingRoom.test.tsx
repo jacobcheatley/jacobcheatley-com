@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import type { ArticleSave } from "./article-schema";
@@ -104,6 +104,20 @@ it("saves every field of the Article and clears the marker", async () => {
     },
   });
   expect(await screen.findByText("Saved")).toBeVisible();
+});
+
+it("keeps the marker when an edit lands while a Save is in flight", async () => {
+  const owner = userEvent.setup();
+  let finishSave = (_saved: SaveArticleResult) => {};
+  room(() => new Promise((resolve) => (finishSave = resolve)));
+
+  await owner.type(titleField(), "!");
+  await owner.click(saveButton());
+  await owner.type(titleField(), " and more");
+  finishSave({ ok: true });
+  await waitFor(() => expect(saveButton()).toBeEnabled());
+
+  expect(screen.getByText("● Unsaved changes")).toBeVisible();
 });
 
 it("saves on Ctrl+S", async () => {
