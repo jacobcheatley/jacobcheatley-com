@@ -52,6 +52,7 @@
   .tug .spread { position: absolute; z-index: 1; left: 0; top: 0; width: 38%; height: 100%; pointer-events: none; transform-origin: left; transform: scaleX(0); transition: transform .7s var(--spring); }
   .tug .spread.shown { transform: none; }
   .tug .spread path { fill: var(--paper); fill-opacity: .8; stroke: var(--ink); stroke-width: 3; vector-effect: non-scaling-stroke; }
+  .tug .bar { position: absolute; z-index: 1; left: -3px; translate: 0 -50%; height: 28px; width: 58px; padding-left: 11px; border: 3px solid var(--ink); border-radius: 0 8px 8px 0; background: rgb(255 255 255 / .85); color: var(--ink); font-size: 13px; line-height: 22px; pointer-events: none; transition: width .7s var(--spring); }
   .tug .card { position: absolute; z-index: 3; left: 16px; right: 16px; }
   .tug .card.top { top: 14px; }
   .tug .card.bottom { bottom: 14px; }
@@ -191,7 +192,8 @@ const variants = {
   A: { name: "Tug: drag the seam, tap to continue", render: renderTug, enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   B: { name: "Ladder: five rungs, a Next button", render: renderLadder, enter: [{ opacity: 0 }, { opacity: 1 }] },
   C: { name: "Hold: tap beats, hold crushes, moves on by itself", render: renderHold, enter: [{ transform: "translateX(100%)" }, { transform: "none" }] },
-  D: { name: "Tug, refined: band tabs, crowd spread, moves on or tap", render: (shown) => renderTug(shown, true), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
+  D: { name: "Tug, refined: band tabs, crowd spread, moves on or tap", render: (shown) => renderTug(shown, "curve"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
+  E: { name: "Tug, refined, with the crowd as bars", render: (shown) => renderTug(shown, "bars"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
 };
 let variantKey = new URLSearchParams(location.search).get("variant");
 if (!variants[variantKey]) variantKey = "A";
@@ -214,7 +216,8 @@ function switchVariant(step) {
 }
 const isFirstMatchup = () => judged.size === 0;
 
-function renderTug({ a, b }, isRefined = false) {
+function renderTug({ a, b }, crowdShape) {
+  const isRefined = crowdShape !== undefined;
   const el = html(`<div class="tug">
     <div class="side a">${face(a)}</div><div class="side b">${face(b)}</div>
     <button class="pill display">too close to call</button>
@@ -244,7 +247,14 @@ function renderTug({ a, b }, isRefined = false) {
     const line = html(`<div class="crowd-line" style="--crowd: 50"><span>the crowd</span></div>`);
     const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p>${isRefined ? `<div class="timer" style="--linger: ${lingerMs}ms"></div>` : '<p class="hint">tap for the next Matchup</p>'}</div>`);
     el.append(line, card);
-    if (isRefined) {
+    if (crowdShape === "bars") {
+      // One bar per Vote value, at the height its seam would rest, growing out of a stub just wide enough for its label.
+      const bars = shares.map((share, i) => html(`<span class="bar display" style="top: ${50 + 17 * (2 - i)}%">${percent(share)}</span>`));
+      el.append(...bars);
+      bars[0].offsetTop; // flush styles so the bars grow from the edge
+      bars.forEach((bar, i) => { bar.style.width = `calc(58px + ${shares[i] * 55}%)`; });
+    }
+    if (crowdShape === "curve") {
       // The crowd's five shares as a smooth hump down the left edge, each at the height its seam would rest.
       const peak = Math.max(...shares);
       const humps = [[0, 100], ...shares.map((share, i) => [(share / peak) * 100, 50 + 17 * (2 - i)]), [0, 0]];
@@ -253,6 +263,8 @@ function renderTug({ a, b }, isRefined = false) {
       el.append(spread);
       spread.getBoundingClientRect(); // flush styles so the hump grows from the edge
       spread.classList.add("shown");
+    }
+    if (isRefined) {
       setTimeout(() => { if (stage.lastElementChild === el) nextMatchup(); }, lingerMs);
     }
     line.offsetTop; // flush styles so the line travels from the middle
