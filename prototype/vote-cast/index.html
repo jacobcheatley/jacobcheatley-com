@@ -54,8 +54,7 @@
   .tug.tabbed .crowd-line span { right: auto; left: 8px; }
   .tug.tailed.revealed .tick, .tug.tailed.revealed .tick.active { display: flex; padding: 0; font-size: 13px; line-height: 26px; white-space: nowrap; }
   .tug .tick .count { position: relative; width: 0; transition: width .7s var(--spring); }
-  .tug .tick .count b { position: absolute; right: 7px; }
-  .tug .tick .count.outside b { right: calc(100% + 6px); text-shadow: 1.5px 0 var(--ink), -1.5px 0 var(--ink), 0 1.5px var(--ink), 0 -1.5px var(--ink), 1px 1px var(--ink), -1px -1px var(--ink), 1px -1px var(--ink), -1px 1px var(--ink); }
+  .tug .tick .count b { position: absolute; right: 7px; text-shadow: 1.5px 0 var(--ink), -1.5px 0 var(--ink), 0 1.5px var(--ink), 0 -1.5px var(--ink), 1px 1px var(--ink), -1px -1px var(--ink), 1px -1px var(--ink), -1px 1px var(--ink); }
   .tug .tick .divider { width: 1.5px; margin-block: 5px; background: var(--paper); opacity: .5; }
   .tug .tick .label { width: 100px; padding-left: 8px; }
   .tug .tick .tag { position: absolute; top: calc(100% + 7px); right: 8px; padding: 0 8px; border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 11px; line-height: 18px; }
@@ -272,9 +271,9 @@ function renderTug({ a, b }, crowdShape) {
         continue;
       }
       // Label segments are one width, so every count bar starts at the same divider and its length is the share alone.
-      const labelWidthPx = 100, edgeGapPx = 12, narrowestBarWithTextPx = 46;
+      const labelWidthPx = 100, edgeGapPx = 12;
       const barPx = share * (el.clientWidth - labelWidthPx - edgeGapPx);
-      tick.innerHTML = `<span class="count ${barPx < narrowestBarWithTextPx ? "outside" : ""}"><b>${percent(share)}</b></span><span class="divider"></span><span class="label">${tick.textContent}</span>${isMine ? '<span class="tag">▲ your vote</span>' : ""}`;
+      tick.innerHTML = `<span class="count"><b>${percent(share)}</b></span><span class="divider"></span><span class="label">${tick.textContent}</span>${isMine ? '<span class="tag">▲ your vote</span>' : ""}`;
       tick.offsetTop; // flush styles so the bar grows out of the label
       tick.querySelector(".count").style.width = `${barPx}px`;
     }
