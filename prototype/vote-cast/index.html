@@ -1,0 +1,341 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway. Question: how does a voter cast one of the five Vote values with one thumb,
+     and what does the reveal of the crowd's split look like? Three variants on ?variant=A|B|C.
+     The crowd is faked per Matchup; nothing is stored.
+     Run: python3 -m http.server 8150 --directory prototype/vote-cast -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PROTOTYPE: casting a Vote</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap">
+<style>
+  :root { --ink: #14110f; --paper: #ffffff; --spring: cubic-bezier(.2, 1.3, .4, 1); }
+  * { box-sizing: border-box; margin: 0; }
+  body { height: 100dvh; display: grid; grid-template-rows: auto 1fr; background: #3a3a38; color: var(--ink); font: 500 15px/1.35 "Bricolage Grotesque", system-ui, sans-serif; overscroll-behavior: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+  button:focus-visible { outline: 3px solid var(--paper); outline-offset: -6px; box-shadow: inset 0 0 0 3px var(--ink); }
+  .display { font-family: "Bowlby One", sans-serif; font-weight: 400; line-height: 1.05; }
+
+  /* the switcher: deliberately not part of the design, and at the top so the thumb zone stays free */
+  #bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 10px; padding: 4px 8px; background: #000; color: #9f9; font: 12px/1.3 ui-monospace, monospace; }
+  #bar button { padding: 4px 12px; font-size: 16px; }
+  #state { flex-basis: 100%; text-align: center; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #stage { position: relative; justify-self: center; align-self: center; width: 100%; height: 100%; max-width: 430px; max-height: 900px; overflow: hidden; background: var(--ink); }
+  #stage > * { position: absolute; inset: 0; }
+  .emoji { font-size: 84px; line-height: 1; }
+  .name { font-size: 30px; }
+  .hint { font-size: 13px; opacity: .75; }
+
+  .card { background: var(--ink); color: var(--paper); border-radius: 14px; padding: 12px 16px; }
+  .card .headline { font-size: 22px; }
+  .card .sub { font-size: 13px; opacity: .8; }
+
+  /* A: Tug. Drag the seam; the winner takes ground. */
+  .tug { touch-action: none; --seam: 50; }
+  .tug .side { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow: hidden; transition: height .3s var(--spring), top .3s var(--spring); }
+  .tug .side .emoji { transition: font-size .3s var(--spring); }
+  .tug .a { top: 0; height: calc(var(--seam) * 1%); }
+  .tug .b { top: calc(var(--seam) * 1%); height: calc(100% - var(--seam) * 1%); }
+  .tug .a .emoji { font-size: calc(36px + var(--seam) * 1px); }
+  .tug .b .emoji { font-size: calc(136px - var(--seam) * 1px); }
+  .tug .pill { position: absolute; z-index: 2; left: 50%; top: calc(var(--seam) * 1%); translate: -50% -50%; white-space: nowrap; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 11px 20px; font-size: 15px; transition: top .3s var(--spring); }
+  .tug .pill.strong { font-size: 19px; }
+  .tug > .hint { position: absolute; z-index: 2; left: 0; right: 0; top: calc(50% + 30px); text-align: center; pointer-events: none; }
+  .tug .crowd-line { position: absolute; z-index: 1; left: 0; right: 0; top: calc(var(--crowd) * 1%); translate: 0 -50%; height: 4px; background: repeating-linear-gradient(90deg, var(--paper) 0 10px, var(--ink) 10px 20px); transition: top .7s var(--spring); }
+  .tug .crowd-line span { position: absolute; right: 8px; top: 50%; translate: 0 -50%; background: var(--paper); color: var(--ink); border-radius: 99px; padding: 2px 10px; font-size: 13px; font-weight: 700; }
+  .tug .card { position: absolute; z-index: 3; left: 16px; right: 16px; }
+  .tug .card.top { top: 14px; }
+  .tug .card.bottom { bottom: 14px; }
+
+  /* B: Ladder. Five rungs between the two Elements, each one a sentence. */
+  .ladder { display: grid; grid-template-rows: 1fr auto 1fr; }
+  .ladder .end { display: flex; justify-content: center; gap: 12px; padding: 12px; }
+  .ladder .end.a { align-items: flex-end; }
+  .ladder .end.b { align-items: flex-start; }
+  .ladder .end .emoji { font-size: 54px; }
+  .ladder .end .name { line-height: 54px; }
+  .rung { position: relative; display: block; width: 100%; padding: 0 16px; text-align: left; overflow: hidden; border-top: 2px solid var(--ink); }
+  .rung:last-child { border-bottom: 2px solid var(--ink); }
+  .rung[data-strength="2"] { height: 76px; font-size: 23px; }
+  .rung[data-strength="1"] { height: 62px; font-size: 17px; }
+  .rung[data-strength="0"] { height: 50px; font-size: 14px; }
+  .rung:active:not(:disabled) { filter: brightness(.9); }
+  .rung .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: currentColor; opacity: .2; transition: width .6s cubic-bezier(.2, .8, .2, 1); }
+  .rung .words, .rung .share { position: relative; }
+  .rung .share { float: right; }
+  .rung.mine { box-shadow: inset 0 0 0 5px var(--ink); }
+  .ladder .sheet { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 14px 14px 0 0; display: grid; gap: 8px; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .ladder .sheet button { height: 52px; border-radius: 12px; background: var(--paper); color: var(--ink); font-size: 18px; }
+
+  /* C: Hold. Tap a side: it beats. Hold the side: it crushes. */
+  .hold { display: flex; }
+  .half { position: relative; flex: var(--grow, 2) 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow: hidden; touch-action: none; transition: flex-grow .6s var(--spring); }
+  .half > * { position: relative; }
+  .half .name { font-size: 22px; }
+  .half .emoji { transition: scale .25s var(--spring); }
+  .half .word { min-height: 26px; font-size: 22px; }
+  .half .charge { position: absolute; inset: auto 0 0 0; height: 0; background: currentColor; opacity: .22; }
+  .half.charging .charge { height: 100%; transition: height .55s linear; }
+  .half.charging .emoji { scale: 1.12; }
+  .half.strong .emoji { scale: 1.5; }
+  .half.strong { animation: shake .3s; }
+  @keyframes shake { 25% { translate: -5px 0; } 50% { translate: 5px 0; } 75% { translate: -3px 0; } }
+  .hold .draw { position: absolute; z-index: 2; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); translate: -50%; white-space: nowrap; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 13px 22px; font-size: 15px; }
+  .hold .card { position: absolute; z-index: 3; left: 16px; right: 16px; bottom: max(20px, env(safe-area-inset-bottom)); display: grid; gap: 8px; text-align: center; pointer-events: none; }
+  .hold .card .same { font-size: 56px; }
+  .hold .split { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
+  .hold .split i { display: block; }
+  .hold .split i.mine { box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px var(--paper); }
+  .hold .timer { height: 4px; border-radius: 2px; background: var(--paper); transform-origin: left; animation: drain 2.8s linear forwards; }
+  @keyframes drain { to { transform: scaleX(0); } }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01s !important; } .half.strong { animation: none; } }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button id="previous" aria-label="previous variant">‹</button>
+  <span id="label"></span>
+  <button id="following" aria-label="next variant">›</button>
+  <span id="state"></span>
+</div>
+<main id="stage"></main>
+
+<script>
+const roster = [
+  ["common", "acid", "🧪", "#b4e31c"], ["common", "air", "🌪️", "#a9d6e8"], ["common", "beast", "🐺", "#b5702a"],
+  ["common", "dark", "🌑", "#2b2440"], ["common", "fighting", "🥊", "#9c2b1e"], ["common", "fire", "🔥", "#f2541b"],
+  ["common", "holy", "😇", "#f3d98b"], ["common", "ice", "❄️", "#7fd8f0"], ["common", "light", "💡", "#fffbe0"],
+  ["common", "lightning", "⚡", "#f7c600"], ["common", "magic", "🪄", "#6a3df0"], ["common", "metal", "⚙️", "#8d99a6"],
+  ["common", "normal", "⚪", "#c9c5b8"], ["common", "plant", "🌿", "#3f9d4a"], ["common", "poison", "☠️", "#8e3fb0"],
+  ["common", "psychic", "🧠", "#f0509a"], ["common", "rock", "🪨", "#8a7560"], ["common", "sand", "🏜️", "#e3c58a"],
+  ["common", "unholy", "😈", "#5b1a6e"], ["common", "water", "💧", "#2f7fe0"],
+  ["rare", "aether", "✴️", "#b9a7ff"], ["rare", "alien", "👽", "#57e389"], ["rare", "bird", "🐦", "#58a6d6"],
+  ["rare", "blood", "🩸", "#a3122a"], ["rare", "bug", "🐛", "#7a9b2a"], ["rare", "chaos", "🌀", "#d01fd0"],
+  ["rare", "crystal", "💎", "#4fe0c0"], ["rare", "death", "🪦", "#4a4a4a"], ["rare", "dragon", "🐉", "#2a8f7f"],
+  ["rare", "fairy", "🧚", "#f7a8d8"], ["rare", "fish", "🐟", "#3aa6b9"], ["rare", "frog", "🐸", "#6cc24a"],
+  ["rare", "fungus", "🍄", "#c2543e"], ["rare", "glass", "🪟", "#d5eef2"], ["rare", "gravity", "🕳️", "#1a1a22"],
+  ["rare", "illusion", "🎭", "#a05fd6"], ["rare", "life", "🧬", "#ff6f91"], ["rare", "magnet", "🧲", "#d23a3a"],
+  ["rare", "monster", "👹", "#7d2e2e"], ["rare", "order", "⚖️", "#e8e2d0"], ["rare", "paper", "📄", "#f4f1e6"],
+  ["rare", "radiation", "☢️", "#d6f03a"], ["rare", "reptile", "🦎", "#4e8a3a"], ["rare", "scissors", "✂️", "#c43c4f"],
+  ["rare", "technology", "🤖", "#5f7d8c"], ["rare", "sound", "🔊", "#ff8a3d"], ["rare", "space", "🌌", "#1d2a6b"],
+  ["rare", "steam", "♨️", "#c9d3d8"], ["rare", "time", "⏳", "#c9a96a"], ["rare", "undead", "🧟", "#6f8f6a"],
+  ["rare", "virus", "🦠", "#6f7d3a"], ["rare", "weapon", "⚔️", "#7a8088"],
+].map(([kind, name, emoji, colour]) => ({ kind, name, emoji, colour }));
+
+const stage = document.getElementById("stage");
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const linear = (c) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+const luminance = (hex) => { const [r, g, b] = rgb(hex).map(linear); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const textOn = (hex) => (luminance(hex) > 0.4 ? "#14110f" : "#ffffff");
+const towardsPaper = (hex, share) => `#${rgb(hex).map((c) => Math.round(c + (255 - c) * share).toString(16).padStart(2, "0")).join("")}`;
+const paint = (el, colour) => { el.style.background = colour; el.style.color = textOn(colour); };
+const percent = (share) => `${Math.round(share * 100)}%`;
+const buzz = (milliseconds) => navigator.vibrate?.(milliseconds);
+const face = (element) => `<span class="emoji">${element.emoji}</span><span class="name display">${element.name}</span>`;
+function html(markup) { const template = document.createElement("template"); template.innerHTML = markup.trim(); return template.content.firstElementChild; }
+
+// A Vote value: +2 a wins strongly, +1 a wins weakly, 0 too close to call, -1 / -2 the same for b.
+const verb = (value) => (Math.abs(value) === 2 ? "crushes" : "beats");
+const sentence = (value, { a, b }) => (value === 0 ? "too close to call" : value > 0 ? `${a.name} ${verb(value)} ${b.name}` : `${b.name} ${verb(value)} ${a.name}`);
+// The five values top to bottom (or left to right), with the colour each one wears.
+const scale = ({ a, b }) => [[2, a.colour], [1, towardsPaper(a.colour, 0.5)], [0, "#ffffff"], [-1, towardsPaper(b.colour, 0.5)], [-2, b.colour]];
+
+const judged = new Set();
+let matchup, crowd;
+
+function pickMatchup() {
+  const pool = judged.size < 5 ? roster.filter((element) => element.kind === "common") : roster;
+  for (;;) {
+    const a = pool[Math.floor(Math.random() * pool.length)], b = pool[Math.floor(Math.random() * pool.length)];
+    if (a !== b && !judged.has([a.name, b.name].sort().join())) return { a, b };
+  }
+}
+
+// Counts per value, in scale order. Mostly one-humped, sometimes split down the middle, sometimes nearly empty.
+function fakeCrowd() {
+  const total = Math.random() < 0.15 ? 3 + Math.floor(Math.random() * 8) : 40 + Math.floor(Math.random() * 700);
+  const isSplit = Math.random() < 0.2, centre = Math.random() * 4 - 2, spread = 0.5 + Math.random();
+  const weights = [2, 1, 0, -1, -2].map((value) => (isSplit ? Math.exp(-((Math.abs(value) - 2) ** 2)) + 0.1 : Math.exp(-((value - centre) ** 2) / (2 * spread * spread))));
+  const weightSum = weights.reduce((sum, weight) => sum + weight);
+  return weights.map((weight) => Math.round((total * weight) / weightSum));
+}
+
+function castVote(value) {
+  const mine = 2 - value;
+  crowd[mine]++;
+  judged.add([matchup.a.name, matchup.b.name].sort().join());
+  const total = crowd.reduce((sum, count) => sum + count);
+  const shares = crowd.map((count) => count / total);
+  const mean = crowd.reduce((sum, count, i) => sum + count * (2 - i), 0) / total;
+  const crowdSide = Math.abs(mean) < 0.3 ? 0 : Math.sign(mean);
+  const headline = shares[0] > 0.25 && shares[4] > 0.25 ? "The crowd is split"
+    : shares[mine] === Math.max(...shares) ? "With the crowd"
+    : Math.sign(value) === crowdSide ? "Close to the crowd" : "Against the crowd";
+  const sub = `${percent(shares[mine])} voted the same, of ${total}`;
+  document.getElementById("state").textContent = `judged ${judged.size} | Vote ${value > 0 ? "+" : ""}${value} (${sentence(value, matchup)}) | crowd [${crowd}] mean ${mean.toFixed(2)}`;
+  return { mine, shares, mean, headline, sub };
+}
+
+const variants = {
+  A: { name: "Tug: drag the seam, tap to continue", render: renderTug, enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
+  B: { name: "Ladder: five rungs, a Next button", render: renderLadder, enter: [{ opacity: 0 }, { opacity: 1 }] },
+  C: { name: "Hold: tap beats, hold crushes, moves on by itself", render: renderHold, enter: [{ transform: "translateX(100%)" }, { transform: "none" }] },
+};
+let variantKey = new URLSearchParams(location.search).get("variant");
+if (!variants[variantKey]) variantKey = "A";
+
+function mount(animated) {
+  const leaving = [...stage.children];
+  const el = variants[variantKey].render(matchup);
+  stage.append(el);
+  const clear = () => leaving.forEach((old) => old.remove());
+  if (!animated || reducedMotion || leaving.length === 0) return clear();
+  el.animate(variants[variantKey].enter, { duration: 300, easing: "cubic-bezier(.2, .8, .2, 1)" }).finished.then(clear);
+}
+function nextMatchup() { matchup = pickMatchup(); crowd = fakeCrowd(); mount(true); }
+function switchVariant(step) {
+  const keys = Object.keys(variants);
+  variantKey = keys[(keys.indexOf(variantKey) + step + keys.length) % keys.length];
+  history.replaceState(null, "", `?variant=${variantKey}`);
+  document.getElementById("label").textContent = `${variantKey} — ${variants[variantKey].name}`;
+  mount(false);
+}
+const isFirstMatchup = () => judged.size === 0;
+
+function renderTug({ a, b }) {
+  const el = html(`<div class="tug">
+    <div class="side a">${face(a)}</div><div class="side b">${face(b)}</div>
+    <button class="pill display">too close to call</button>
+    ${isFirstMatchup() ? '<p class="hint">drag up or down: the winner takes ground</p>' : ""}
+  </div>`);
+  const pill = el.querySelector(".pill");
+  paint(el.querySelector(".a"), a.colour);
+  paint(el.querySelector(".b"), b.colour);
+  el.querySelector(".hint")?.style.setProperty("color", textOn(b.colour));
+
+  // Small drags are a weak win, long drags a strong one; both well inside a thumb's reach.
+  const weakDragPx = 36, strongDragPx = 110;
+  let dragStartY = null, value = 0, isRevealed = false;
+  function show(nextValue) {
+    value = nextValue;
+    el.style.setProperty("--seam", 50 + 17 * value);
+    pill.textContent = sentence(value, { a, b });
+    pill.classList.toggle("strong", Math.abs(value) === 2);
+  }
+  function reveal() {
+    isRevealed = true;
+    el.querySelector(".hint")?.remove();
+    const { mean, headline, sub } = castVote(value);
+    const line = html(`<div class="crowd-line" style="--crowd: 50"><span>the crowd</span></div>`);
+    const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p><p class="hint">tap for the next Matchup</p></div>`);
+    el.append(line, card);
+    line.offsetTop; // flush styles so the line travels from the middle
+    line.style.setProperty("--crowd", 50 + 17 * mean);
+  }
+  el.onpointerdown = (event) => {
+    if (isRevealed) return nextMatchup();
+    if (event.target === pill) return;
+    dragStartY = event.clientY;
+    el.setPointerCapture(event.pointerId);
+  };
+  el.onpointermove = (event) => {
+    if (dragStartY === null) return;
+    const drag = event.clientY - dragStartY;
+    const strength = Math.abs(drag) < weakDragPx ? 0 : Math.abs(drag) < strongDragPx ? 1 : 2;
+    const nextValue = Math.sign(drag) * strength;
+    if (nextValue !== value) { buzz(10 * strength); show(nextValue); }
+  };
+  el.onpointerup = el.onpointercancel = () => {
+    if (dragStartY === null) return;
+    dragStartY = null;
+    if (value !== 0) reveal();
+  };
+  pill.onclick = () => { if (!isRevealed) reveal(); };
+  return el;
+}
+
+function renderLadder({ a, b }) {
+  const el = html(`<div class="ladder"><div class="end a">${face(a)}</div><div class="rungs"></div><div class="end b">${face(b)}</div></div>`);
+  paint(el.querySelector(".a"), a.colour);
+  paint(el.querySelector(".b"), b.colour);
+  const rungs = scale({ a, b }).map(([value, colour]) => {
+    const words = value === 0 ? "too close to call" : `${(value > 0 ? a : b).name} ${verb(value)}`;
+    const rung = html(`<button class="rung display" data-strength="${Math.abs(value)}"><span class="fill"></span><span class="words">${words}</span><span class="share"></span></button>`);
+    paint(rung, colour);
+    rung.onclick = () => reveal(value);
+    return rung;
+  });
+  el.querySelector(".rungs").append(...rungs);
+  function reveal(value) {
+    const { mine, shares, headline, sub } = castVote(value);
+    rungs.forEach((rung, i) => {
+      rung.disabled = true;
+      rung.classList.toggle("mine", i === mine);
+      rung.querySelector(".share").textContent = `${i === mine ? "you, " : ""}${percent(shares[i])}`;
+      rung.offsetTop; // flush styles so the bar grows from nothing
+      rung.querySelector(".fill").style.width = percent(shares[i]);
+    });
+    const sheet = html(`<div class="sheet card"><div><p class="headline display">${headline}</p><p class="sub">${sub}</p></div><button class="display">Next Matchup</button></div>`);
+    sheet.querySelector("button").onclick = nextMatchup;
+    el.append(sheet);
+    if (!reducedMotion) sheet.animate([{ transform: "translateY(100%)" }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.2, .8, .2, 1)" });
+    sheet.querySelector("button").focus({ preventScroll: true });
+  }
+  return el;
+}
+
+function renderHold({ a, b }) {
+  const el = html(`<div class="hold">
+    <button class="half a"><span class="charge"></span>${face(a)}<span class="word display"></span></button>
+    <button class="half b"><span class="charge"></span>${face(b)}<span class="word display"></span></button>
+    <button class="draw display">too close to call</button>
+  </div>`);
+  const holdToCrushMs = 550, lingerMs = 2800;
+  let isRevealed = false;
+  function reveal(value) {
+    isRevealed = true;
+    const { mine, shares, mean, headline, sub } = castVote(value);
+    el.querySelector(".draw").remove();
+    el.querySelectorAll(".hint").forEach((hint) => hint.remove());
+    el.querySelector(".a").style.setProperty("--grow", 2 + mean * 0.6);
+    el.querySelector(".b").style.setProperty("--grow", 2 - mean * 0.6);
+    const split = scale({ a, b }).map(([, colour], i) => `<i class="${i === mine ? "mine" : ""}" style="flex: ${shares[i]} 1 0; background: ${colour}"></i>`).join("");
+    el.append(html(`<div class="card"><p class="same display">${percent(shares[mine])}</p><p class="sub">${sub.slice(sub.indexOf(" ") + 1)}</p><div class="split">${split}</div><p class="headline display">${headline}</p><div class="timer"></div></div>`));
+    setTimeout(advance, lingerMs);
+  }
+  function advance() { if (el.isConnected && stage.lastElementChild === el) nextMatchup(); }
+  el.addEventListener("pointerdown", () => { if (isRevealed) advance(); });
+  el.addEventListener("contextmenu", (event) => event.preventDefault());
+  for (const [half, element, sign] of [[el.querySelector(".a"), a, 1], [el.querySelector(".b"), b, -1]]) {
+    paint(half, element.colour);
+    if (isFirstMatchup()) half.append(html(`<span class="hint">tap to beat, hold to crush</span>`));
+    const word = half.querySelector(".word");
+    let crushTimer = null, isCrushing = false;
+    const release = () => { clearTimeout(crushTimer); crushTimer = null; half.classList.remove("charging"); };
+    half.onpointerdown = () => {
+      if (isRevealed) return;
+      isCrushing = false;
+      half.classList.add("charging");
+      word.textContent = "beats";
+      crushTimer = setTimeout(() => { isCrushing = true; half.classList.add("strong"); word.textContent = "crushes"; buzz(25); }, holdToCrushMs);
+    };
+    half.onpointerup = () => { if (crushTimer === null) return; release(); reveal(sign * (isCrushing ? 2 : 1)); };
+    half.onpointerleave = half.onpointercancel = () => { if (crushTimer === null) return; release(); half.classList.remove("strong"); word.textContent = ""; };
+  }
+  el.querySelector(".draw").onclick = () => reveal(0);
+  return el;
+}
+
+document.getElementById("previous").onclick = () => switchVariant(-1);
+document.getElementById("following").onclick = () => switchVariant(1);
+addEventListener("keydown", (event) => { if (event.key === "ArrowLeft") switchVariant(-1); if (event.key === "ArrowRight") switchVariant(1); });
+matchup = pickMatchup();
+crowd = fakeCrowd();
+switchVariant(0);
+</script>
+</body>
+</html>
