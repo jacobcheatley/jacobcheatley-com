@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
+import type { VoteReveal } from "./matchup-score";
+import { Reveal } from "./Reveal";
 import type { ShowdownElement } from "./schema";
 import type { VoteValue } from "./showdown-schema";
 import {
@@ -31,6 +33,8 @@ export function Tug({
   bottom,
   isFirstMatchup,
   onCast,
+  reveal,
+  onAdvance,
 }: {
   top: ShowdownElement;
   bottom: ShowdownElement;
@@ -38,6 +42,10 @@ export function Tug({
   // in, and it is the one that says how this works.
   isFirstMatchup: boolean;
   onCast: (value: VoteValue) => void;
+  // The crowd, once this Voter's own Vote is in it. Until then the Tug is the
+  // whole screen and the crowd cannot sway them.
+  reveal: VoteReveal | null;
+  onAdvance: () => void;
 }) {
   const [value, setValue] = useState<VoteValue>(0);
   const [isDragging, setDragging] = useState(false);
@@ -45,7 +53,13 @@ export function Tug({
   const seam = seamAt(value);
   const sentence = voteSentence(value, top, bottom);
 
+  // Revealed, the Tug has nothing left to drag and a touch anywhere is the
+  // Voter asking for the next Matchup rather than waiting out the bar.
   function startDrag(event: React.PointerEvent<HTMLDivElement>) {
+    if (reveal) {
+      onAdvance();
+      return;
+    }
     dragFrom.current = event.clientY;
     setDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -68,6 +82,12 @@ export function Tug({
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (reveal) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      onAdvance();
+      return;
+    }
     const step = ARROW_STEPS[event.key];
     if (step !== undefined) {
       event.preventDefault();
@@ -100,39 +120,54 @@ export function Tug({
       <Side element={top} topPercent={0} heightPercent={seam} />
       <Side element={bottom} topPercent={seam} heightPercent={100 - seam} />
 
-      {SEAM_LANDINGS.map((landing) => (
-        <span
-          key={landing}
-          className={`-translate-y-1/2 absolute right-0 z-10 rounded-l-full py-px pl-2.5 font-bold text-[11px] transition-[opacity,padding] duration-200 ${
-            landing === value
-              ? "pr-5 opacity-100"
-              : `pr-2 ${isDragging ? "opacity-70" : "opacity-35"}`
-          }`}
-          style={{ top: `${seamAt(landing)}%`, background: INK, color: PAPER }}
-        >
-          {tabLabel(landing, top, bottom)}
-        </span>
-      ))}
+      {reveal ? (
+        <Reveal
+          reveal={reveal}
+          top={top}
+          bottom={bottom}
+          onAdvance={onAdvance}
+        />
+      ) : (
+        <>
+          {SEAM_LANDINGS.map((landing) => (
+            <span
+              key={landing}
+              className={`-translate-y-1/2 absolute right-0 z-10 rounded-l-full py-px pl-2.5 font-bold text-[11px] transition-[opacity,padding] duration-200 ${
+                landing === value
+                  ? "pr-5 opacity-100"
+                  : `pr-2 ${isDragging ? "opacity-70" : "opacity-35"}`
+              }`}
+              style={{
+                top: `${seamAt(landing)}%`,
+                background: INK,
+                color: PAPER,
+              }}
+            >
+              {tabLabel(landing, top, bottom)}
+            </span>
+          ))}
 
-      <button
-        type="button"
-        // The slider takes the keyboard for both of them: Enter on it casts
-        // whatever the pill reads.
-        tabIndex={-1}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => onCast(value)}
-        className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring"
-        style={{
-          top: `${seam}%`,
-          background: INK,
-          color: PAPER,
-          fontSize: Math.abs(value) === STRONG_WIN ? 19 : 15,
-        }}
-      >
-        {sentence}
-      </button>
+          <button
+            type="button"
+            // The slider takes the keyboard for both of them: Enter on it casts
+            // whatever the pill reads.
+            tabIndex={-1}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={() => onCast(value)}
+            className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring"
+            style={{
+              top: `${seam}%`,
+              background: INK,
+              color: PAPER,
+              fontSize: Math.abs(value) === STRONG_WIN ? 19 : 15,
+            }}
+          >
+            {sentence}
+          </button>
+        </>
+      )}
 
-      {isFirstMatchup && (
+      {isFirstMatchup && !reveal && (
         <p
           className="pointer-events-none absolute inset-x-0 z-20 text-center text-[13px] opacity-75"
           style={{ top: "calc(50% + 30px)", color: textOn(bottom.colour) }}
