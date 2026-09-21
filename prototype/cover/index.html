@@ -40,13 +40,15 @@
   .cover { position: relative; width: 100%; height: 100%; overflow: hidden; container-type: size; color: var(--ink); font-family: "Bowlby One", sans-serif; line-height: .95; text-transform: lowercase; }
   .cover .emoji { position: absolute; translate: -50% -50%; line-height: 1; font-family: system-ui, "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
 
-  /* A: the Tug in miniature. Two Elements, a tilted seam, the name on the pill. Hover: fire takes ground. */
+  /* A: the Tug in miniature. Two stacked Elements, as on the phone; the seam keeps a slight tilt. Hover: fire takes ground. */
   .tug { background: #2f7fe0; transition: --seam .35s cubic-bezier(.2, 1.3, .4, 1); }
   .frame:hover .tug { --seam: 62%; }
-  .tug .fire { position: absolute; inset: 0; background: #f2541b; clip-path: polygon(0 0, calc(var(--seam) + 8%) 0, calc(var(--seam) - 8%) 100%, 0 100%); }
-  .tug .seam { position: absolute; left: var(--seam); top: -20%; width: 2.4cqw; height: 140%; background: var(--ink); translate: -50%; rotate: 13.5deg; }
-  .tug .emoji { font-size: 25cqw; }
-  .tug .pill { position: absolute; left: var(--seam); top: 50%; translate: -50% -50%; rotate: -7deg; padding: 3cqw 5cqw 3.6cqw; border-radius: 5cqw; background: var(--ink); color: var(--white); font-size: 7.4cqw; text-align: center; white-space: nowrap; }
+  .tug .fire { position: absolute; inset: 0; background: #f2541b; clip-path: polygon(0 0, 100% 0, 100% calc(var(--seam) - 6%), 0 calc(var(--seam) + 6%)); }
+  .tug .seam { position: absolute; top: var(--seam); left: -10%; width: 120%; height: 2.4cqw; background: var(--ink); translate: 0 -50%; rotate: -4.6deg; }
+  .tug .emoji { font-size: 22cqw; transition: scale .35s cubic-bezier(.2, 1.3, .4, 1); }
+  .frame:hover .tug .winning { scale: 1.2; }
+  .frame:hover .tug .losing { scale: .8; }
+  .tug .pill { position: absolute; left: 50%; top: var(--seam); translate: -50% -50%; rotate: -7deg; padding: 3cqw 5cqw 3.6cqw; border-radius: 5cqw; background: var(--ink); color: var(--white); font-size: 7.4cqw; text-align: center; white-space: nowrap; }
 
   /* B: title card. One Element colour, the name as big as the frame allows, the roster as a footer. */
   .title { background: #f7c600; }
@@ -101,7 +103,7 @@
   const tiles = [...scattered.slice(0, 22), null, ...scattered.slice(22, 30), null, ...scattered.slice(30)];
 
   const VARIANTS = {
-    A: { name: "the Tug", html: `<div class="cover tug"><div class="fire"></div><div class="seam"></div><span class="emoji" style="left:19%;top:30%">🔥</span><span class="emoji" style="left:81%;top:70%">💧</span><div class="pill">${NAME}</div></div>` },
+    A: { name: "the Tug", html: `<div class="cover tug"><div class="fire"></div><div class="seam"></div><span class="emoji winning" style="left:17%;top:25%">🔥</span><span class="emoji losing" style="left:83%;top:77%">💧</span><div class="pill">${NAME}</div></div>` },
     B: { name: "title card", html: `<div class="cover title"><div class="words">${NAME}</div><div class="strip">${["🔥", "💧", "🌿", "⚡", "🪨", "❄️", "🐸", "✂️"].map((emoji) => `<span>${emoji}</span>`).join("")}</div></div>` },
     C: { name: "mosaic", html: `<div class="cover mosaic">${tiles.map((tile) => (tile ? `<span style="background:${tile[1]}">${tile[0]}</span>` : "<span></span>")).join("")}<div class="stamp">${NAME}</div></div>` },
     D: { name: "triangle", html: `<div class="cover ring"><span class="emoji" style="left:16%;top:27%">🔥</span><span class="emoji" style="left:84%;top:27%">🌿</span><span class="emoji" style="left:50%;top:84%">💧</span><div class="disc">${NAME}</div></div>` },
