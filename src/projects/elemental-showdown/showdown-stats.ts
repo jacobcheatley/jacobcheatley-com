@@ -1,5 +1,7 @@
 import type { Confidence, Effectiveness } from "./matchup-score";
+import type { ShowdownElement } from "./schema";
 import type { ShowdownAggregate } from "./showdown-aggregate";
+import type { Story } from "./showdown-stories";
 
 // What the Stats hand a visitor, and the two numbers that open them. Nothing
 // here may import server code: the locked screen draws its meters from these
@@ -43,6 +45,13 @@ export type StatsElement = {
   colour: string;
 };
 
+export const statsElementOf = ({
+  id,
+  name,
+  emoji,
+  colour,
+}: ShowdownElement): StatsElement => ({ id, name, emoji, colour });
+
 // The crowd's call on one Matchup it has judged, read from the lower-id
 // Element's side, the way the Vote is stored.
 export type JudgedMatchup = {
@@ -61,24 +70,24 @@ export type CrowdCalls = {
   matchups: JudgedMatchup[];
 };
 
-export type UnlockedStats = CrowdCalls & { state: "unlocked" };
+// The Stories lead, then the Element pages. Both are read out of the same
+// Active Matchups, but a Story also knows the Voter's own Votes, so the two are
+// computed apart and sent together.
+export type UnlockedStats = CrowdCalls & {
+  state: "unlocked";
+  stories: Story[];
+};
 
 export type ShowdownStats = LockedStats | UnlockedStats;
 
 // A Matchup nobody has voted on is left out rather than sent as the Neutral
 // its prior alone scores it: on an Element's page it is not yet judged, and
 // silence is not a verdict.
-export const unlockedStatsOf = ({
+export const crowdCallsOf = ({
   elements,
   matchups,
-}: ShowdownAggregate): UnlockedStats => ({
-  state: "unlocked",
-  elements: elements.map(({ id, name, emoji, colour }) => ({
-    id,
-    name,
-    emoji,
-    colour,
-  })),
+}: ShowdownAggregate): CrowdCalls => ({
+  elements: elements.map(statsElementOf),
   matchups: matchups
     .filter(({ score }) => score.voteCount > 0)
     .map(({ elementLow, elementHigh, score }) => ({

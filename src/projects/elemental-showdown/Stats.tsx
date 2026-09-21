@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
-import { INK, PAPER, textOn } from "./element-colour";
+import { INK, NO_ELEMENT, PAPER, textOn } from "./element-colour";
 import { elementPageOf } from "./element-page";
 import type { Confidence } from "./matchup-score";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
+import { Stories } from "./Stories";
 import {
   type CrowdCalls,
   EVERY_VOTES_TO_UNLOCK,
@@ -14,9 +15,7 @@ import {
   type UnlockedStats,
 } from "./showdown-stats";
 
-// A tile of the mosaic before its Element is behind it, and the one colour in
-// the Project that belongs to no Element: a meter turns it once it is met.
-const BLANK_TILE = "#2c2825";
+// The colour a meter turns once it is met.
 const MET = "#9fe870";
 
 // The Stats in the Project's own full-height layout rather than the Portfolio's
@@ -88,7 +87,7 @@ function Mosaic({ tileCount }: { tileCount: number }) {
         <span
           key={place}
           className="aspect-square rounded-md"
-          style={{ background: BLANK_TILE }}
+          style={{ background: NO_ELEMENT }}
         />
       ))}
     </div>
@@ -133,8 +132,8 @@ function Meter({
 const centreInRail = (tile: HTMLButtonElement | null) =>
   tile?.scrollIntoView({ inline: "center", block: "nearest" });
 
-// The Stats open: a page per Element, then the foot. Each section stands on
-// its own down the screen, so the Stories go above these.
+// The Stats open: the Stories, a page per Element, then the foot. Each section
+// stands on its own down the screen.
 function OpenStats({ stats }: { stats: UnlockedStats }) {
   const railed = [...stats.elements].sort((one, other) =>
     one.name.localeCompare(other.name),
@@ -153,6 +152,7 @@ function OpenStats({ stats }: { stats: UnlockedStats }) {
 
   return (
     <>
+      <Stories stories={stats.stories} />
       {chosen ? (
         <section ref={everyElement}>
           <h2 className="px-4 pt-6 pb-1 font-showdown-display text-[28px]">

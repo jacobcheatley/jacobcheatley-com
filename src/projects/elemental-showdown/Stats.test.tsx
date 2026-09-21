@@ -9,6 +9,7 @@ import type {
   StatsElement,
   UnlockedStats,
 } from "./showdown-stats";
+import type { Story } from "./showdown-stories";
 
 // The route's only contribution is what the loader gated, so the tests hand
 // that in.
@@ -117,7 +118,8 @@ const call = (
 const unlocked = (
   elements: StatsElement[],
   matchups: JudgedMatchup[] = [],
-): UnlockedStats => ({ state: "unlocked", elements, matchups });
+  stories: Story[] = [],
+): UnlockedStats => ({ state: "unlocked", elements, matchups, stories });
 
 const chip = (name: string) => screen.getByRole("button", { name });
 
@@ -253,6 +255,65 @@ describe("the Stats once they are open", () => {
 
     expect(
       screen.getByRole("heading", { level: 1, name: "water" }),
+    ).toBeInTheDocument();
+  });
+
+  it("leads with the crowd's Stories as headlines", () => {
+    render(
+      <Stats
+        stats={unlocked(
+          [fire, water],
+          [],
+          [
+            {
+              kind: "champion",
+              element: fire,
+              winCount: 34,
+              opponentCount: 51,
+            },
+          ],
+        )}
+      />,
+    );
+
+    expect(screen.getByText("the champion")).toBeInTheDocument();
+    expect(screen.getByText("fire wins the most")).toBeInTheDocument();
+    expect(
+      screen.getByText("It beats 34 of the other 51."),
+    ).toBeInTheDocument();
+  });
+
+  it("tells the Voter their own share and hottest take", () => {
+    render(
+      <Stats
+        stats={unlocked(
+          [fire, water],
+          [],
+          [
+            {
+              kind: "you",
+              record: {
+                withTheCrowdShare: 0.64,
+                hottestTake: { elements: [water, fire], vote: 2 },
+              },
+            },
+          ],
+        )}
+      />,
+    );
+
+    expect(
+      screen.getByText("with the crowd 64% of the time"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/💧 water crushes 🔥 fire\./)).toBeInTheDocument();
+  });
+
+  it("shows one card saying it is too early while no Story qualifies", () => {
+    render(<Stats stats={unlocked([fire, water], [], [])} />);
+
+    expect(screen.getByText("too early to call")).toBeInTheDocument();
+    expect(
+      screen.getByText("Keep voting: nothing is settled yet."),
     ).toBeInTheDocument();
   });
 

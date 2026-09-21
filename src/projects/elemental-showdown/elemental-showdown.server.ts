@@ -19,11 +19,12 @@ import {
   voteValueSchema,
 } from "./showdown-schema";
 import {
+  crowdCallsOf,
   isStatsUnlocked,
   type ShowdownStats,
   type UnlockCounts,
-  unlockedStatsOf,
 } from "./showdown-stats";
+import { type OwnVote, storiesOf } from "./showdown-stories";
 import { createVoteLimiter } from "./vote-limiter";
 
 // The roster and the three sums of every voted Matchup, in two queries. A
@@ -73,34 +74,42 @@ export async function nextMatchup(
 }
 
 // A visitor with no cookie has cast nothing, so there is nothing to ask for.
-async function countVotesBy(voter: string | undefined) {
-  if (!voter) return 0;
-  const [own] = await db
-    .select({ voteCount: count() })
+// The gate counts these and the "you" Story reads their values, both of which
+// the cached aggregate is too old to know.
+async function votesBy(voter: string | undefined): Promise<OwnVote[]> {
+  if (!voter) return [];
+  return db
+    .select({
+      elementLow: votes.elementLow,
+      elementHigh: votes.elementHigh,
+      value: votes.value,
+    })
     .from(votes)
     .where(eq(votes.voter, voter));
-  if (!own)
-    throw new Error(`counting the Votes of Voter ${voter} returned no row`);
-  return own.voteCount;
 }
 
 // The gate is the server's: while it holds, the only things to leave here are
 // the two counts and how many tiles the mosaic has. The crowd's number comes
-// from the cached aggregate and the Voter's own is always fresh, so their last
-// Vote is in it.
+// from the cached aggregate and the Voter's own Votes are always fresh, so
+// their last one is in it.
 export async function showdownStats(
   voter: string | undefined,
   nowMs: number,
 ): Promise<ShowdownStats> {
-  const [aggregate, ownVoteCount] = await Promise.all([
+  const [aggregate, ownVotes] = await Promise.all([
     showdownAggregate(nowMs),
-    countVotesBy(voter),
+    votesBy(voter),
   ]);
   const counts: UnlockCounts = {
-    ownVoteCount,
+    ownVoteCount: ownVotes.length,
     everyVoteCount: aggregate.everyVoteCount,
   };
-  if (isStatsUnlocked(counts)) return unlockedStatsOf(aggregate);
+  if (isStatsUnlocked(counts))
+    return {
+      state: "unlocked",
+      ...crowdCallsOf(aggregate),
+      stories: storiesOf(aggregate, ownVotes),
+    };
   return {
     state: "locked",
     ...counts,
