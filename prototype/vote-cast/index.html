@@ -49,7 +49,7 @@
   .tug.dragging .tick { opacity: .7; }
   .tug .tick.active { opacity: 1; padding-right: 20px; }
   .tug.revealed .tick { display: none; }
-  .tug.tabbed.revealed .tick { display: block; opacity: .9; box-shadow: 0 0 0 1.5px var(--paper); padding-block: 4px; font-size: 13px; transition: min-width .7s var(--spring); }
+  .tug.tabbed.revealed .tick { z-index: 2; display: block; opacity: .9; box-shadow: 0 0 0 1.5px var(--paper); padding-block: 4px; font-size: 13px; transition: min-width .7s var(--spring); }
   .tug.tabbed.revealed .tick.active { z-index: 2; opacity: 1; padding-block: 8px; font-size: 15px; box-shadow: 0 0 0 3px var(--paper); }
   .tug.tabbed .crowd-line span { right: auto; left: 8px; }
   .tug.tailed.revealed .tick { width: 150px; border-radius: 0; white-space: nowrap; }
