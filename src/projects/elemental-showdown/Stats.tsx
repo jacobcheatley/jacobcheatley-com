@@ -1,11 +1,17 @@
-import { INK, PAPER } from "./element-colour";
+import { useRef, useState } from "react";
+import { INK, PAPER, textOn } from "./element-colour";
+import { elementPageOf } from "./element-page";
+import type { Confidence } from "./matchup-score";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
 import {
+  type CrowdCalls,
   EVERY_VOTES_TO_UNLOCK,
   type LockedStats,
   OWN_VOTES_TO_UNLOCK,
   type ShowdownStats,
+  type StatsElement,
+  type UnlockedStats,
 } from "./showdown-stats";
 
 // A tile of the mosaic before its Element is behind it, and the one colour in
@@ -24,7 +30,7 @@ export function Stats({ stats }: { stats: ShowdownStats }) {
       {stats.state === "locked" ? (
         <LockedScreen {...stats} />
       ) : (
-        <p className="p-4">the stats are open</p>
+        <OpenStats stats={stats} />
       )}
     </main>
   );
@@ -119,5 +125,153 @@ function Meter({
         />
       </div>
     </div>
+  );
+}
+
+// The rail is longer than the screen, so whichever way an Element was picked,
+// its tile comes back under the Voter's thumb as it becomes the current one.
+const centreInRail = (tile: HTMLButtonElement | null) =>
+  tile?.scrollIntoView({ inline: "center", block: "nearest" });
+
+// The Stats open: a page per Element, then the foot. Each section stands on
+// its own down the screen, so the Stories go above these.
+function OpenStats({ stats }: { stats: UnlockedStats }) {
+  const railed = [...stats.elements].sort((one, other) =>
+    one.name.localeCompare(other.name),
+  );
+  const [chosenId, setChosenId] = useState<number | null>(null);
+  const everyElement = useRef<HTMLElement>(null);
+  // Until the Voter picks one, the rail's first Element is the page they read.
+  const chosen = railed.find((element) => element.id === chosenId) ?? railed[0];
+
+  // A chip sits deep in a page, so picking one puts the rail back under the
+  // Voter's thumb rather than dropping them into the middle of the next page.
+  function choose(elementId: number) {
+    setChosenId(elementId);
+    everyElement.current?.scrollIntoView();
+  }
+
+  return (
+    <>
+      {chosen ? (
+        <section ref={everyElement}>
+          <h2 className="px-4 pt-6 pb-1 font-showdown-display text-[28px]">
+            every element
+          </h2>
+          <nav
+            className="sticky top-0 z-10 flex gap-1 overflow-x-auto p-2 [scrollbar-width:none]"
+            style={{ background: INK }}
+          >
+            {railed.map((element) => (
+              <button
+                key={element.id}
+                ref={element.id === chosen.id ? centreInRail : null}
+                type="button"
+                aria-label={element.name}
+                aria-current={element.id === chosen.id}
+                onClick={() => choose(element.id)}
+                className="size-[42px] flex-none rounded-xl text-[22px]"
+                style={{
+                  background: element.colour,
+                  color: textOn(element.colour),
+                  boxShadow:
+                    element.id === chosen.id ? `0 0 0 3px ${PAPER}` : undefined,
+                }}
+              >
+                {element.emoji}
+              </button>
+            ))}
+          </nav>
+          <ElementPage element={chosen} calls={stats} onChoose={choose} />
+        </section>
+      ) : null}
+      <div className="grid gap-[10px] px-4 pt-[22px] pb-[max(2.5rem,env(safe-area-inset-bottom))]">
+        <p>More Votes make every call surer.</p>
+        <PrimaryLink to="/elemental-showdown">keep voting</PrimaryLink>
+        <ShareButton label="send it to a friend" />
+      </div>
+    </>
+  );
+}
+
+// The outline is the Confidence: heavy where the crowd is sure, thin where it
+// is fairly sure, dashed and translucent where the call is a guess. The two
+// thinner ones carry the heavy one's width as a margin, so every chip takes up
+// the same room whatever the crowd knows. The border is the chip's own ink.
+const CHIP_OUTLINE: Record<Confidence, string> = {
+  solid: "border-[3px]",
+  medium: "m-[1.5px] border-[1.5px]",
+  faint: "m-[1.5px] border-[1.5px] border-dashed opacity-55",
+};
+
+// One Element's whole standing, full-bleed in its colour: who it beats, who
+// beats it, and how sure the crowd is of each.
+function ElementPage({
+  element,
+  calls,
+  onChoose,
+}: {
+  element: StatsElement;
+  calls: CrowdCalls;
+  onChoose: (elementId: number) => void;
+}) {
+  const {
+    winCount,
+    lossCount,
+    nemesis,
+    favouriteVictim,
+    bands,
+    notYetJudgedCount,
+  } = elementPageOf(calls, element);
+  return (
+    <article
+      className="grid content-start gap-[18px] px-4 pt-[22px] pb-10"
+      style={{ background: element.colour, color: textOn(element.colour) }}
+    >
+      <div className="flex items-center gap-[14px]">
+        <span className="text-[72px] leading-none">{element.emoji}</span>
+        <h1 className="font-showdown-display text-[44px] leading-[1.05]">
+          {element.name}
+        </h1>
+      </div>
+      <p className="font-bold text-[14px]">
+        wins {winCount}, loses {lossCount}.
+        {nemesis ? ` Nemesis: ${nemesis.emoji} ${nemesis.name}.` : ""}
+        {favouriteVictim
+          ? ` Favourite victim: ${favouriteVictim.emoji} ${favouriteVictim.name}.`
+          : ""}
+      </p>
+      {bands.map(({ effectiveness, verb, opponents }) => (
+        <section key={effectiveness}>
+          <h2 className="mb-2 font-showdown-display text-[24px]">
+            {verb}{" "}
+            <small className="font-showdown font-bold text-[13px] opacity-70">
+              {effectiveness}
+            </small>
+          </h2>
+          <div className="flex flex-wrap gap-[6px]">
+            {opponents.map(({ opponent, confidence }) => (
+              <button
+                key={opponent.id}
+                type="button"
+                onClick={() => onChoose(opponent.id)}
+                className={`rounded-full py-[5px] pr-[11px] pl-2 font-bold text-[14px] ${CHIP_OUTLINE[confidence]}`}
+                style={{
+                  background: opponent.colour,
+                  color: textOn(opponent.colour),
+                }}
+              >
+                {opponent.emoji} {opponent.name}
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+      {notYetJudgedCount > 0 ? <p>{notYetJudgedCount} not yet judged</p> : null}
+      <p className="text-[12px] opacity-75">
+        Heavy outline: the crowd is sure. Thin: fairly sure. Dashed: a guess
+        from a few Votes.
+      </p>
+    </article>
   );
 }
