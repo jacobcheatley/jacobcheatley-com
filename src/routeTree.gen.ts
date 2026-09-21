@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ShellRouteImport } from './routes/_shell'
+import { Route as ElementalShowdownRouteImport } from './routes/elemental-showdown'
 import { Route as StickyNotesRouteImport } from './routes/sticky-notes'
 import { Route as ShellIndexRouteImport } from './routes/_shell.index'
 import { Route as BlogIndexRouteImport } from './routes/blog.index'
@@ -21,6 +22,11 @@ import { Route as BlogWriteIdRouteImport } from './routes/blog.write.$id'
 
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ElementalShowdownRoute = ElementalShowdownRouteImport.update({
+  id: '/elemental-showdown',
+  path: '/elemental-showdown',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StickyNotesRoute = StickyNotesRouteImport.update({
@@ -66,6 +72,7 @@ const BlogWriteIdRoute = BlogWriteIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
+  '/elemental-showdown': typeof ElementalShowdownRoute
   '/sticky-notes': typeof StickyNotesRouteWithChildren
   '/blog/$slug': typeof BlogSlugRoute
   '/sticky-notes/new': typeof StickyNotesNewRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/blog/write/': typeof BlogWriteIndexRoute
 }
 export interface FileRoutesByTo {
+  '/elemental-showdown': typeof ElementalShowdownRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/sticky-notes/new': typeof StickyNotesNewRoute
   '/': typeof ShellIndexRoute
@@ -86,6 +94,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_shell': typeof ShellRouteWithChildren
+  '/elemental-showdown': typeof ElementalShowdownRoute
   '/sticky-notes': typeof StickyNotesRouteWithChildren
   '/blog/$slug': typeof BlogSlugRoute
   '/sticky-notes/new': typeof StickyNotesNewRoute
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/elemental-showdown'
     | '/sticky-notes'
     | '/blog/$slug'
     | '/sticky-notes/new'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/blog/write/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/elemental-showdown'
     | '/blog/$slug'
     | '/sticky-notes/new'
     | '/'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_shell'
+    | '/elemental-showdown'
     | '/sticky-notes'
     | '/blog/$slug'
     | '/sticky-notes/new'
@@ -130,6 +142,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   ShellRoute: typeof ShellRouteWithChildren
+  ElementalShowdownRoute: typeof ElementalShowdownRoute
   StickyNotesRoute: typeof StickyNotesRouteWithChildren
   BlogSlugRoute: typeof BlogSlugRoute
   BlogIndexRoute: typeof BlogIndexRoute
@@ -144,6 +157,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ShellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/elemental-showdown': {
+      id: '/elemental-showdown'
+      path: '/elemental-showdown'
+      fullPath: '/elemental-showdown'
+      preLoaderRoute: typeof ElementalShowdownRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sticky-notes': {
@@ -231,6 +251,7 @@ const StickyNotesRouteWithChildren = StickyNotesRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   ShellRoute: ShellRouteWithChildren,
+  ElementalShowdownRoute: ElementalShowdownRoute,
   StickyNotesRoute: StickyNotesRouteWithChildren,
   BlogSlugRoute: BlogSlugRoute,
   BlogIndexRoute: BlogIndexRoute,
