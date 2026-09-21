@@ -1,0 +1,406 @@
+<!doctype html>
+<!-- PROTOTYPE, throwaway. Question: how is the 52×52 Chart read on a phone, what do the locked state and
+     the unlock look like, and where do the fun stats live? Three variants on ?variant=A|B|C.
+     Every Matchup is faked from a seed; nothing is stored.
+     Run: python3 -m http.server 8153 --directory prototype/chart -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PROTOTYPE: the Chart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap">
+<style>
+  :root { --ink: #14110f; --paper: #ffffff; --spring: cubic-bezier(.2, 1.3, .4, 1); }
+  * { box-sizing: border-box; margin: 0; }
+  body { height: 100dvh; display: grid; grid-template-rows: auto 1fr; background: #3a3a38; color: var(--ink); font: 500 15px/1.35 "Bricolage Grotesque", system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+  button, select { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; }
+  button:focus-visible, select:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+  .display { font-family: "Bowlby One", sans-serif; font-weight: 400; line-height: 1.05; }
+
+  /* the switcher: deliberately not part of the design */
+  #bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 10px; padding: 4px 8px; background: #000; color: #9f9; font: 12px/1.3 ui-monospace, monospace; }
+  #bar button { padding: 4px 8px; }
+  #bar .arrow { font-size: 16px; padding: 4px 12px; }
+  #bar .knob { border: 1px solid #9f9; border-radius: 4px; }
+  #state { flex-basis: 100%; text-align: center; color: #aaa; }
+
+  #stage { justify-self: center; width: 100%; max-width: 430px; min-height: 0; overflow-y: auto; background: var(--ink); color: var(--paper); }
+  .card { background: var(--ink); color: var(--paper); border-radius: 14px; padding: 12px 16px; }
+  .card .headline { font-size: 22px; }
+  .card .sub { font-size: 13px; opacity: .8; }
+
+  /* the verdict on one Matchup: the Tug's seam, lying on its side */
+  .verdict { position: relative; display: flex; height: 112px; border-radius: 14px; overflow: hidden; }
+  .verdict .side { display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 26px; min-width: 0; overflow: hidden; transition: flex-basis .3s var(--spring); }
+  .verdict .side .emoji { font-size: 34px; line-height: 1.1; }
+  .verdict .side .name { font-size: 13px; }
+  .verdict .pill { position: absolute; left: 50%; bottom: 6px; translate: -50%; white-space: nowrap; background: var(--ink); color: var(--paper); border-radius: 99px; padding: 3px 12px; font-size: 12px; }
+  .verdict.controversial .side:first-child { clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 25%, 100% 50%, calc(100% - 14px) 75%, 100% 100%, 0 100%); }
+  .meta { font-size: 13px; opacity: .8; padding: 6px 4px 0; }
+
+  /* locked, and the unlock */
+  .locked { display: grid; gap: 18px; padding: 22px 16px 28px; }
+  .locked h1 { font-size: 40px; }
+  .mosaic { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; aspect-ratio: 1; }
+  .mosaic i { border-radius: 3px; background: #2c2825; transition: background .35s, scale .35s var(--spring); transition-delay: calc(var(--wave) * 28ms); }
+  .unlocking .mosaic i { background: var(--colour); scale: 1.08; }
+  .meter { display: grid; gap: 4px; }
+  .meter .track { height: 26px; border-radius: 99px; box-shadow: inset 0 0 0 2px var(--paper); overflow: hidden; }
+  .meter .fill { height: 100%; border-radius: 99px; background: var(--paper); transition: width .5s var(--spring); }
+  .meter.met .fill { background: #9fe870; }
+  .locked .go { height: 56px; border-radius: 14px; background: var(--paper); color: var(--ink); font-size: 20px; }
+  .stamp { display: none; }
+  .unlocking .stamp { display: block; position: fixed; z-index: 5; left: 50%; top: 45%; translate: -50% -50%; rotate: -7deg; padding: 10px 22px; border-radius: 16px; background: var(--paper); color: var(--ink); font-size: 44px; white-space: nowrap; box-shadow: 0 0 0 5px var(--ink), 0 0 0 9px var(--paper); animation: stamp .45s .7s var(--spring) both; }
+  @keyframes stamp { from { scale: 3; opacity: 0; } }
+
+  /* A: the Grid. Drag a thumb across it; the card under it reads the Matchup. */
+  .grid-view { display: grid; gap: 10px; padding: 8px; }
+  .toggles { display: flex; gap: 6px; flex-wrap: wrap; }
+  .toggles button { padding: 6px 12px; border-radius: 99px; box-shadow: inset 0 0 0 2px var(--paper); font-size: 13px; font-weight: 700; }
+  .toggles button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+  .grid { position: relative; display: grid; aspect-ratio: 1; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .grid.common { gap: 1px; }
+  .grid > * { min-width: 0; min-height: 0; display: grid; place-items: center; overflow: hidden; line-height: 1; }
+  .grid.common .head { font-size: 13px; border-radius: 3px; }
+  .grid .self { background: var(--ink); }
+  .grid .unknown { background: #2c2825 !important; scale: 1 !important; }
+  .grid [data-row] { border-radius: 15%; }
+  .grid .cross { position: absolute; pointer-events: none; box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); z-index: 2; overflow: visible; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; opacity: .85; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .stat-chips { display: grid; gap: 6px; }
+  .stat-chips button { text-align: left; padding: 10px 14px; border-radius: 12px; box-shadow: inset 0 0 0 2px var(--paper); }
+  .stat-chips b { display: block; font-size: 12px; opacity: .7; }
+
+  /* B: Element pages. One Element at a time, its Matchups sorted into bands. */
+  .rail { position: sticky; top: 0; z-index: 3; display: flex; gap: 4px; padding: 8px; overflow-x: auto; background: var(--ink); scrollbar-width: none; }
+  .rail button { flex: none; width: 42px; height: 42px; border-radius: 12px; font-size: 22px; }
+  .rail button[aria-current="true"] { box-shadow: 0 0 0 3px var(--paper); }
+  .rail .gap { flex: none; width: 2px; margin: 6px 4px; background: var(--paper); opacity: .4; }
+  .page { min-height: 100%; padding: 22px 16px 40px; display: grid; gap: 18px; align-content: start; }
+  .page .hero { display: flex; align-items: center; gap: 14px; }
+  .page .hero .emoji { font-size: 72px; line-height: 1; }
+  .page .hero h1 { font-size: 44px; }
+  .page .record { font-size: 14px; font-weight: 700; }
+  .band h2 { font-size: 24px; margin-bottom: 8px; }
+  .band h2 small { font: 700 13px "Bricolage Grotesque", sans-serif; opacity: .7; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 5px 11px 5px 8px; border-radius: 99px; font-size: 14px; font-weight: 700; border: 3px solid var(--ink); }
+  .chip.medium { border-width: 1.5px; margin: 1.5px; }
+  .chip.faint { border: 1.5px dashed var(--ink); margin: 1.5px; opacity: .55; }
+  .page .legend { opacity: .75; }
+
+  /* C: Headlines. The Chart told as stories; any one Matchup is a lookup away. */
+  .story { position: relative; min-height: 250px; padding: 18px 16px; display: grid; align-content: end; gap: 10px; }
+  .story .emojis { font-size: 70px; line-height: 1; letter-spacing: 6px; text-shadow: 0 3px 0 rgb(0 0 0 / .25); }
+  .story .kicker { font-size: 13px; font-weight: 700; opacity: .7; }
+  .lookup { padding: 22px 16px 40px; display: grid; gap: 12px; }
+  .lookup h2 { font-size: 28px; }
+  .lookup .pickers { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+  .lookup select { width: 100%; height: 48px; padding: 0 10px; border-radius: 12px; background: var(--paper); color: var(--ink); font-weight: 700; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01s !important; animation-duration: .01s !important; transition-delay: 0s !important; animation-delay: 0s !important; } }
+</style>
+</head>
+<body>
+<div id="bar">
+  <button class="arrow" id="previous" aria-label="previous variant">‹</button>
+  <span id="label"></span>
+  <button class="arrow" id="following" aria-label="next variant">›</button>
+  <button class="knob" id="my-vote">+1 my Vote</button>
+  <button class="knob" id="crowd-votes">+5 crowd Votes</button>
+  <button class="knob" id="relock">relock</button>
+  <button class="knob" id="faint"></button>
+  <span id="state"></span>
+</div>
+<main id="stage"></main>
+
+<script>
+const roster = [
+  ["common", "acid", "🧪", "#b4e31c"], ["common", "air", "🌪️", "#a9d6e8"], ["common", "beast", "🐺", "#b5702a"],
+  ["common", "dark", "🌑", "#2b2440"], ["common", "fighting", "🥊", "#9c2b1e"], ["common", "fire", "🔥", "#f2541b"],
+  ["common", "holy", "😇", "#f3d98b"], ["common", "ice", "❄️", "#7fd8f0"], ["common", "light", "💡", "#fffbe0"],
+  ["common", "lightning", "⚡", "#f7c600"], ["common", "magic", "🪄", "#6a3df0"], ["common", "metal", "⚙️", "#8d99a6"],
+  ["common", "normal", "⚪", "#c9c5b8"], ["common", "plant", "🌿", "#3f9d4a"], ["common", "poison", "☠️", "#8e3fb0"],
+  ["common", "psychic", "🧠", "#f0509a"], ["common", "rock", "🪨", "#8a7560"], ["common", "sand", "🏜️", "#e3c58a"],
+  ["common", "unholy", "😈", "#5b1a6e"], ["common", "water", "💧", "#2f7fe0"],
+  ["rare", "aether", "✴️", "#b9a7ff"], ["rare", "alien", "👽", "#57e389"], ["rare", "bird", "🐦", "#58a6d6"],
+  ["rare", "blood", "🩸", "#a3122a"], ["rare", "bug", "🐛", "#7a9b2a"], ["rare", "chaos", "🌀", "#d01fd0"],
+  ["rare", "crystal", "💎", "#4fe0c0"], ["rare", "death", "🪦", "#4a4a4a"], ["rare", "dragon", "🐉", "#2a8f7f"],
+  ["rare", "fairy", "🧚", "#f7a8d8"], ["rare", "fish", "🐟", "#3aa6b9"], ["rare", "frog", "🐸", "#6cc24a"],
+  ["rare", "fungus", "🍄", "#c2543e"], ["rare", "glass", "🪟", "#d5eef2"], ["rare", "gravity", "🕳️", "#1a1a22"],
+  ["rare", "illusion", "🎭", "#a05fd6"], ["rare", "life", "🧬", "#ff6f91"], ["rare", "magnet", "🧲", "#d23a3a"],
+  ["rare", "monster", "👹", "#7d2e2e"], ["rare", "order", "⚖️", "#e8e2d0"], ["rare", "paper", "📄", "#f4f1e6"],
+  ["rare", "radiation", "☢️", "#d6f03a"], ["rare", "reptile", "🦎", "#4e8a3a"], ["rare", "scissors", "✂️", "#c43c4f"],
+  ["rare", "technology", "🤖", "#5f7d8c"], ["rare", "sound", "🔊", "#ff8a3d"], ["rare", "space", "🌌", "#1d2a6b"],
+  ["rare", "steam", "♨️", "#c9d3d8"], ["rare", "time", "⏳", "#c9a96a"], ["rare", "undead", "🧟", "#6f8f6a"],
+  ["rare", "virus", "🦠", "#6f7d3a"], ["rare", "weapon", "⚔️", "#7a8088"],
+].map(([kind, name, emoji, colour], id) => ({ id, kind, name, emoji, colour }));
+const commonCount = roster.filter((element) => element.kind === "common").length;
+const idOf = (name) => roster.find((element) => element.name === name).id;
+
+const stage = document.getElementById("stage");
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const linear = (c) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+const luminance = (hex) => { const [r, g, b] = rgb(hex).map(linear); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const textOn = (hex) => (luminance(hex) > 0.4 ? "#14110f" : "#ffffff");
+const towardsPaper = (hex, share) => `#${rgb(hex).map((c) => Math.round(c + (255 - c) * share).toString(16).padStart(2, "0")).join("")}`;
+const painted = (colour) => `background: ${colour}; color: ${textOn(colour)}`;
+function html(markup) { const template = document.createElement("template"); template.innerHTML = markup.trim(); return template.content.firstElementChild; }
+
+// The fake crowd. Stored as the real thing would be: one record per Matchup, low id first, positive mean = the lower id wins.
+function seededRandom(seed) { return () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const random = seededRandom(153);
+// Each Element gets a place on a wheel, so wins run in circles and rock-paper-scissors triangles exist.
+const wheel = roster.map(() => ({ angle: random() * Math.PI * 2, power: random() - 0.5 }));
+const matchups = roster.map((low) => roster.map((high) => {
+  if (low.id >= high.id) return null;
+  const mean = Math.max(-2, Math.min(2, 1.7 * Math.sin(wheel[low.id].angle - wheel[high.id].angle) + 0.8 * (wheel[low.id].power - wheel[high.id].power) + (random() - 0.5) * 0.8));
+  const bothCommon = low.kind === "common" && high.kind === "common";
+  const votes = Math.round(3 + random() ** 2 * (bothCommon ? 600 : 260));
+  return { mean, votes, halfWidth: 1.9 / Math.sqrt(votes), polarisation: random() < 0.25 ? 0.6 + random() * 0.35 : random() * 0.55 };
+}));
+for (const [winner, loser, mean, polarisation = 0.2] of [["water", "fire", 1.7], ["fire", "plant", 1.8], ["plant", "water", 1.2], ["fire", "ice", 1.8], ["lightning", "water", 1.4], ["rock", "scissors", 1.9], ["scissors", "paper", 1.9], ["paper", "rock", 1.6], ["holy", "unholy", 0.1, 0.92], ["light", "dark", -0.1, 0.88]]) {
+  const low = Math.min(idOf(winner), idOf(loser)), high = Math.max(idOf(winner), idOf(loser));
+  Object.assign(matchups[low][high], { mean: idOf(winner) === low ? mean : -mean, polarisation, votes: 640, halfWidth: 0.08 });
+}
+const allVotes = matchups.flat().reduce((sum, matchup) => sum + (matchup?.votes ?? 0), 0);
+
+// The scoring decision's cuts. A verdict is read from `from`'s side.
+function verdict(from, against) {
+  const stored = matchups[Math.min(from, against)][Math.max(from, against)];
+  const mean = from < against ? stored.mean : -stored.mean;
+  const tier = Math.abs(mean) < 0.5 ? 0 : Math.sign(mean) * (Math.abs(mean) < 1.5 ? 1 : 2);
+  return { from: roster[from], against: roster[against], mean, tier, isControversial: tier === 0 && stored.polarisation >= 0.6, polarisation: stored.polarisation, confidence: stored.halfWidth <= 0.25 ? "solid" : stored.halfWidth <= 0.5 ? "medium" : "faint", votes: stored.votes };
+}
+const tierWords = { 2: ["crushes", "4×"], 1: ["beats", "2×"], 0: ["is even with", "neutral"], "-1": ["loses to", "½×"], "-2": ["is crushed by", "¼×"] };
+const wordsFor = (read) => (read.isControversial ? ["splits the crowd with", "controversial"] : tierWords[read.tier]);
+
+let showsFaint = true;
+const isKnown = (read) => showsFaint || read.confidence !== "faint";
+const winLoseColours = { 2: "#12813b", 1: "#8fd694", 0: "#f1eee6", "-1": "#f6a98f", "-2": "#d23a1f" };
+const hazard = "repeating-linear-gradient(45deg, #14110f 0 2px, #f7c600 2px 4px)";
+function winLosePaint(read) { return read.isControversial ? hazard : winLoseColours[read.tier]; }
+function winnerPaint(read) {
+  if (read.isControversial) return `linear-gradient(135deg, ${read.from.colour} 50%, ${read.against.colour} 50%)`;
+  if (read.tier === 0) return "#ffffff";
+  const winner = read.tier > 0 ? read.from : read.against;
+  return Math.abs(read.tier) === 2 ? winner.colour : towardsPaper(winner.colour, 0.55);
+}
+
+function verdictBlock(read) {
+  if (!isKnown(read)) return html(`<div><div class="verdict"><div class="side" style="flex: 1; ${painted("#2c2825")}"><span class="emoji">${read.from.emoji} ? ${read.against.emoji}</span><span class="name display">too early to say</span></div></div><p class="meta">${read.votes} Votes so far</p></div>`);
+  const [verb, multiplier] = wordsFor(read);
+  return html(`<div>
+    <div class="verdict ${read.isControversial ? "controversial" : ""}">
+      <div class="side" style="flex: 0 0 ${50 + 12 * read.tier}%; ${painted(read.from.colour)}"><span class="emoji">${read.from.emoji}</span><span class="name display">${read.from.name}</span></div>
+      <div class="side" style="flex: 1; ${painted(read.against.colour)}"><span class="emoji">${read.against.emoji}</span><span class="name display">${read.against.name}</span></div>
+      <span class="pill display">${read.from.name} ${verb} ${read.against.name}</span>
+    </div>
+    <p class="meta">${multiplier}, ${read.confidence} Confidence, ${read.votes} Votes</p>
+  </div>`);
+}
+
+// Stats. Only solid and medium verdicts count: a faint one is not a story yet.
+const opponentsOf = (id) => roster.filter((other) => other.id !== id).map((other) => verdict(id, other.id));
+const counted = (id) => opponentsOf(id).filter((read) => read.confidence !== "faint");
+const best = (items, score) => items.reduce((top, item) => (score(item) > score(top) ? item : top));
+const everyRead = roster.flatMap((low) => roster.filter((high) => high.id > low.id).map((high) => verdict(low.id, high.id))).filter((read) => read.confidence !== "faint");
+const stats = {
+  champion: best(roster, (element) => counted(element.id).filter((read) => read.tier > 0).length),
+  punchingBag: best(roster, (element) => counted(element.id).filter((read) => read.tier < 0).length),
+  diplomat: best(roster, (element) => counted(element.id).filter((read) => read.tier === 0 && !read.isControversial).length),
+  glassCannon: best(roster, (element) => Math.min(counted(element.id).filter((read) => read.tier === 2).length, counted(element.id).filter((read) => read.tier === -2).length)),
+  mostControversial: best(everyRead, (read) => (read.isControversial ? read.polarisation : 0)),
+  biggestCrush: best(everyRead, (read) => Math.abs(read.mean)),
+  mostVoted: best(everyRead, (read) => read.votes),
+  triangle: findTriangle(),
+};
+function findTriangle() {
+  const beats = (a, b) => { const read = verdict(a, b); return read.confidence !== "faint" && read.tier > 0 ? read.mean : 0; };
+  let top = { strength: 0 };
+  for (let a = 0; a < roster.length; a++) for (let b = a + 1; b < roster.length; b++) for (let c = a + 1; c < roster.length; c++) {
+    if (c === b) continue;
+    const strength = Math.min(beats(a, b), beats(b, c), beats(c, a));
+    if (strength > top.strength) top = { strength, elements: [roster[a], roster[b], roster[c]] };
+  }
+  return top.elements;
+}
+const winsOf = (element) => counted(element.id).filter((read) => read.tier > 0).length;
+const lossesOf = (element) => counted(element.id).filter((read) => read.tier < 0).length;
+
+// The lock. Both numbers from the scoring decision.
+const unlockAtMine = 20, unlockAtCrowd = 250;
+let myVotes = 17, crowdVotes = 240;
+const isUnlocked = () => myVotes >= unlockAtMine && crowdVotes >= unlockAtCrowd;
+
+function renderLocked() {
+  const commons = roster.slice(0, commonCount);
+  const meter = (label, count, goal) => `<div class="meter ${count >= goal ? "met" : ""}"><b>${label}: ${Math.min(count, goal)} of ${goal}</b><div class="track"><div class="fill" style="width: ${Math.min(100, (count / goal) * 100)}%"></div></div></div>`;
+  return html(`<div class="locked">
+    <h1 class="display">the chart is locked</h1>
+    <div class="mosaic">${commons.map((row) => commons.map((column) => `<i style="--wave: ${row.id + column.id}; --colour: ${row === column ? "#14110f" : winnerPaint(verdict(row.id, column.id)).startsWith("#") ? winnerPaint(verdict(row.id, column.id)) : "#ffffff"}"></i>`).join("")).join("")}</div>
+    ${meter("your Votes", myVotes, unlockAtMine)}
+    ${meter("everyone's Votes", crowdVotes, unlockAtCrowd)}
+    <p>${myVotes < unlockAtMine ? `${unlockAtMine - myVotes} more from you and it opens.` : isUnlocked() ? "That is enough. Here it comes." : "You have done your part. It opens when the crowd catches up."}</p>
+    <button class="go display">keep voting</button>
+    <div class="stamp display">chart unlocked</div>
+  </div>`);
+}
+
+// A
+let gridShowsAll = false, gridPaintsWinner = false, gridFocus = [idOf("fire"), idOf("plant")];
+function renderGrid() {
+  const shown = gridShowsAll ? roster : roster.slice(0, commonCount);
+  const paint = gridPaintsWinner ? winnerPaint : winLosePaint;
+  const el = html(`<div class="grid-view">
+    <div class="toggles">
+      <button data-toggle="all" aria-pressed="${!gridShowsAll}">20 common</button><button data-toggle="all" aria-pressed="${gridShowsAll}">all 52</button>
+      <button data-toggle="paint" aria-pressed="${!gridPaintsWinner}">win / lose</button><button data-toggle="paint" aria-pressed="${gridPaintsWinner}">winner's colour</button>
+    </div>
+    <div class="grid ${gridShowsAll ? "" : "common"}" style="grid-template-columns: repeat(${shown.length + 1}, 1fr)">
+      <span></span>${shown.map((column) => `<span class="head" style="${painted(column.colour)}">${gridShowsAll ? "" : column.emoji}</span>`).join("")}
+      ${shown.map((row) => `<span class="head" style="${painted(row.colour)}">${gridShowsAll ? "" : row.emoji}</span>${shown.map((column) => {
+        if (row === column) return '<span class="self"></span>';
+        const read = verdict(row.id, column.id);
+        return `<span data-row="${row.id}" data-column="${column.id}" class="${isKnown(read) ? "" : "unknown"}" style="background: ${paint(read)}; scale: ${{ solid: 1, medium: 0.72, faint: 0.4 }[read.confidence]}"></span>`;
+      }).join("")}`).join("")}
+      <span class="cross"></span>
+    </div>
+    <div class="reading"></div>
+    <div class="legend">${gridPaintsWinner ? "<span>a cell wears its winner's colour: full for a crush, pale for a win, white for neutral, halved for controversial</span>" : [2, 1, 0, -1, -2].map((tier) => `<span><i style="background: ${winLoseColours[tier]}"></i>${tierWords[tier][1]}</span>`).join("") + `<span><i style="background: ${hazard}"></i>controversial</span>`}<span>smaller = less Confidence; read a row against a column</span></div>
+    <div class="stat-chips">
+      <button data-row="${stats.biggestCrush.from.id}" data-column="${stats.biggestCrush.against.id}"><b>biggest crush</b>${stats.biggestCrush.from.emoji} ${stats.biggestCrush.from.name} against ${stats.biggestCrush.against.emoji} ${stats.biggestCrush.against.name}</button>
+      <button data-row="${stats.mostControversial.from.id}" data-column="${stats.mostControversial.against.id}"><b>most controversial</b>${stats.mostControversial.from.emoji} ${stats.mostControversial.from.name} against ${stats.mostControversial.against.emoji} ${stats.mostControversial.against.name}</button>
+      <button data-row="${stats.mostVoted.from.id}" data-column="${stats.mostVoted.against.id}"><b>most voted on</b>${stats.mostVoted.from.emoji} ${stats.mostVoted.from.name} against ${stats.mostVoted.against.emoji} ${stats.mostVoted.against.name}</button>
+    </div>
+  </div>`);
+  const grid = el.querySelector(".grid"), cross = el.querySelector(".cross");
+  function focus(row, column) {
+    gridFocus = [row, column];
+    el.querySelector(".reading").replaceChildren(verdictBlock(verdict(row, column)));
+    const cell = grid.querySelector(`[data-row="${row}"][data-column="${column}"]`);
+    cross.hidden = !cell;
+    if (cell) Object.assign(cross.style, { left: `${cell.offsetLeft}px`, top: `${cell.offsetTop}px`, width: `${cell.offsetWidth}px`, height: `${cell.offsetHeight}px` });
+    report();
+  }
+  const focusUnder = (event) => { const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest(".grid [data-row]"); if (cell) focus(Number(cell.dataset.row), Number(cell.dataset.column)); };
+  grid.addEventListener("pointerdown", focusUnder);
+  grid.addEventListener("pointermove", (event) => { if (event.buttons || event.pointerType === "touch") focusUnder(event); });
+  for (const chip of el.querySelectorAll(".stat-chips button")) chip.onclick = () => {
+    const row = Number(chip.dataset.row), column = Number(chip.dataset.column);
+    if (!gridShowsAll && Math.max(row, column) >= commonCount) { gridShowsAll = true; gridFocus = [row, column]; return mount(); }
+    focus(row, column);
+  };
+  for (const toggle of el.querySelectorAll("[data-toggle]")) toggle.onclick = () => {
+    if (toggle.getAttribute("aria-pressed") === "true") return;
+    if (toggle.dataset.toggle === "all") gridShowsAll = !gridShowsAll; else gridPaintsWinner = !gridPaintsWinner;
+    if (!gridShowsAll && Math.max(...gridFocus) >= commonCount) gridFocus = [idOf("fire"), idOf("plant")];
+    mount();
+  };
+  requestAnimationFrame(() => focus(...gridFocus));
+  return el;
+}
+
+// B
+let pageElement = idOf("fire");
+function renderPages() {
+  const element = roster[pageElement], reads = opponentsOf(element.id);
+  const bands = [
+    ["crushes", "4×", (read) => read.tier === 2], ["beats", "2×", (read) => read.tier === 1],
+    ["even with", "neutral", (read) => read.tier === 0 && !read.isControversial], ["splits the crowd with", "controversial", (read) => read.isControversial],
+    ["loses to", "½×", (read) => read.tier === -1], ["crushed by", "¼×", (read) => read.tier === -2],
+  ].map(([title, multiplier, belongs]) => [title, multiplier, reads.filter((read) => isKnown(read) && belongs(read))]);
+  if (!showsFaint) bands.push(["too early to say", "not enough Votes", reads.filter((read) => !isKnown(read))]);
+  const chip = (read) => `<button class="chip ${read.confidence}" data-element="${read.against.id}" style="${painted(read.against.colour)}">${read.against.emoji} ${read.against.name}</button>`;
+  const solid = counted(element.id), nemesis = best(solid, (read) => -read.mean), victim = best(solid, (read) => read.mean);
+  const railButton = (other) => `<button data-element="${other.id}" aria-label="${other.name}" aria-current="${other === element}" style="${painted(other.colour)}">${other.emoji}</button>`;
+  const el = html(`<div>
+    <nav class="rail">${roster.slice(0, commonCount).map(railButton).join("")}<span class="gap"></span>${roster.slice(commonCount).map(railButton).join("")}</nav>
+    <article class="page" style="${painted(element.colour)}">
+      <div class="hero"><span class="emoji">${element.emoji}</span><h1 class="display">${element.name}</h1></div>
+      <p class="record">wins ${winsOf(element)}, loses ${lossesOf(element)}. Nemesis: ${nemesis.against.emoji} ${nemesis.against.name}. Favourite victim: ${victim.against.emoji} ${victim.against.name}.</p>
+      ${bands.filter(([, , members]) => members.length).map(([title, multiplier, members]) => `<section class="band"><h2 class="display">${title} <small>${multiplier}</small></h2><div class="chips">${members.sort((a, b) => Math.abs(b.mean) - Math.abs(a.mean)).map(chip).join("")}</div></section>`).join("")}
+      <p class="legend">Heavy outline: the crowd is sure. Thin: fairly sure. ${showsFaint ? "Dashed: a guess from a few Votes." : ""}</p>
+    </article>
+  </div>`);
+  for (const button of el.querySelectorAll("[data-element]")) button.onclick = () => { pageElement = Number(button.dataset.element); mount(); stage.scrollTop = 0; };
+  requestAnimationFrame(() => el.querySelector('[aria-current="true"]').scrollIntoView({ inline: "center", block: "nearest" }));
+  return el;
+}
+
+// C
+let lookup = [idOf("rock"), idOf("scissors")];
+function renderHeadlines() {
+  const trio = stats.triangle, controversial = stats.mostControversial, crush = stats.biggestCrush;
+  const story = (background, emojis, kicker, headline, sub) => `<section class="story" style="background: ${background}"><div class="emojis">${emojis}</div><div class="card"><p class="kicker">${kicker}</p><p class="headline display">${headline}</p><p class="sub">${sub}</p></div></section>`;
+  const option = (chosen) => roster.map((element) => `<option value="${element.id}" ${element.id === chosen ? "selected" : ""}>${element.emoji} ${element.name}</option>`).join("");
+  const crushWinner = crush.mean > 0 ? crush.from : crush.against, crushLoser = crush.mean > 0 ? crush.against : crush.from;
+  const el = html(`<div>
+    ${story(stats.champion.colour, stats.champion.emoji, "the champion", `${stats.champion.name} wins the most`, `It beats ${winsOf(stats.champion)} of the other 51.`)}
+    ${story(`linear-gradient(115deg, ${controversial.from.colour} 50%, ${controversial.against.colour} 50%)`, `${controversial.from.emoji}${controversial.against.emoji}`, "the argument", `${controversial.from.name} against ${controversial.against.name}`, `The crowd is split down the middle, over ${controversial.votes} Votes.`)}
+    ${story(`linear-gradient(115deg, ${trio.map((element, i) => `${element.colour} ${i * 33.4}% ${(i + 1) * 33.4}%`).join(", ")})`, trio.map((element) => element.emoji).join(""), "a perfect triangle", `${trio[0].name} beats ${trio[1].name} beats ${trio[2].name} beats ${trio[0].name}`, "Rock, paper, scissors, found by the crowd.")}
+    ${story(crushWinner.colour, `${crushWinner.emoji}`, "the biggest crush", `${crushWinner.name} flattens ${crushLoser.name}`, `Nobody argued. ${crush.votes} Votes.`)}
+    ${story(stats.punchingBag.colour, stats.punchingBag.emoji, "the punching bag", `${stats.punchingBag.name} loses the most`, `It loses to ${lossesOf(stats.punchingBag)} of the other 51.`)}
+    ${story(stats.glassCannon.colour, stats.glassCannon.emoji, "the glass cannon", `${stats.glassCannon.name} crushes or gets crushed`, "Few of its Matchups are close.")}
+    ${story(stats.diplomat.colour, stats.diplomat.emoji, "the diplomat", `${stats.diplomat.name} picks no fights`, "More neutral Matchups than any other Element.")}
+    ${story("#ffffff", "🫵", "you", "with the crowd 64% of the time", `Your hottest take: ${roster[idOf("sand")].emoji} sand crushes ${roster[idOf("magic")].emoji} magic. The crowd says the opposite.`)}
+    <section class="lookup"><h2 class="display">look up a matchup</h2>
+      <div class="pickers"><select aria-label="first Element">${option(lookup[0])}</select><span>against</span><select aria-label="second Element">${option(lookup[1])}</select></div>
+      <div class="reading"></div>
+      <p class="meta">${allVotes.toLocaleString()} Votes on 1,326 Matchups so far.</p>
+    </section>
+  </div>`);
+  const [first, second] = el.querySelectorAll("select");
+  function read() {
+    lookup = [Number(first.value), Number(second.value)];
+    el.querySelector(".reading").replaceChildren(lookup[0] === lookup[1] ? html(`<p class="meta">Pick two different Elements.</p>`) : verdictBlock(verdict(...lookup)));
+    report();
+  }
+  first.onchange = second.onchange = read;
+  read();
+  return el;
+}
+
+const variants = {
+  A: { name: "Grid: the whole Chart, read with a thumb", render: renderGrid, state: () => `focus ${gridFocus.map((id) => roster[id].name).join(" / ")}, ${gridShowsAll ? "all 52" : "20 common"}, ${gridPaintsWinner ? "winner's colour" : "win/lose"}` },
+  B: { name: "Element pages: one Element at a time, in bands", render: renderPages, state: () => `page ${roster[pageElement].name}` },
+  C: { name: "Headlines: stats first, any Matchup by lookup", render: renderHeadlines, state: () => `lookup ${lookup.map((id) => roster[id].name).join(" / ")}` },
+};
+let variantKey = new URLSearchParams(location.search).get("variant");
+if (!variants[variantKey]) variantKey = "A";
+
+function report() {
+  document.getElementById("label").textContent = `${variantKey} — ${variants[variantKey].name}`;
+  document.getElementById("faint").textContent = `faint cells: ${showsFaint ? "shown pale" : "hidden"}`;
+  document.getElementById("state").textContent = `${isUnlocked() ? "unlocked" : "LOCKED"} | mine ${myVotes}/${unlockAtMine} | crowd ${crowdVotes}/${unlockAtCrowd} | ${isUnlocked() ? variants[variantKey].state() : ""}`;
+}
+function mount() { stage.replaceChildren(isUnlocked() ? variants[variantKey].render() : renderLocked()); report(); }
+function addVotes(mine, crowd) {
+  const wasUnlocked = isUnlocked();
+  myVotes += mine; crowdVotes += crowd + mine;
+  if (wasUnlocked || !isUnlocked()) return mount();
+  stage.replaceChildren(renderLocked());
+  report();
+  void stage.firstElementChild.offsetWidth;
+  stage.firstElementChild.classList.add("unlocking");
+  navigator.vibrate?.([30, 60, 120]);
+  setTimeout(mount, 2600);
+}
+function switchVariant(step) {
+  const keys = Object.keys(variants);
+  variantKey = keys[(keys.indexOf(variantKey) + step + keys.length) % keys.length];
+  history.replaceState(null, "", `?variant=${variantKey}`);
+  mount(); stage.scrollTop = 0;
+}
+document.getElementById("previous").onclick = () => switchVariant(-1);
+document.getElementById("following").onclick = () => switchVariant(1);
+document.getElementById("my-vote").onclick = () => addVotes(1, 0);
+document.getElementById("crowd-votes").onclick = () => addVotes(0, 5);
+document.getElementById("relock").onclick = () => { myVotes = 17; crowdVotes = 240; mount(); };
+document.getElementById("faint").onclick = () => { showsFaint = !showsFaint; mount(); };
+addEventListener("keydown", (event) => { if (event.target.matches("select, input")) return; if (event.key === "ArrowLeft") switchVariant(-1); if (event.key === "ArrowRight") switchVariant(1); });
+mount();
+</script>
+</body>
+</html>
