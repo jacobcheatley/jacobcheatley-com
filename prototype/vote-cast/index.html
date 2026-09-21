@@ -52,9 +52,13 @@
   .tug.tabbed.revealed .tick { z-index: 2; display: block; opacity: .9; box-shadow: 0 0 0 1.5px var(--paper); padding-block: 4px; font-size: 13px; transition: min-width .7s var(--spring); }
   .tug.tabbed.revealed .tick.active { z-index: 2; opacity: 1; padding-block: 8px; font-size: 15px; box-shadow: 0 0 0 3px var(--paper); }
   .tug.tabbed .crowd-line span { right: auto; left: 8px; }
-  .tug.tailed.revealed .tick { width: 150px; border-radius: 0; white-space: nowrap; }
-  .tug.tailed.revealed .tick.active { font-size: 13px; }
-  .tug .tail { position: absolute; right: 100%; top: 50%; translate: 0 -50%; height: calc(100% - 6px); width: 0; box-sizing: content-box; border: 3px solid var(--ink); border-right: 0; border-radius: 8px 0 0 8px; background: var(--paper); transition: width .7s var(--spring); }
+  .tug.tailed.revealed .tick, .tug.tailed.revealed .tick.active { display: flex; padding: 0; font-size: 13px; line-height: 26px; white-space: nowrap; }
+  .tug .tick .count { position: relative; width: 0; transition: width .7s var(--spring); }
+  .tug .tick .count b { position: absolute; right: 7px; }
+  .tug .tick .count.outside b { right: calc(100% + 6px); text-shadow: 1.5px 0 var(--ink), -1.5px 0 var(--ink), 0 1.5px var(--ink), 0 -1.5px var(--ink), 1px 1px var(--ink), -1px -1px var(--ink), 1px -1px var(--ink), -1px 1px var(--ink); }
+  .tug .tick .divider { width: 1.5px; margin-block: 5px; background: var(--paper); opacity: .5; }
+  .tug .tick .label { width: 100px; padding-left: 8px; }
+  .tug .tick .tag { position: absolute; top: calc(100% + 7px); right: 8px; padding: 0 8px; border-radius: 6px; background: var(--paper); color: var(--ink); font-size: 11px; line-height: 18px; }
   .tug .spread { position: absolute; z-index: 1; left: 0; top: 0; width: 38%; height: 100%; pointer-events: none; transform-origin: left; transform: scaleX(0); transition: transform .7s var(--spring); }
   .tug .spread.shown { transform: none; }
   .tug .spread path { fill: var(--paper); fill-opacity: .8; stroke: var(--ink); stroke-width: 3; vector-effect: non-scaling-stroke; }
@@ -201,7 +205,7 @@ const variants = {
   D: { name: "Tug, refined: band tabs, crowd spread, moves on or tap", render: (shown) => renderTug(shown, "curve"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   E: { name: "Tug, refined, with the crowd as bars", render: (shown) => renderTug(shown, "bars"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   F: { name: "Tug, refined, the band tabs pop out into the bars", render: (shown) => renderTug(shown, "tabs"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
-  G: { name: "Tug, refined, fixed pills with true-length tails", render: (shown) => renderTug(shown, "tails"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
+  G: { name: "Tug, refined, label | true-length count bar, one shape", render: (shown) => renderTug(shown, "tails"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
 };
 let variantKey = new URLSearchParams(location.search).get("variant");
 if (!variants[variantKey]) variantKey = "A";
@@ -259,23 +263,20 @@ function renderTug({ a, b }, crowdShape) {
     const line = html(`<div class="crowd-line" style="--crowd: 50"><span>the crowd</span></div>`);
     const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p>${isRefined ? `<div class="timer" style="--linger: ${lingerMs}ms"></div>` : '<p class="hint">tap for the next Matchup</p>'}</div>`);
     el.append(line, card);
-    if (hasFiveTabs) {
-      pill.remove(); // the voter's own bar takes the pill's place on the seam
-      for (const tick of el.querySelectorAll(".tick")) {
-        const share = shares[2 - Number(tick.dataset.value)];
-        tick.textContent = `${tick.classList.contains("active") ? "you: " : ""}${tick.textContent} ${percent(share)}`;
-        if (crowdShape === "tabs") tick.style.minWidth = `calc(64px + ${share * 55}%)`;
+    if (hasFiveTabs) pill.remove(); // the voter's own bar takes the pill's place on the seam
+    for (const tick of hasFiveTabs ? el.querySelectorAll(".tick") : []) {
+      const share = shares[2 - Number(tick.dataset.value)], isMine = tick.classList.contains("active");
+      if (crowdShape === "tabs") {
+        tick.textContent = `${isMine ? "you: " : ""}${tick.textContent} ${percent(share)}`;
+        tick.style.minWidth = `calc(64px + ${share * 55}%)`;
+        continue;
       }
-    }
-    if (crowdShape === "tails") {
-      // Every pill is the same width, so the tails start level and their length is the share and nothing else.
-      const pillWidthPx = 150, edgeGapPx = 12;
-      for (const tick of el.querySelectorAll(".tick")) {
-        const tail = html(`<i class="tail"></i>`);
-        tick.append(tail);
-        tail.offsetTop; // flush styles so the tail grows out of the pill
-        tail.style.width = `${shares[2 - Number(tick.dataset.value)] * (el.clientWidth - pillWidthPx - edgeGapPx)}px`;
-      }
+      // Label segments are one width, so every count bar starts at the same divider and its length is the share alone.
+      const labelWidthPx = 100, edgeGapPx = 12, narrowestBarWithTextPx = 46;
+      const barPx = share * (el.clientWidth - labelWidthPx - edgeGapPx);
+      tick.innerHTML = `<span class="count ${barPx < narrowestBarWithTextPx ? "outside" : ""}"><b>${percent(share)}</b></span><span class="divider"></span><span class="label">${tick.textContent}</span>${isMine ? '<span class="tag">▲ your vote</span>' : ""}`;
+      tick.offsetTop; // flush styles so the bar grows out of the label
+      tick.querySelector(".count").style.width = `${barPx}px`;
     }
     if (crowdShape === "bars") {
       // One bar per Vote value, at the height its seam would rest, growing out of a stub just wide enough for its label.
