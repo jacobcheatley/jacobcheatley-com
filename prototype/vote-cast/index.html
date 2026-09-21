@@ -49,6 +49,9 @@
   .tug.dragging .tick { opacity: .7; }
   .tug .tick.active { opacity: 1; padding-right: 20px; }
   .tug.revealed .tick { display: none; }
+  .tug.tabbed.revealed .tick { display: block; opacity: .9; box-shadow: 0 0 0 1.5px var(--paper); padding-block: 4px; font-size: 13px; transition: min-width .7s var(--spring); }
+  .tug.tabbed.revealed .tick.active { z-index: 2; opacity: 1; padding-block: 8px; font-size: 15px; box-shadow: 0 0 0 3px var(--paper); }
+  .tug.tabbed .crowd-line span { right: auto; left: 8px; }
   .tug .spread { position: absolute; z-index: 1; left: 0; top: 0; width: 38%; height: 100%; pointer-events: none; transform-origin: left; transform: scaleX(0); transition: transform .7s var(--spring); }
   .tug .spread.shown { transform: none; }
   .tug .spread path { fill: var(--paper); fill-opacity: .8; stroke: var(--ink); stroke-width: 3; vector-effect: non-scaling-stroke; }
@@ -194,6 +197,7 @@ const variants = {
   C: { name: "Hold: tap beats, hold crushes, moves on by itself", render: renderHold, enter: [{ transform: "translateX(100%)" }, { transform: "none" }] },
   D: { name: "Tug, refined: band tabs, crowd spread, moves on or tap", render: (shown) => renderTug(shown, "curve"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   E: { name: "Tug, refined, with the crowd as bars", render: (shown) => renderTug(shown, "bars"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
+  F: { name: "Tug, refined, the band tabs pop out into the bars", render: (shown) => renderTug(shown, "tabs"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
 };
 let variantKey = new URLSearchParams(location.search).get("variant");
 if (!variants[variantKey]) variantKey = "A";
@@ -227,7 +231,9 @@ function renderTug({ a, b }, crowdShape) {
   paint(el.querySelector(".a"), a.colour);
   paint(el.querySelector(".b"), b.colour);
   el.querySelector(".hint")?.style.setProperty("color", textOn(b.colour));
-  if (isRefined) for (const landing of [2, 1, -1, -2]) el.append(html(`<span class="tick" data-value="${landing}" style="top: ${50 + 17 * landing}%">${verb(landing)}</span>`));
+  const tabLabel = (landing) => (landing === 0 ? "too close" : `${(landing > 0 ? a : b).emoji} ${verb(landing)}`);
+  if (isRefined) for (const landing of crowdShape === "tabs" ? [2, 1, 0, -1, -2] : [2, 1, -1, -2]) el.append(html(`<span class="tick" data-value="${landing}" style="top: ${50 + 17 * landing}%">${tabLabel(landing)}</span>`));
+  el.classList.toggle("tabbed", crowdShape === "tabs");
 
   // Small drags are a weak win, long drags a strong one; both well inside a thumb's reach.
   const weakDragPx = 36, strongDragPx = 110, lingerMs = 3500;
@@ -247,6 +253,14 @@ function renderTug({ a, b }, crowdShape) {
     const line = html(`<div class="crowd-line" style="--crowd: 50"><span>the crowd</span></div>`);
     const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p>${isRefined ? `<div class="timer" style="--linger: ${lingerMs}ms"></div>` : '<p class="hint">tap for the next Matchup</p>'}</div>`);
     el.append(line, card);
+    if (crowdShape === "tabs") {
+      pill.remove(); // the voter's own bar takes the pill's place on the seam
+      for (const tick of el.querySelectorAll(".tick")) {
+        const share = shares[2 - Number(tick.dataset.value)];
+        tick.textContent = `${tick.classList.contains("active") ? "you: " : ""}${tick.textContent} ${percent(share)}`;
+        tick.style.minWidth = `calc(64px + ${share * 55}%)`;
+      }
+    }
     if (crowdShape === "bars") {
       // One bar per Vote value, at the height its seam would rest, growing out of a stub just wide enough for its label.
       const bars = shares.map((share, i) => html(`<span class="bar display" style="top: ${50 + 17 * (2 - i)}%">${percent(share)}</span>`));
@@ -270,6 +284,7 @@ function renderTug({ a, b }, crowdShape) {
     line.offsetTop; // flush styles so the line travels from the middle
     line.style.setProperty("--crowd", 50 + 17 * mean);
   }
+  show(0);
   el.onpointerdown = (event) => {
     if (isRevealed) return nextMatchup();
     if (event.target === pill) return;
