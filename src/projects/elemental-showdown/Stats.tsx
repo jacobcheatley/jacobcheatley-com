@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
 import { INK, PAPER } from "./element-colour";
+import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
 import {
   EVERY_VOTES_TO_UNLOCK,
@@ -58,13 +58,7 @@ function LockedScreen({
         goal={EVERY_VOTES_TO_UNLOCK}
       />
       <p>{stillMissing(ownVoteCount)}</p>
-      <Link
-        to="/elemental-showdown"
-        className="grid h-14 place-items-center rounded-[14px] font-showdown-display text-[20px] no-underline"
-        style={{ background: PAPER, color: INK }}
-      >
-        keep voting
-      </Link>
+      <PrimaryLink to="/elemental-showdown">keep voting</PrimaryLink>
       <ShareButton
         label={
           everyVoteCount < EVERY_VOTES_TO_UNLOCK

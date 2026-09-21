@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
 import type { VoteCastResult, VoteLimited, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
+import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
 import type { VoteCast, VoteValue } from "./showdown-schema";
 import { Tug } from "./Tug";
@@ -128,13 +129,7 @@ function AllJudged({ matchupCount }: { matchupCount: number }) {
         you’ve judged all {matchupCount} matchups
       </p>
       <div className="grid w-full max-w-[22rem] gap-3">
-        <Link
-          to="/elemental-showdown/stats"
-          className="grid h-14 place-items-center rounded-[14px] font-showdown-display text-[20px] no-underline"
-          style={{ background: PAPER, color: INK }}
-        >
-          the stats
-        </Link>
+        <PrimaryLink to="/elemental-showdown/stats">the stats</PrimaryLink>
         <ShareButton label="send it to a friend" />
       </div>
     </div>
