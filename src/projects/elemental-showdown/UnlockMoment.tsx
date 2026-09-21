@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { INK, NO_ELEMENT, PAPER } from "./element-colour";
 import type { StatsElement } from "./showdown-stats";
 
-// The whole moment: the wave crossing the mosaic, the stamp landing on it, and
-// a beat to read it before the Stats take the screen.
+// The whole moment: the wave crossing the mosaic, the stamp landing under it,
+// and a beat to read it before the Stats take the screen.
 export const UNLOCK_MS = 2600;
 
-// One tile's flip, and how far behind the wave's last step it starts.
+// How long one tile takes to flip, and how far behind the tile before it on
+// the wave it starts.
 const TILE_FLIP_MS = 350;
 const WAVE_STEP_MS = 28;
 
@@ -17,6 +18,12 @@ const STAMP_MS = 450;
 // Two short buzzes and a long one.
 const UNLOCK_BUZZ = [30, 60, 120];
 
+// The stamp stays one line whatever it lands on: Bowlby One sets these two
+// words about nine times the font size wide, and the tilt and the outline add
+// to that, so on a phone the size comes from the screen and 44px is the
+// ceiling it is drawn at.
+const STAMP_FONT_SIZE = "min(44px, 8vw)";
+
 // The mosaic is this many tiles wide, so a tile's place gives its row and its
 // column. The wave runs down the diagonal, a row counting for two columns so
 // that it leans rather than falling at 45°.
@@ -26,7 +33,7 @@ const waveStepsTo = (place: number) =>
 
 // The Stats opening on the screen the Vote that opened them was cast on: the
 // locked screen's blank mosaic, a tile per Active Element, flips to its own
-// Element in a diagonal wave and the stamp lands on it.
+// Element in a diagonal wave, and the stamp lands under it.
 export function UnlockMoment({
   elements,
   onDone,
@@ -51,7 +58,7 @@ export function UnlockMoment({
 
   return (
     <main
-      className="grid h-dvh content-center overflow-hidden px-4 font-showdown"
+      className="grid h-dvh content-center gap-16 overflow-hidden px-4 font-showdown"
       style={{ background: INK, color: PAPER }}
     >
       <div aria-hidden className="grid grid-cols-13 gap-[3px]">
@@ -83,9 +90,9 @@ export function UnlockMoment({
         })}
       </div>
       <p
-        className="pointer-events-none fixed top-[45%] left-1/2 whitespace-nowrap rounded-2xl px-[22px] py-[10px] font-showdown-display text-[44px]"
+        className="mx-auto w-fit whitespace-nowrap rounded-2xl px-[22px] py-[10px] font-showdown-display"
         style={{
-          translate: "-50% -50%",
+          fontSize: STAMP_FONT_SIZE,
           rotate: "-7deg",
           background: PAPER,
           color: INK,
