@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
 import type { VoteCastResult, VoteLimited, VoteReveal } from "./matchup-score";
@@ -6,7 +6,15 @@ import type { NextMatchup } from "./matchup-selection";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
 import type { VoteCast, VoteValue } from "./showdown-schema";
+import type { StatsElement } from "./showdown-stats";
 import { Tug } from "./Tug";
+import { UnlockMoment } from "./UnlockMoment";
+
+// The wave is motion a visitor can ask not to be shown; asked, the Stats take
+// the screen at once instead. `matchMedia` belongs to a browser, and this is
+// read only when a Vote lands in one.
+const prefersReducedMotion = () =>
+  window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
 
 // The whole screen: one Matchup at a time, in the Project's own full-height
 // layout rather than the Portfolio's shell.
@@ -19,10 +27,13 @@ export function ElementalShowdown({
   castVote: (options: { data: VoteCast }) => Promise<VoteCastResult>;
   nextMatchup: () => Promise<NextMatchup>;
 }) {
+  const navigate = useNavigate();
   const [matchup, setMatchup] = useState(shown);
   const [reveal, setReveal] = useState<VoteReveal | null>(null);
   const [limited, setLimited] = useState<VoteLimited | null>(null);
   const [votesCast, setVotesCast] = useState(0);
+  // The Elements of the moment being played, once a Vote has unlocked them.
+  const [unlocking, setUnlocking] = useState<StatsElement[] | null>(null);
   // A ref for the guard: a second Enter can arrive before a re-render would
   // have told it the first Vote is already on its way.
   const casting = useRef(false);
@@ -58,8 +69,18 @@ export function ElementalShowdown({
       });
   }
 
+  const openStats = useCallback(() => {
+    void navigate({ to: "/elemental-showdown/stats" });
+  }, [navigate]);
+
   // The reveal's own clock calls this, and so does a Voter who has read enough.
   const advance = useCallback(() => {
+    // The Stats this Vote earned take the screen rather than the next Matchup.
+    if (reveal?.unlockedElements) {
+      if (prefersReducedMotion()) openStats();
+      else setUnlocking(reveal.unlockedElements);
+      return;
+    }
     const drawn = drawing.current;
     if (!drawn) return;
     drawing.current = null;
@@ -73,7 +94,10 @@ export function ElementalShowdown({
         // The reveal stays up rather than an empty screen taking its place.
         console.error(new Error("drawing the next Matchup failed", { cause }));
       });
-  }, []);
+  }, [reveal, openStats]);
+
+  if (unlocking)
+    return <UnlockMoment elements={unlocking} onDone={openStats} />;
 
   return (
     <main

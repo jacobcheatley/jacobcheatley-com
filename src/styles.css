@@ -143,6 +143,15 @@ body {
   }
 }
 
+/* Frames only: when the stamp lands and how long it takes come inline from
+   UnlockMoment.tsx. It is held out of sight until then by `both`. */
+@keyframes stats-unlocked-stamp {
+  from {
+    scale: 3;
+    opacity: 0;
+  }
+}
+
 /* Frames only: the blink rate and its step timing come inline from
    note-overlay.tsx, and motion-reduce:animate-none! leaves the caret steady. */
 @keyframes desk-caret {
