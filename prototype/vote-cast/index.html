@@ -45,6 +45,13 @@
   .tug > .hint { position: absolute; z-index: 2; left: 0; right: 0; top: calc(50% + 30px); text-align: center; pointer-events: none; }
   .tug .crowd-line { position: absolute; z-index: 1; left: 0; right: 0; top: calc(var(--crowd) * 1%); translate: 0 -50%; height: 4px; background: repeating-linear-gradient(90deg, var(--paper) 0 10px, var(--ink) 10px 20px); transition: top .7s var(--spring); }
   .tug .crowd-line span { position: absolute; right: 8px; top: 50%; translate: 0 -50%; background: var(--paper); color: var(--ink); border-radius: 99px; padding: 2px 10px; font-size: 13px; font-weight: 700; }
+  .tug .tick { position: absolute; z-index: 1; right: 0; translate: 0 -50%; padding: 1px 8px 1px 10px; border-radius: 99px 0 0 99px; background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 700; opacity: .35; pointer-events: none; transition: opacity .2s, padding .2s; }
+  .tug.dragging .tick { opacity: .7; }
+  .tug .tick.active { opacity: 1; padding-right: 20px; }
+  .tug.revealed .tick { display: none; }
+  .tug .spread { position: absolute; z-index: 1; left: 0; top: 0; width: 38%; height: 100%; pointer-events: none; transform-origin: left; transform: scaleX(0); transition: transform .7s var(--spring); }
+  .tug .spread.shown { transform: none; }
+  .tug .spread path { fill: var(--paper); fill-opacity: .8; stroke: var(--ink); stroke-width: 3; vector-effect: non-scaling-stroke; }
   .tug .card { position: absolute; z-index: 3; left: 16px; right: 16px; }
   .tug .card.top { top: 14px; }
   .tug .card.bottom { bottom: 14px; }
@@ -88,7 +95,7 @@
   .hold .split { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
   .hold .split i { display: block; }
   .hold .split i.mine { box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px var(--paper); }
-  .hold .timer { height: 4px; border-radius: 2px; background: var(--paper); transform-origin: left; animation: drain 2.8s linear forwards; }
+  .timer { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--paper); transform-origin: left; animation: drain var(--linger) linear forwards; }
   @keyframes drain { to { transform: scaleX(0); } }
 
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01s !important; } .half.strong { animation: none; } }
@@ -184,6 +191,7 @@ const variants = {
   A: { name: "Tug: drag the seam, tap to continue", render: renderTug, enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   B: { name: "Ladder: five rungs, a Next button", render: renderLadder, enter: [{ opacity: 0 }, { opacity: 1 }] },
   C: { name: "Hold: tap beats, hold crushes, moves on by itself", render: renderHold, enter: [{ transform: "translateX(100%)" }, { transform: "none" }] },
+  D: { name: "Tug, refined: band tabs, crowd spread, moves on or tap", render: (shown) => renderTug(shown, true), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
 };
 let variantKey = new URLSearchParams(location.search).get("variant");
 if (!variants[variantKey]) variantKey = "A";
@@ -206,7 +214,7 @@ function switchVariant(step) {
 }
 const isFirstMatchup = () => judged.size === 0;
 
-function renderTug({ a, b }) {
+function renderTug({ a, b }, isRefined = false) {
   const el = html(`<div class="tug">
     <div class="side a">${face(a)}</div><div class="side b">${face(b)}</div>
     <button class="pill display">too close to call</button>
@@ -216,23 +224,37 @@ function renderTug({ a, b }) {
   paint(el.querySelector(".a"), a.colour);
   paint(el.querySelector(".b"), b.colour);
   el.querySelector(".hint")?.style.setProperty("color", textOn(b.colour));
+  if (isRefined) for (const landing of [2, 1, -1, -2]) el.append(html(`<span class="tick" data-value="${landing}" style="top: ${50 + 17 * landing}%">${verb(landing)}</span>`));
 
   // Small drags are a weak win, long drags a strong one; both well inside a thumb's reach.
-  const weakDragPx = 36, strongDragPx = 110;
+  const weakDragPx = 36, strongDragPx = 110, lingerMs = 3500;
   let dragStartY = null, value = 0, isRevealed = false;
   function show(nextValue) {
     value = nextValue;
     el.style.setProperty("--seam", 50 + 17 * value);
     pill.textContent = sentence(value, { a, b });
     pill.classList.toggle("strong", Math.abs(value) === 2);
+    for (const tick of el.querySelectorAll(".tick")) tick.classList.toggle("active", Number(tick.dataset.value) === value);
   }
   function reveal() {
     isRevealed = true;
     el.querySelector(".hint")?.remove();
-    const { mean, headline, sub } = castVote(value);
+    el.classList.add("revealed");
+    const { shares, mean, headline, sub } = castVote(value);
     const line = html(`<div class="crowd-line" style="--crowd: 50"><span>the crowd</span></div>`);
-    const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p><p class="hint">tap for the next Matchup</p></div>`);
+    const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p>${isRefined ? `<div class="timer" style="--linger: ${lingerMs}ms"></div>` : '<p class="hint">tap for the next Matchup</p>'}</div>`);
     el.append(line, card);
+    if (isRefined) {
+      // The crowd's five shares as a smooth hump down the left edge, each at the height its seam would rest.
+      const peak = Math.max(...shares);
+      const humps = [[0, 100], ...shares.map((share, i) => [(share / peak) * 100, 50 + 17 * (2 - i)]), [0, 0]];
+      const curve = humps.slice(1).map(([x, y], i) => { const [fromX, fromY] = humps[i], midY = (fromY + y) / 2; return `C${fromX},${midY} ${x},${midY} ${x},${y}`; }).join(" ");
+      const spread = html(`<svg class="spread" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,100 ${curve} Z"/></svg>`);
+      el.append(spread);
+      spread.getBoundingClientRect(); // flush styles so the hump grows from the edge
+      spread.classList.add("shown");
+      setTimeout(() => { if (stage.lastElementChild === el) nextMatchup(); }, lingerMs);
+    }
     line.offsetTop; // flush styles so the line travels from the middle
     line.style.setProperty("--crowd", 50 + 17 * mean);
   }
@@ -240,6 +262,7 @@ function renderTug({ a, b }) {
     if (isRevealed) return nextMatchup();
     if (event.target === pill) return;
     dragStartY = event.clientY;
+    el.classList.add("dragging");
     el.setPointerCapture(event.pointerId);
   };
   el.onpointermove = (event) => {
@@ -252,6 +275,7 @@ function renderTug({ a, b }) {
   el.onpointerup = el.onpointercancel = () => {
     if (dragStartY === null) return;
     dragStartY = null;
+    el.classList.remove("dragging");
     if (value !== 0) reveal();
   };
   pill.onclick = () => { if (!isRevealed) reveal(); };
@@ -304,7 +328,7 @@ function renderHold({ a, b }) {
     el.querySelector(".a").style.setProperty("--grow", 2 + mean * 0.6);
     el.querySelector(".b").style.setProperty("--grow", 2 - mean * 0.6);
     const split = scale({ a, b }).map(([, colour], i) => `<i class="${i === mine ? "mine" : ""}" style="flex: ${shares[i]} 1 0; background: ${colour}"></i>`).join("");
-    el.append(html(`<div class="card"><p class="same display">${percent(shares[mine])}</p><p class="sub">${sub.slice(sub.indexOf(" ") + 1)}</p><div class="split">${split}</div><p class="headline display">${headline}</p><div class="timer"></div></div>`));
+    el.append(html(`<div class="card"><p class="same display">${percent(shares[mine])}</p><p class="sub">${sub.slice(sub.indexOf(" ") + 1)}</p><div class="split">${split}</div><p class="headline display">${headline}</p><div class="timer" style="--linger: ${lingerMs}ms"></div></div>`));
     setTimeout(advance, lingerMs);
   }
   function advance() { if (el.isConnected && stage.lastElementChild === el) nextMatchup(); }
