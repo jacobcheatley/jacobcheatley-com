@@ -20,3 +20,10 @@ it("links the Blog Cover to the Blog by name", () => {
     "/blog",
   );
 });
+
+it("links the Elemental Showdown Cover to its Project by name", () => {
+  render(<Projects />);
+  expect(
+    screen.getByRole("link", { name: "Elemental Showdown" }),
+  ).toHaveAttribute("href", "/elemental-showdown");
+});
