@@ -209,6 +209,98 @@ describe("castVote", () => {
   });
 });
 
+describe("the Vote that unlocks the Stats", () => {
+  // Both numbers one Vote short, with a Matchup left for the Voter to cast the
+  // Vote that crosses them on.
+  async function oneVoteShortOfBoth() {
+    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+    await castVotes(matchups, {
+      own: OWN_VOTES_TO_UNLOCK - 1,
+      everyone: EVERY_VOTES_TO_UNLOCK - 1,
+    });
+    return {
+      matchups,
+      unlocking: theVoteOn(matchups, OWN_VOTES_TO_UNLOCK - 1),
+    };
+  }
+
+  function theVoteOn(matchups: Matchup[], at: number) {
+    const unvoted = matchups[at];
+    if (!unvoted) throw new Error(`no Matchup ${at} to vote on`);
+    return {
+      topElementId: unvoted.elementLow,
+      bottomElementId: unvoted.elementHigh,
+      value: A_WEAK_WIN,
+    };
+  }
+
+  it("carries the Active Elements the wave flips a tile for", async () => {
+    const { unlocking } = await oneVoteShortOfBoth();
+
+    const reveal = await castVote(VOTER, unlocking);
+
+    expect(reveal.unlockedElements).toHaveLength(ELEMENTS_FOR_THE_GATE);
+    expect(reveal.unlockedElements?.[0]).toEqual({
+      id: expect.any(Number),
+      name: "element 0",
+      emoji: "🔥",
+      colour: "#f2541b",
+    });
+  });
+
+  it("says nothing of an unlock on the Vote before both numbers are met", async () => {
+    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+    await castVotes(matchups, {
+      own: OWN_VOTES_TO_UNLOCK - 2,
+      everyone: EVERY_VOTES_TO_UNLOCK - 2,
+    });
+
+    const reveal = await castVote(
+      VOTER,
+      theVoteOn(matchups, OWN_VOTES_TO_UNLOCK - 2),
+    );
+
+    expect(reveal.unlockedElements).toBeUndefined();
+  });
+
+  it("says nothing of an unlock on the Vote after it", async () => {
+    const { matchups, unlocking } = await oneVoteShortOfBoth();
+    await castVote(VOTER, unlocking);
+
+    const reveal = await castVote(
+      VOTER,
+      theVoteOn(matchups, OWN_VOTES_TO_UNLOCK),
+    );
+
+    expect(reveal.unlockedElements).toBeUndefined();
+  });
+
+  it("says nothing of an unlock on a repeat Vote that stored nothing", async () => {
+    const { unlocking } = await oneVoteShortOfBoth();
+    await castVote(VOTER, unlocking);
+
+    const reveal = await castVote(VOTER, unlocking);
+
+    expect(reveal.unlockedElements).toBeUndefined();
+  });
+
+  it("opens the Stats to the Voter the moment their unlocking Vote lands", async () => {
+    const { unlocking } = await oneVoteShortOfBoth();
+    // The locked screen the Voter is reading holds the crowd's number for a
+    // minute, and their unlocking Vote arrives inside it.
+    const whileHeldMs = nextRead();
+    expect(await showdownStats(VOTER, whileHeldMs)).toMatchObject({
+      state: "locked",
+    });
+
+    await castVote(VOTER, unlocking);
+
+    expect(await showdownStats(VOTER, whileHeldMs)).toMatchObject({
+      state: "unlocked",
+    });
+  });
+});
+
 // The limiter is one per Machine, so each test here brings an address of its
 // own rather than spending another test's cap.
 describe("castVoteFromAddress", () => {

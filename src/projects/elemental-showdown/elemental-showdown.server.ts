@@ -22,6 +22,7 @@ import {
   crowdCallsOf,
   isStatsUnlocked,
   type ShowdownStats,
+  statsElementOf,
   type UnlockCounts,
 } from "./showdown-stats";
 import { type OwnVote, storiesOf } from "./showdown-stories";
@@ -48,7 +49,9 @@ async function loadAggregate(): Promise<ShowdownAggregate> {
 
 // One copy per Machine: a suspended Machine wakes with an empty cache and a
 // second Machine holds its own, both of which the Project can live with.
-export const showdownAggregate = cacheAggregate(loadAggregate);
+const { readAggregate, forgetAggregate } = cacheAggregate(loadAggregate);
+
+export const showdownAggregate = readAggregate;
 
 // A visitor with no cookie has voted on nothing, so they are offered the whole
 // roster's Matchups. Their own Votes are read fresh every time: the cache would
@@ -140,7 +143,9 @@ export async function castVote(
     eq(votes.elementHigh, elementHigh),
   );
 
-  await db
+  // A repeat Vote stores nothing, so it leaves both counts where they were and
+  // cannot be the Vote that crosses them.
+  const inserted = await db
     .insert(votes)
     .values({
       voter,
@@ -150,11 +155,13 @@ export async function castVote(
     })
     .onConflictDoNothing({
       target: [votes.voter, votes.elementLow, votes.elementHigh],
-    });
+    })
+    .returning({ voter: votes.voter });
 
   // The split is read fresh for this one Matchup, never from the cache the
-  // Stats read: the Voter's own Vote has to be in it.
-  const [tally, [stood]] = await Promise.all([
+  // Stats read: the Voter's own Vote has to be in it. So are both unlock
+  // numbers, which the cached copy is up to a minute too old to decide on.
+  const [tally, [stood], [countsAfter]] = await Promise.all([
     db
       .select({ value: votes.value, voteCount: count() })
       .from(votes)
@@ -164,16 +171,48 @@ export async function castVote(
       .select({ value: votes.value })
       .from(votes)
       .where(and(thisMatchup, eq(votes.voter, voter))),
+    db
+      .select({
+        everyVoteCount: count(),
+        ownVoteCount:
+          sql`count(*) filter (where ${votes.voter} = ${voter})`.mapWith(
+            Number,
+          ),
+      })
+      .from(votes),
   ]);
   if (!stood)
     throw new Error(
       `the Vote on Matchup ${elementLow}-${elementHigh} was cast but is not there to read back`,
     );
+  if (!countsAfter)
+    throw new Error("counting the Votes cast so far gave no row back");
 
   const counts = noVotes();
   for (const { value: stored, voteCount } of tally)
     counts[asShown(stored)] += voteCount;
-  return revealFor(counts, asShown(stood.value));
+  const reveal = revealFor(counts, asShown(stood.value));
+
+  const countsBefore: UnlockCounts =
+    inserted.length === 1
+      ? {
+          ownVoteCount: countsAfter.ownVoteCount - 1,
+          everyVoteCount: countsAfter.everyVoteCount - 1,
+        }
+      : countsAfter;
+  if (isStatsUnlocked(countsBefore) || !isStatsUnlocked(countsAfter))
+    return reveal;
+
+  // The Stats gate reads the cached count, which is a minute behind this Vote
+  // at worst: the Voter who has just watched them open must not be dropped
+  // onto the locked screen.
+  forgetAggregate();
+  const roster = await db
+    .select()
+    .from(elements)
+    .where(eq(elements.isActive, true))
+    .orderBy(elements.name);
+  return { ...reveal, unlockedElements: roster.map(statsElementOf) };
 }
 
 // One cap per Machine, as the aggregate's cache is one copy per Machine.
