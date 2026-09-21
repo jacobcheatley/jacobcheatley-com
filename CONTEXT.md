@@ -116,3 +116,51 @@ _Avoid_: tag (a **Tag** is the Sticky Notes name tag), category
 **Publish date**:
 The moment an **Article** becomes public, and the date shown with it. An Article with none is a **Draft**; with one still in the future it is **Scheduled**; once it has arrived it is **Published**. Only Published Articles are visible on the site.
 _Avoid_: status, published flag
+
+### Elemental Showdown
+
+The crowd-voted Project (`/elemental-showdown`). Visitors vote on head-to-heads between **Elements**; the votes add up to the public **Stats**.
+
+**Element**:
+One of the owner-seeded contenders — fire, water, plant and so on — each with an emoji and a colour. The name and emoji identify it; the colour is thematic and need not be unique. Not the Sticky Notes **Element**; the two never meet.
+_Avoid_: type
+
+**Common**, **Rare**:
+The two kinds of **Element**. A Common one is a staple everyone has an opinion on (fire, water, rock); a Rare one is further afield (magnet, paper, frog). A voter's first five **Matchups** are between two Common Elements; after that the kind changes nothing.
+_Avoid_: tier, core, starter
+
+**Active**:
+An **Element** the owner currently has switched on. One that is not Active is never offered in a **Matchup** and does not appear in the **Stats**, but its **Votes** are kept and return with it: a seasonal Element (santa, the easter bunny) is a Rare one that is Active for part of the year. A Matchup is Active when both its Elements are.
+_Avoid_: enabled, retired, deleted, seasonal (not a kind)
+
+**Matchup**:
+An unordered pair of two different **Elements**. It is what a voter is shown and what a **Vote** is about.
+_Avoid_: pair, battle, duel
+
+**Vote**:
+One **Voter**'s verdict on one **Matchup**: one side wins strongly, one side wins weakly, or too close to call.
+_Avoid_: rating, answer, swipe
+
+**Voter**:
+A browser that has cast at least one **Vote**. Not a person: a cleared cookie or a second device is a new Voter.
+_Avoid_: user, account, visitor (a visitor becomes a Voter on their first Vote)
+
+**Stats**:
+The only public view of the votes as a whole: **Stories** about the crowd's calls, then a page per **Element** listing its **Effectiveness** against every other, each shown with its **Confidence**. A **Voter** sees the Stats once there are enough Votes overall and they have cast enough of their own. There is no grid of every Matchup.
+_Avoid_: chart, type chart, table, results
+
+**Story**:
+One headline in the **Stats**, drawn from the crowd's calls: the champion, the punching bag, the most **Controversial** Matchup, a rock-paper-scissors triangle, the Voter's own record against the crowd.
+_Avoid_: headline, card, fun fact
+
+**Effectiveness**:
+The crowd's call on one **Matchup**, read from one Element's side: 4×, 2×, **Neutral**, **Controversial**, ½× or ¼×. What one Element reads as 2×, the other reads as ½×.
+_Avoid_: tier, verdict, result
+
+**Neutral**, **Controversial**:
+The two **Effectiveness** values with no winner. Neutral: the crowd agrees neither side wins. Controversial: the crowd is split between the two sides, not indifferent.
+_Avoid_: tie, draw, mixed
+
+**Confidence**:
+How sure the crowd is of a Matchup's **Effectiveness**, given how many **Votes** it has and how much they agree: solid, medium or faint.
+_Avoid_: boldness, certainty, strength

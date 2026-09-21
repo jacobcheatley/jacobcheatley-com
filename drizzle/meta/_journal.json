@@ -15,6 +15,20 @@
       "when": 1789879585230,
       "tag": "0001_gorgeous_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790023730136,
+      "tag": "0002_woozy_thing",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790023735863,
+      "tag": "0003_element_roster",
+      "breakpoints": true
     }
   ]
 }
