@@ -8,11 +8,11 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElementalShowdown } from "./ElementalShowdown";
-import type { VoteReveal } from "./matchup-score";
+import type { VoteCastResult, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
 import { REVEAL_LINGER_MS } from "./Reveal";
 import type { ShowdownElement } from "./schema";
-import type { VoteCast } from "./showdown-schema";
+import type { RateWindow, VoteCast } from "./showdown-schema";
 
 // The route's only contribution is the Matchup the loader drew and the two
 // server functions, so the tests hand those in.
@@ -53,7 +53,13 @@ const reveal = (crowd: Partial<VoteReveal> = {}): VoteReveal => ({
   ...crowd,
 });
 
-type CastVote = (options: { data: VoteCast }) => Promise<VoteReveal>;
+// A Vote this address has no room left for, in the window it ran past.
+const limitedBy = (window: RateWindow): VoteCastResult => ({
+  state: "limited",
+  window,
+});
+
+type CastVote = (options: { data: VoteCast }) => Promise<VoteCastResult>;
 
 function showdown({
   shown = matchup(fire, water),
@@ -250,6 +256,42 @@ describe("after a Vote", () => {
     await waitFor(() => expect(failed).toHaveBeenCalledTimes(1));
     expect(screen.getByText("fire")).toBeInTheDocument();
     expect(screen.getByText("water")).toBeInTheDocument();
+  });
+});
+
+describe("a Vote the address has no room left for", () => {
+  it("says slow down and keeps the Matchup up", async () => {
+    const user = userEvent.setup();
+    showdown({ castVote: vi.fn<CastVote>(async () => limitedBy("minute")) });
+
+    await user.click(pill());
+
+    expect(await screen.findByText("slow down a sec")).toBeInTheDocument();
+    expect(screen.getByText("fire")).toBeInTheDocument();
+    expect(screen.getByText("water")).toBeInTheDocument();
+    expect(screen.queryByText("▲ your vote")).toBeNull();
+  });
+
+  it("springs the seam back, so the next drag simply votes again", async () => {
+    const user = userEvent.setup();
+    showdown({ castVote: vi.fn<CastVote>(async () => limitedBy("minute")) });
+
+    tug().focus();
+    await user.keyboard("{ArrowUp}{ArrowUp}{Enter}");
+
+    await screen.findByText("slow down a sec");
+    expect(tug()).toHaveAttribute("aria-valuenow", "0");
+  });
+
+  it("sends the Voter away until tomorrow once the day is spent", async () => {
+    const user = userEvent.setup();
+    showdown({ castVote: vi.fn<CastVote>(async () => limitedBy("day")) });
+
+    await user.click(pill());
+
+    expect(
+      await screen.findByText("that’s plenty for today, come back tomorrow"),
+    ).toBeInTheDocument();
   });
 });
 

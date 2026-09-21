@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
 import {
   castVote,
+  castVoteFromAddress,
   nextMatchup,
   showdownAggregate,
 } from "./elemental-showdown.server";
@@ -10,6 +11,7 @@ import { scoreMatchup } from "./matchup-score";
 import { elements, votes } from "./schema";
 import { AGGREGATE_LIFETIME_MS } from "./showdown-aggregate";
 import type { ElementKind } from "./showdown-schema";
+import { VOTES_PER_MINUTE } from "./vote-limiter";
 
 const VOTER = "11111111-1111-4111-8111-111111111111";
 const OTHER_VOTER = "22222222-2222-4222-8222-222222222222";
@@ -165,6 +167,47 @@ describe("castVote", () => {
     await castVote(OTHER_VOTER, { ...matchup, value: -1 });
 
     expect(await storedVotes()).toHaveLength(2);
+  });
+});
+
+// The limiter is one per Machine, so each test here brings an address of its
+// own rather than spending another test's cap.
+describe("castVoteFromAddress", () => {
+  it("reveals the crowd as ever to an address within its cap", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+
+    const cast = await castVoteFromAddress(VOTER, "203.0.113.1", 0, {
+      topElementId: fire,
+      bottomElementId: water,
+      value: 2,
+    });
+
+    expect(cast).toMatchObject({ state: "reveal", vote: 2 });
+  });
+
+  it("stores no Vote once the address has spent the minute's cap", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+    const plant = await insertElement("plant");
+    const address = "203.0.113.2";
+    for (let cast = 0; cast < VOTES_PER_MINUTE; cast++)
+      await castVoteFromAddress(VOTER, address, 0, {
+        topElementId: fire,
+        bottomElementId: water,
+        value: 1,
+      });
+
+    const cast = await castVoteFromAddress(VOTER, address, 0, {
+      topElementId: fire,
+      bottomElementId: plant,
+      value: 2,
+    });
+
+    expect(cast).toEqual({ state: "limited", window: "minute" });
+    expect(await storedVotes()).toMatchObject([
+      { elementLow: fire, elementHigh: water },
+    ]);
   });
 });
 
