@@ -52,6 +52,9 @@
   .tug.tabbed.revealed .tick { display: block; opacity: .9; box-shadow: 0 0 0 1.5px var(--paper); padding-block: 4px; font-size: 13px; transition: min-width .7s var(--spring); }
   .tug.tabbed.revealed .tick.active { z-index: 2; opacity: 1; padding-block: 8px; font-size: 15px; box-shadow: 0 0 0 3px var(--paper); }
   .tug.tabbed .crowd-line span { right: auto; left: 8px; }
+  .tug.tailed.revealed .tick { width: 150px; border-radius: 0; white-space: nowrap; }
+  .tug.tailed.revealed .tick.active { font-size: 13px; }
+  .tug .tail { position: absolute; right: 100%; top: 50%; translate: 0 -50%; height: calc(100% - 6px); width: 0; box-sizing: content-box; border: 3px solid var(--ink); border-right: 0; border-radius: 8px 0 0 8px; background: var(--paper); transition: width .7s var(--spring); }
   .tug .spread { position: absolute; z-index: 1; left: 0; top: 0; width: 38%; height: 100%; pointer-events: none; transform-origin: left; transform: scaleX(0); transition: transform .7s var(--spring); }
   .tug .spread.shown { transform: none; }
   .tug .spread path { fill: var(--paper); fill-opacity: .8; stroke: var(--ink); stroke-width: 3; vector-effect: non-scaling-stroke; }
@@ -198,6 +201,7 @@ const variants = {
   D: { name: "Tug, refined: band tabs, crowd spread, moves on or tap", render: (shown) => renderTug(shown, "curve"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   E: { name: "Tug, refined, with the crowd as bars", render: (shown) => renderTug(shown, "bars"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
   F: { name: "Tug, refined, the band tabs pop out into the bars", render: (shown) => renderTug(shown, "tabs"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
+  G: { name: "Tug, refined, fixed pills with true-length tails", render: (shown) => renderTug(shown, "tails"), enter: [{ transform: "translateY(100%)" }, { transform: "none" }] },
 };
 let variantKey = new URLSearchParams(location.search).get("variant");
 if (!variants[variantKey]) variantKey = "A";
@@ -231,9 +235,11 @@ function renderTug({ a, b }, crowdShape) {
   paint(el.querySelector(".a"), a.colour);
   paint(el.querySelector(".b"), b.colour);
   el.querySelector(".hint")?.style.setProperty("color", textOn(b.colour));
+  const hasFiveTabs = crowdShape === "tabs" || crowdShape === "tails";
   const tabLabel = (landing) => (landing === 0 ? "too close" : `${(landing > 0 ? a : b).emoji} ${verb(landing)}`);
-  if (isRefined) for (const landing of crowdShape === "tabs" ? [2, 1, 0, -1, -2] : [2, 1, -1, -2]) el.append(html(`<span class="tick" data-value="${landing}" style="top: ${50 + 17 * landing}%">${tabLabel(landing)}</span>`));
-  el.classList.toggle("tabbed", crowdShape === "tabs");
+  if (isRefined) for (const landing of hasFiveTabs ? [2, 1, 0, -1, -2] : [2, 1, -1, -2]) el.append(html(`<span class="tick" data-value="${landing}" style="top: ${50 + 17 * landing}%">${tabLabel(landing)}</span>`));
+  el.classList.toggle("tabbed", hasFiveTabs);
+  el.classList.toggle("tailed", crowdShape === "tails");
 
   // Small drags are a weak win, long drags a strong one; both well inside a thumb's reach.
   const weakDragPx = 36, strongDragPx = 110, lingerMs = 3500;
@@ -253,12 +259,22 @@ function renderTug({ a, b }, crowdShape) {
     const line = html(`<div class="crowd-line" style="--crowd: 50"><span>the crowd</span></div>`);
     const card = html(`<div class="card ${value >= 0 ? "top" : "bottom"}"><p class="headline display">${headline}</p><p class="sub">${sub}</p>${isRefined ? `<div class="timer" style="--linger: ${lingerMs}ms"></div>` : '<p class="hint">tap for the next Matchup</p>'}</div>`);
     el.append(line, card);
-    if (crowdShape === "tabs") {
+    if (hasFiveTabs) {
       pill.remove(); // the voter's own bar takes the pill's place on the seam
       for (const tick of el.querySelectorAll(".tick")) {
         const share = shares[2 - Number(tick.dataset.value)];
         tick.textContent = `${tick.classList.contains("active") ? "you: " : ""}${tick.textContent} ${percent(share)}`;
-        tick.style.minWidth = `calc(64px + ${share * 55}%)`;
+        if (crowdShape === "tabs") tick.style.minWidth = `calc(64px + ${share * 55}%)`;
+      }
+    }
+    if (crowdShape === "tails") {
+      // Every pill is the same width, so the tails start level and their length is the share and nothing else.
+      const pillWidthPx = 150, edgeGapPx = 12;
+      for (const tick of el.querySelectorAll(".tick")) {
+        const tail = html(`<i class="tail"></i>`);
+        tick.append(tail);
+        tail.offsetTop; // flush styles so the tail grows out of the pill
+        tail.style.width = `${shares[2 - Number(tick.dataset.value)] * (el.clientWidth - pillWidthPx - edgeGapPx)}px`;
       }
     }
     if (crowdShape === "bars") {
