@@ -40,6 +40,43 @@ async function insertElement(
 
 const storedVotes = () => db.select().from(votes);
 
+type Matchup = { elementLow: number; elementHigh: number };
+
+const A_WEAK_WIN: VoteValue = 1;
+
+// Seven Elements give 21 Matchups, more than the Voter's own number, so each
+// of their Votes below is on a Matchup of its own.
+const ELEMENTS_FOR_THE_GATE = 7;
+
+async function insertMatchups(elementCount: number) {
+  const ids: number[] = [];
+  for (let at = 0; at < elementCount; at++)
+    ids.push(await insertElement(`element ${at}`));
+  return ids.flatMap((elementLow, at) =>
+    ids.slice(at + 1).map((elementHigh) => ({ elementLow, elementHigh })),
+  );
+}
+
+// The Voter takes a Matchup each; the rest of the crowd piles onto the first
+// of them, one Voter apiece so that every Vote stands.
+async function castVotes(
+  matchups: Matchup[],
+  { own, everyone }: { own: number; everyone: number },
+) {
+  const [crowded] = matchups;
+  if (!crowded) throw new Error("no Matchup to vote on");
+  await db.insert(votes).values([
+    ...matchups
+      .slice(0, own)
+      .map((matchup) => ({ voter: VOTER, ...matchup, value: A_WEAK_WIN })),
+    ...Array.from({ length: everyone - own }, () => ({
+      voter: crypto.randomUUID(),
+      ...crowded,
+      value: A_WEAK_WIN,
+    })),
+  ]);
+}
+
 describe("castVote", () => {
   it("stores a Vote cast with the higher-id Element on top the way round the Matchup is kept, sign and all", async () => {
     const fire = await insertElement("fire");
@@ -281,43 +318,6 @@ describe("showdownAggregate", () => {
 });
 
 describe("showdownStats", () => {
-  type Matchup = { elementLow: number; elementHigh: number };
-
-  const A_WEAK_WIN: VoteValue = 1;
-
-  // Seven Elements give 21 Matchups, more than the Voter's own number, so each
-  // of their Votes below is on a Matchup of its own.
-  const ELEMENTS_FOR_THE_GATE = 7;
-
-  async function insertMatchups(elementCount: number) {
-    const ids: number[] = [];
-    for (let at = 0; at < elementCount; at++)
-      ids.push(await insertElement(`element ${at}`));
-    return ids.flatMap((elementLow, at) =>
-      ids.slice(at + 1).map((elementHigh) => ({ elementLow, elementHigh })),
-    );
-  }
-
-  // The Voter takes a Matchup each; the rest of the crowd piles onto the first
-  // of them, one Voter apiece so that every Vote stands.
-  async function castVotes(
-    matchups: Matchup[],
-    { own, everyone }: { own: number; everyone: number },
-  ) {
-    const [crowded] = matchups;
-    if (!crowded) throw new Error("no Matchup to vote on");
-    await db.insert(votes).values([
-      ...matchups
-        .slice(0, own)
-        .map((matchup) => ({ voter: VOTER, ...matchup, value: A_WEAK_WIN })),
-      ...Array.from({ length: everyone - own }, () => ({
-        voter: crypto.randomUUID(),
-        ...crowded,
-        value: A_WEAK_WIN,
-      })),
-    ]);
-  }
-
   // The gate is met exactly, so every test below reads the open Stats.
   async function unlockFor(elementCount: number) {
     const matchups = await insertMatchups(elementCount);
