@@ -18,6 +18,11 @@ import {
   type VoteValue,
   voteValueSchema,
 } from "./showdown-schema";
+import {
+  isStatsUnlocked,
+  type ShowdownStats,
+  type UnlockCounts,
+} from "./showdown-stats";
 import { createVoteLimiter } from "./vote-limiter";
 
 // The roster and the three sums of every voted Matchup, in two queries. A
@@ -64,6 +69,42 @@ export async function nextMatchup(
       : [],
   ]);
   return drawMatchup({ aggregate, votes: cast, random });
+}
+
+// A visitor with no cookie has cast nothing, so there is nothing to ask for.
+async function countVotesBy(voter: string | undefined) {
+  if (!voter) return 0;
+  const [own] = await db
+    .select({ voteCount: count() })
+    .from(votes)
+    .where(eq(votes.voter, voter));
+  if (!own)
+    throw new Error(`counting the Votes of Voter ${voter} returned no row`);
+  return own.voteCount;
+}
+
+// The gate is the server's: while it holds, the only things to leave here are
+// the two counts and how many tiles the mosaic has. The crowd's number comes
+// from the cached aggregate and the Voter's own is always fresh, so their last
+// Vote is in it.
+export async function showdownStats(
+  voter: string | undefined,
+  nowMs: number,
+): Promise<ShowdownStats> {
+  const [aggregate, ownVoteCount] = await Promise.all([
+    showdownAggregate(nowMs),
+    countVotesBy(voter),
+  ]);
+  const counts: UnlockCounts = {
+    ownVoteCount,
+    everyVoteCount: aggregate.everyVoteCount,
+  };
+  if (isStatsUnlocked(counts)) return { state: "unlocked" };
+  return {
+    state: "locked",
+    ...counts,
+    elementCount: aggregate.elements.length,
+  };
 }
 
 // A Matchup is stored from the lower-id Element's side and shown from the top

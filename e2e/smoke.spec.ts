@@ -67,6 +67,19 @@ test("/elemental-showdown responds 200 and shows a Matchup", async ({
   await expect(page.getByRole("slider")).toBeVisible();
 });
 
+// A fresh browser has cast nothing, so the Stats are locked to it however many
+// Votes the crowd has behind it.
+test("/elemental-showdown/stats shows the locked screen to a fresh browser", async ({
+  page,
+}) => {
+  const response = await page.goto("/elemental-showdown/stats");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "the stats are locked",
+  );
+  await expect(page.getByRole("link", { name: "keep voting" })).toBeVisible();
+});
+
 // Reading, never voting: the cookie is set by a deliberate Vote and nothing
 // else, which is why there is no cookie notice.
 test("being shown a Matchup leaves no cookie behind", async ({ page }) => {

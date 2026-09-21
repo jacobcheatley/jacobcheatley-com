@@ -4,7 +4,11 @@ import {
   getRequestHeader,
   setCookie,
 } from "@tanstack/react-start/server";
-import { castVoteFromAddress, nextMatchup } from "./elemental-showdown.server";
+import {
+  castVoteFromAddress,
+  nextMatchup,
+  showdownStats,
+} from "./elemental-showdown.server";
 import { voteCastSchema } from "./showdown-schema";
 import {
   readVoterCookie,
@@ -23,6 +27,10 @@ const addressOfRequest = () => getRequestHeader("fly-client-ip");
 
 export const nextMatchupFn = createServerFn({ method: "GET" }).handler(() =>
   nextMatchup(voterOfRequest(), Math.random, Date.now()),
+);
+
+export const showdownStatsFn = createServerFn({ method: "GET" }).handler(() =>
+  showdownStats(voterOfRequest(), Date.now()),
 );
 
 // `.validator(voteCastSchema)` re-validates on the server: the trust boundary.
