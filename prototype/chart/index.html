@@ -1,6 +1,6 @@
 <!doctype html>
 <!-- PROTOTYPE, throwaway. Question: how is the 52×52 Chart read on a phone, what do the locked state and
-     the unlock look like, and where do the fun stats live? Three variants on ?variant=A|B|C.
+     the unlock look like, and where do the fun stats live? Four variants on ?variant=A|B|C|D; D is B and C together.
      Every Matchup is faked from a seed; nothing is stored.
      Run: python3 -m http.server 8153 --directory prototype/chart -->
 <html lang="en">
@@ -41,9 +41,12 @@
   /* locked, and the unlock */
   .locked { display: grid; gap: 18px; padding: 22px 16px 28px; }
   .locked h1 { font-size: 40px; }
-  .mosaic { display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; aspect-ratio: 1; }
-  .mosaic i { border-radius: 3px; background: #2c2825; transition: background .35s, scale .35s var(--spring); transition-delay: calc(var(--wave) * 28ms); }
+  .mosaic { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; }
+  .mosaic i { display: grid; place-items: center; aspect-ratio: 1; border-radius: 6px; font-style: normal; font-size: 15px; background: #2c2825; transition: background .35s, scale .35s var(--spring); transition-delay: calc(var(--wave) * 28ms); }
+  .mosaic i span { opacity: 0; transition: opacity .35s; transition-delay: inherit; }
   .unlocking .mosaic i { background: var(--colour); scale: 1.08; }
+  .unlocking .mosaic i span { opacity: 1; }
+  .share { width: 100%; height: 56px; border-radius: 14px; box-shadow: inset 0 0 0 3px var(--paper); font-size: 18px; }
   .meter { display: grid; gap: 4px; }
   .meter .track { height: 26px; border-radius: 99px; box-shadow: inset 0 0 0 2px var(--paper); overflow: hidden; }
   .meter .fill { height: 100%; border-radius: 99px; background: var(--paper); transition: width .5s var(--spring); }
@@ -94,6 +97,10 @@
   .story { position: relative; min-height: 250px; padding: 18px 16px; display: grid; align-content: end; gap: 10px; }
   .story .emojis { font-size: 70px; line-height: 1; letter-spacing: 6px; text-shadow: 0 3px 0 rgb(0 0 0 / .25); }
   .story .kicker { font-size: 13px; font-weight: 700; opacity: .7; }
+  .stories-row { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .stories-row .story { flex: 0 0 88%; min-height: 320px; scroll-snap-align: start; }
+  .every { font-size: 28px; padding: 24px 16px 4px; }
+  .invite { display: grid; gap: 10px; padding: 22px 16px 40px; }
   .lookup { padding: 22px 16px 40px; display: grid; gap: 12px; }
   .lookup h2 { font-size: 28px; }
   .lookup .pickers { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
@@ -233,19 +240,32 @@ const lossesOf = (element) => counted(element.id).filter((read) => read.tier < 0
 const unlockAtMine = 20, unlockAtCrowd = 250;
 let myVotes = 17, crowdVotes = 240;
 const isUnlocked = () => myVotes >= unlockAtMine && crowdVotes >= unlockAtCrowd;
+const alphabetical = [...roster].sort((a, b) => a.name.localeCompare(b.name));
+
+function shareButton(label) {
+  const button = html(`<button class="share display">${label}</button>`);
+  const link = `${location.origin}/elemental-showdown`;
+  button.onclick = () => {
+    if (navigator.share) return navigator.share({ title: "Elemental Showdown", text: "Which Element wins? Vote and find out.", url: link });
+    navigator.clipboard.writeText(link);
+    button.textContent = "link copied";
+  };
+  return button;
+}
 
 function renderLocked() {
-  const commons = roster.slice(0, commonCount);
   const meter = (label, count, goal) => `<div class="meter ${count >= goal ? "met" : ""}"><b>${label}: ${Math.min(count, goal)} of ${goal}</b><div class="track"><div class="fill" style="width: ${Math.min(100, (count / goal) * 100)}%"></div></div></div>`;
-  return html(`<div class="locked">
-    <h1 class="display">the chart is locked</h1>
-    <div class="mosaic">${commons.map((row) => commons.map((column) => `<i style="--wave: ${row.id + column.id}; --colour: ${row === column ? "#14110f" : winnerPaint(verdict(row.id, column.id)).startsWith("#") ? winnerPaint(verdict(row.id, column.id)) : "#ffffff"}"></i>`).join("")).join("")}</div>
+  const el = html(`<div class="locked">
+    <h1 class="display">the stats are locked</h1>
+    <div class="mosaic">${alphabetical.map((element, i) => `<i style="--wave: ${(i % 13) + Math.floor(i / 13) * 2}; --colour: ${element.colour}"><span>${element.emoji}</span></i>`).join("")}</div>
     ${meter("your Votes", myVotes, unlockAtMine)}
     ${meter("everyone's Votes", crowdVotes, unlockAtCrowd)}
     <p>${myVotes < unlockAtMine ? `${unlockAtMine - myVotes} more from you and it opens.` : isUnlocked() ? "That is enough. Here it comes." : "You have done your part. It opens when the crowd catches up."}</p>
     <button class="go display">keep voting</button>
-    <div class="stamp display">chart unlocked</div>
+    <div class="stamp display">stats unlocked</div>
   </div>`);
+  el.querySelector(".go").after(shareButton(crowdVotes < unlockAtCrowd ? "bring a friend, fill the bar" : "send it to a friend"));
+  return el;
 }
 
 // A
@@ -304,7 +324,7 @@ function renderGrid() {
 
 // B
 let pageElement = idOf("fire");
-function renderPages() {
+function renderElementPages(railGroups) {
   const element = roster[pageElement], reads = opponentsOf(element.id);
   const bands = [
     ["crushes", "4×", (read) => read.tier === 2], ["beats", "2×", (read) => read.tier === 1],
@@ -316,7 +336,7 @@ function renderPages() {
   const solid = counted(element.id), nemesis = best(solid, (read) => -read.mean), victim = best(solid, (read) => read.mean);
   const railButton = (other) => `<button data-element="${other.id}" aria-label="${other.name}" aria-current="${other === element}" style="${painted(other.colour)}">${other.emoji}</button>`;
   const el = html(`<div>
-    <nav class="rail">${roster.slice(0, commonCount).map(railButton).join("")}<span class="gap"></span>${roster.slice(commonCount).map(railButton).join("")}</nav>
+    <nav class="rail">${railGroups.map((group) => group.map(railButton).join("")).join('<span class="gap"></span>')}</nav>
     <article class="page" style="${painted(element.colour)}">
       <div class="hero"><span class="emoji">${element.emoji}</span><h1 class="display">${element.name}</h1></div>
       <p class="record">wins ${winsOf(element)}, loses ${lossesOf(element)}. Nemesis: ${nemesis.against.emoji} ${nemesis.against.name}. Favourite victim: ${victim.against.emoji} ${victim.against.name}.</p>
@@ -324,27 +344,34 @@ function renderPages() {
       <p class="legend">Heavy outline: the crowd is sure. Thin: fairly sure. ${showsFaint ? "Dashed: a guess from a few Votes." : ""}</p>
     </article>
   </div>`);
-  for (const button of el.querySelectorAll("[data-element]")) button.onclick = () => { pageElement = Number(button.dataset.element); mount(); stage.scrollTop = 0; };
-  requestAnimationFrame(() => el.querySelector('[aria-current="true"]').scrollIntoView({ inline: "center", block: "nearest" }));
+  for (const button of el.querySelectorAll("[data-element]")) button.onclick = () => { pageElement = Number(button.dataset.element); mount(); stage.querySelector(".rail").scrollIntoView(); };
+  requestAnimationFrame(() => { const rail = el.querySelector(".rail"), current = rail.querySelector('[aria-current="true"]'); rail.scrollLeft = current.offsetLeft - (rail.clientWidth - current.offsetWidth) / 2; });
   return el;
 }
 
+const renderPages = () => renderElementPages([roster.slice(0, commonCount), roster.slice(commonCount)]);
+
 // C
 let lookup = [idOf("rock"), idOf("scissors")];
-function renderHeadlines() {
+function storiesMarkup() {
   const trio = stats.triangle, controversial = stats.mostControversial, crush = stats.biggestCrush;
   const story = (background, emojis, kicker, headline, sub) => `<section class="story" style="background: ${background}"><div class="emojis">${emojis}</div><div class="card"><p class="kicker">${kicker}</p><p class="headline display">${headline}</p><p class="sub">${sub}</p></div></section>`;
-  const option = (chosen) => roster.map((element) => `<option value="${element.id}" ${element.id === chosen ? "selected" : ""}>${element.emoji} ${element.name}</option>`).join("");
   const crushWinner = crush.mean > 0 ? crush.from : crush.against, crushLoser = crush.mean > 0 ? crush.against : crush.from;
+  return [
+    story(stats.champion.colour, stats.champion.emoji, "the champion", `${stats.champion.name} wins the most`, `It beats ${winsOf(stats.champion)} of the other 51.`),
+    story(`linear-gradient(115deg, ${controversial.from.colour} 50%, ${controversial.against.colour} 50%)`, `${controversial.from.emoji}${controversial.against.emoji}`, "the argument", `${controversial.from.name} against ${controversial.against.name}`, `The crowd is split down the middle, over ${controversial.votes} Votes.`),
+    story(`linear-gradient(115deg, ${trio.map((element, i) => `${element.colour} ${i * 33.4}% ${(i + 1) * 33.4}%`).join(", ")})`, trio.map((element) => element.emoji).join(""), "a perfect triangle", `${trio[0].name} beats ${trio[1].name} beats ${trio[2].name} beats ${trio[0].name}`, "Rock, paper, scissors, found by the crowd."),
+    story(crushWinner.colour, `${crushWinner.emoji}`, "the biggest crush", `${crushWinner.name} flattens ${crushLoser.name}`, `Nobody argued. ${crush.votes} Votes.`),
+    story(stats.punchingBag.colour, stats.punchingBag.emoji, "the punching bag", `${stats.punchingBag.name} loses the most`, `It loses to ${lossesOf(stats.punchingBag)} of the other 51.`),
+    story(stats.glassCannon.colour, stats.glassCannon.emoji, "the glass cannon", `${stats.glassCannon.name} crushes or gets crushed`, "Few of its Matchups are close."),
+    story(stats.diplomat.colour, stats.diplomat.emoji, "the diplomat", `${stats.diplomat.name} picks no fights`, "More neutral Matchups than any other Element."),
+    story("#ffffff", "🫵", "you", "with the crowd 64% of the time", `Your hottest take: ${roster[idOf("sand")].emoji} sand crushes ${roster[idOf("magic")].emoji} magic. The crowd says the opposite.`),
+  ];
+}
+function renderHeadlines() {
+  const option = (chosen) => roster.map((element) => `<option value="${element.id}" ${element.id === chosen ? "selected" : ""}>${element.emoji} ${element.name}</option>`).join("");
   const el = html(`<div>
-    ${story(stats.champion.colour, stats.champion.emoji, "the champion", `${stats.champion.name} wins the most`, `It beats ${winsOf(stats.champion)} of the other 51.`)}
-    ${story(`linear-gradient(115deg, ${controversial.from.colour} 50%, ${controversial.against.colour} 50%)`, `${controversial.from.emoji}${controversial.against.emoji}`, "the argument", `${controversial.from.name} against ${controversial.against.name}`, `The crowd is split down the middle, over ${controversial.votes} Votes.`)}
-    ${story(`linear-gradient(115deg, ${trio.map((element, i) => `${element.colour} ${i * 33.4}% ${(i + 1) * 33.4}%`).join(", ")})`, trio.map((element) => element.emoji).join(""), "a perfect triangle", `${trio[0].name} beats ${trio[1].name} beats ${trio[2].name} beats ${trio[0].name}`, "Rock, paper, scissors, found by the crowd.")}
-    ${story(crushWinner.colour, `${crushWinner.emoji}`, "the biggest crush", `${crushWinner.name} flattens ${crushLoser.name}`, `Nobody argued. ${crush.votes} Votes.`)}
-    ${story(stats.punchingBag.colour, stats.punchingBag.emoji, "the punching bag", `${stats.punchingBag.name} loses the most`, `It loses to ${lossesOf(stats.punchingBag)} of the other 51.`)}
-    ${story(stats.glassCannon.colour, stats.glassCannon.emoji, "the glass cannon", `${stats.glassCannon.name} crushes or gets crushed`, "Few of its Matchups are close.")}
-    ${story(stats.diplomat.colour, stats.diplomat.emoji, "the diplomat", `${stats.diplomat.name} picks no fights`, "More neutral Matchups than any other Element.")}
-    ${story("#ffffff", "🫵", "you", "with the crowd 64% of the time", `Your hottest take: ${roster[idOf("sand")].emoji} sand crushes ${roster[idOf("magic")].emoji} magic. The crowd says the opposite.`)}
+    ${storiesMarkup().join("")}
     <section class="lookup"><h2 class="display">look up a matchup</h2>
       <div class="pickers"><select aria-label="first Element">${option(lookup[0])}</select><span>against</span><select aria-label="second Element">${option(lookup[1])}</select></div>
       <div class="reading"></div>
@@ -362,13 +389,24 @@ function renderHeadlines() {
   return el;
 }
 
+// D
+function renderStats() {
+  const el = html(`<div><div class="stories-row">${storiesMarkup().join("")}</div><h2 class="display every">every element</h2></div>`);
+  el.append(renderElementPages([alphabetical]));
+  const invite = html(`<div class="invite"><p>More Votes make every call surer.</p></div>`);
+  invite.append(shareButton("send it to a friend"));
+  el.append(invite);
+  return el;
+}
+
 const variants = {
   A: { name: "Grid: the whole Chart, read with a thumb", render: renderGrid, state: () => `focus ${gridFocus.map((id) => roster[id].name).join(" / ")}, ${gridShowsAll ? "all 52" : "20 common"}, ${gridPaintsWinner ? "winner's colour" : "win/lose"}` },
   B: { name: "Element pages: one Element at a time, in bands", render: renderPages, state: () => `page ${roster[pageElement].name}` },
   C: { name: "Headlines: stats first, any Matchup by lookup", render: renderHeadlines, state: () => `lookup ${lookup.map((id) => roster[id].name).join(" / ")}` },
+  D: { name: "Stats: stories in a row, then every Element, alphabetical", render: renderStats, state: () => `page ${roster[pageElement].name}` },
 };
 let variantKey = new URLSearchParams(location.search).get("variant");
-if (!variants[variantKey]) variantKey = "A";
+if (!variants[variantKey]) variantKey = "D";
 
 function report() {
   document.getElementById("label").textContent = `${variantKey} — ${variants[variantKey].name}`;
