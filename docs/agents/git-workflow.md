@@ -40,6 +40,10 @@ Drive it with the `gh stack` CLI (`gh extension install github/gh-stack`):
 
 Constraints: all branches live in the same repo (no cross-fork stacks), each still follows the `type/<ticket>-<short-name>` grammar, and every PR still lands on `main` as a squash merge — this extends the squash-merge rule, it doesn't replace it. See GitHub's docs: <https://docs.github.com/en/pull-requests/get-started/about-stacked-prs>.
 
+## Staging on demand
+
+`main` deploys to staging and then production by itself. To put any other branch on staging (a phone check before merging), run CI by hand on it: `gh workflow run ci.yml --ref <branch>`. That runs `check`, `test`, `deploy-staging` and `smoke` against the branch and never touches production; the next push to `main` puts staging back on `main`. The branch's migrations run on the staging database.
+
 ## Enforcement
 
 `branch-pattern.yml` gates PRs into `main` on the head branch. It skips branches it doesn't own: `dependabot/*` and GitHub's auto-generated `revert-<n>-...` reverts. It checks format only — it does not verify the ticket references a real issue.
