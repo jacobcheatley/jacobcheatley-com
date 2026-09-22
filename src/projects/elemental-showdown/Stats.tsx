@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { INK, NO_ELEMENT, PAPER, textOn } from "./element-colour";
 import { elementPageOf } from "./element-page";
+import { MOSAIC_TILE, Mosaic } from "./Mosaic";
 import type { Confidence } from "./matchup-score";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
@@ -50,7 +51,7 @@ function LockedScreen({
       <h1 className="font-showdown-display text-[40px] leading-[1.05]">
         the stats are locked
       </h1>
-      <Mosaic tileCount={elementCount} />
+      <BlankMosaic tileCount={elementCount} />
       <Meter
         label="your Votes"
         count={ownVoteCount}
@@ -74,22 +75,22 @@ function LockedScreen({
   );
 }
 
-// One blank tile per Active Element, and nothing about which Element: the
-// Stats' shape is all a locked screen is allowed to show.
-function Mosaic({ tileCount }: { tileCount: number }) {
+// Nothing about which Element: the Stats' shape is all a locked screen is
+// allowed to show.
+function BlankMosaic({ tileCount }: { tileCount: number }) {
   // Blank tiles differ in nothing, so a tile's place in the mosaic is the only
   // identity it has.
   const places = Array.from({ length: tileCount }, (_, at) => at);
   return (
-    <div aria-hidden className="grid grid-cols-13 gap-[3px]">
+    <Mosaic>
       {places.map((place) => (
         <span
           key={place}
-          className="aspect-square rounded-md"
+          className={MOSAIC_TILE}
           style={{ background: NO_ELEMENT }}
         />
       ))}
-    </div>
+    </Mosaic>
   );
 }
 

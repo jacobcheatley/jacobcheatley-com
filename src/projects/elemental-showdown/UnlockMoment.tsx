@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { INK, NO_ELEMENT, PAPER } from "./element-colour";
+import { MOSAIC_COLUMNS, MOSAIC_TILE, Mosaic } from "./Mosaic";
 import type { StatsElement } from "./showdown-stats";
 
 // The whole moment: the wave crossing the mosaic, the stamp landing under it,
@@ -23,10 +24,8 @@ const UNLOCK_BUZZ = [30, 60, 120];
 // to that.
 const STAMP_FONT_SIZE = "min(44px, 8vw)";
 
-// The mosaic is this many tiles wide, so a tile's place gives its row and its
-// column. The wave runs down the diagonal, a row counting for two columns so
-// that it leans rather than falling at 45°.
-const MOSAIC_COLUMNS = 13;
+// The wave runs down the diagonal, a row counting for two columns so that it
+// leans rather than falling at 45°.
 const waveStepsTo = (place: number) =>
   (place % MOSAIC_COLUMNS) + Math.floor(place / MOSAIC_COLUMNS) * 2;
 
@@ -60,13 +59,13 @@ export function UnlockMoment({
       className="grid h-dvh content-center gap-16 overflow-hidden px-4 font-showdown"
       style={{ background: INK, color: PAPER }}
     >
-      <div aria-hidden className="grid grid-cols-13 gap-[3px]">
+      <Mosaic>
         {elements.map((element, place) => {
           const flipDelay = `${waveStepsTo(place) * WAVE_STEP_MS}ms`;
           return (
             <span
               key={element.id}
-              className="grid aspect-square place-items-center rounded-md text-[15px] leading-none transition-[background-color,scale] ease-spring"
+              className={`grid place-items-center text-[15px] leading-none transition-[background-color,scale] ease-spring ${MOSAIC_TILE}`}
               style={{
                 transitionDuration: `${TILE_FLIP_MS}ms`,
                 transitionDelay: flipDelay,
@@ -87,7 +86,7 @@ export function UnlockMoment({
             </span>
           );
         })}
-      </div>
+      </Mosaic>
       <p
         className="mx-auto w-fit whitespace-nowrap rounded-2xl px-[22px] py-[10px] font-showdown-display"
         style={{
