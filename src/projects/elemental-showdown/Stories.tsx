@@ -1,10 +1,11 @@
+import { useRef } from "react";
 import { INK, NO_ELEMENT, PAPER } from "./element-colour";
+import { percent } from "./showdown-copy";
 import type { HottestTake, Story } from "./showdown-stories";
 
 // The crowd's calls as headlines: a row that scrolls sideways with the next
-// Story peeking, each a full-bleed field in its Element's colour under an ink
-// card. All the copy here is the prototype's placeholder: the owner writes the
-// real words.
+// Story peeking, each a full-bleed field in its Element's colour. A mouse has
+// no swipe, so beside a fine pointer the row grows a button at each end.
 
 // The diagonal a Matchup's two colours and a triangle's three are split on.
 const FIELD_ANGLE = "115deg";
@@ -21,20 +22,69 @@ const fieldOf = (colours: string[]) =>
     .join(", ")})`;
 
 export function Stories({ stories }: { stories: Story[] }) {
+  const row = useRef<HTMLDivElement>(null);
+  const turn = (direction: -1 | 1) =>
+    row.current?.scrollBy({
+      left: direction * row.current.clientWidth * 0.8,
+      behavior: "smooth",
+    });
   return (
-    <div className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]">
-      {stories.length === 0 ? (
-        <Field
-          colours={[NO_ELEMENT]}
-          emojis="🤷"
-          kicker="the crowd"
-          headline="too early to call"
-          sub="Keep voting: nothing is settled yet."
-        />
-      ) : (
-        stories.map((story) => <StoryCard key={story.kind} story={story} />)
+    <div className="relative">
+      <div
+        ref={row}
+        className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none]"
+      >
+        {stories.length === 0 ? (
+          <Field
+            colours={[NO_ELEMENT]}
+            emojis="🤷"
+            kicker="the crowd"
+            headline="too early to call"
+            sub="Keep voting: nothing is settled yet."
+          />
+        ) : (
+          stories.map((story) => <StoryCard key={story.kind} story={story} />)
+        )}
+      </div>
+      {stories.length > 1 && (
+        <>
+          <RowTurn
+            label="earlier stories"
+            edge="left-2"
+            onTurn={() => turn(-1)}
+          >
+            ←
+          </RowTurn>
+          <RowTurn label="later stories" edge="right-2" onTurn={() => turn(1)}>
+            →
+          </RowTurn>
+        </>
       )}
     </div>
+  );
+}
+
+function RowTurn({
+  label,
+  edge,
+  onTurn,
+  children,
+}: {
+  label: string;
+  edge: "left-2" | "right-2";
+  onTurn: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onTurn}
+      className={`-translate-y-1/2 absolute top-1/2 ${edge} hidden size-11 place-items-center rounded-full font-bold text-[20px] pointer-fine:grid`}
+      style={{ background: INK, color: PAPER, boxShadow: `0 0 0 2px ${PAPER}` }}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -53,7 +103,7 @@ function Field({
 }) {
   return (
     <section
-      className="grid min-h-[320px] flex-[0_0_88%] snap-start content-end gap-[10px] px-4 py-[18px]"
+      className="grid min-h-[320px] max-w-[22rem] flex-[0_0_88%] snap-start content-end gap-[10px] px-4 py-[18px]"
       style={{ background: fieldOf(colours) }}
     >
       <p className="text-[70px] leading-none tracking-[6px] [text-shadow:0_3px_0_rgb(0_0_0/0.25)]">
@@ -77,8 +127,6 @@ const TAKE_VERB = { 0: "is even with", 1: "beats", 2: "crushes" } as const;
 
 const takeLine = ({ elements: [backed, over], vote }: HottestTake) =>
   `Your hottest take: ${backed.emoji} ${backed.name} ${TAKE_VERB[vote]} ${over.emoji} ${over.name}. The crowd is not so sure.`;
-
-const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 function StoryCard({ story }: { story: Story }) {
   switch (story.kind) {

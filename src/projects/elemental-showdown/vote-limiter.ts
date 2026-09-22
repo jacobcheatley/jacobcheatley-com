@@ -1,10 +1,5 @@
-import { isIPv6 } from "node:net";
+import { isIPv4, isIPv6 } from "node:net";
 import type { RateWindow } from "./showdown-schema";
-
-// The cap on Votes per network address, so that a casual script cannot flood
-// the Stats. It lives in this Machine's memory: a restart or a second Machine
-// costs at most one more window's worth of Votes, which is inside what a cap
-// against casual flooding is for.
 
 // A fast thumb casts perhaps 30 Votes a minute, and a whole household, office
 // or carrier can sit behind one address, so the cap is generous.
@@ -38,10 +33,16 @@ function ipv6Bucket(address: string): string {
     .join(":");
 }
 
+// A socket listening on IPv6 reports an IPv4 client as `::ffff:203.0.113.7`,
+// whose /64 is the whole of IPv4: it is the IPv4 address it carries.
+const IPV4_MAPPED_PREFIX = /^::ffff:/i;
+
 // An address the header did not give in a form the counter can key on is
 // counted whole: a bucket of its own is still a bucket.
 const bucketFor = (address: string | undefined): string => {
   if (!address) return NO_ADDRESS;
+  const mapped = address.replace(IPV4_MAPPED_PREFIX, "");
+  if (isIPv4(mapped)) return mapped;
   return isIPv6(address) ? ipv6Bucket(address) : address;
 };
 

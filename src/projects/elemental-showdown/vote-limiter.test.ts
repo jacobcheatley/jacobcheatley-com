@@ -84,6 +84,20 @@ describe("what counts as one address", () => {
     expect(limitVote("2001:0db8:0001:0002:0:0:0:1", 0)).toBe("minute");
   });
 
+  it("keeps one IPv4-mapped address's cap off another's", () => {
+    const limitVote = createVoteLimiter();
+    spendMinute(limitVote, "::ffff:203.0.113.7", 0);
+
+    expect(limitVote("::ffff:203.0.113.8", 0)).toBeUndefined();
+  });
+
+  it("counts an IPv4-mapped address as the IPv4 address it carries", () => {
+    const limitVote = createVoteLimiter();
+    spendMinute(limitVote, `::ffff:${ADDRESS}`, 0);
+
+    expect(limitVote(ADDRESS, 0)).toBe("minute");
+  });
+
   it("puts every request that arrives without an address in one bucket", () => {
     const limitVote = createVoteLimiter();
     spendMinute(limitVote, undefined, 0);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ShowdownElement } from "./schema";
+import type { ShownElement } from "./showdown-stats";
 import {
   draggedVote,
   seamAt,
@@ -8,13 +8,11 @@ import {
   voteSentence,
 } from "./tug";
 
-const element = (name: string, emoji: string): ShowdownElement => ({
+const element = (name: string, emoji: string): ShownElement => ({
   id: name.length,
   name,
   emoji,
   colour: "#f2541b",
-  kind: "common",
-  isActive: true,
 });
 
 const fire = element("fire", "🔥");

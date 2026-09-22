@@ -34,8 +34,15 @@ export type ShowdownAggregate = {
   everyVoteCount: number;
 };
 
-export const matchupKey = (elementLow: number, elementHigh: number) =>
-  `${elementLow}:${elementHigh}`;
+// The two Element ids a Vote is stored against, which is what a Map of
+// Matchups is keyed by.
+export const matchupKey = ({
+  elementLow,
+  elementHigh,
+}: {
+  elementLow: number;
+  elementHigh: number;
+}) => `${elementLow}:${elementHigh}`;
 
 const NO_VOTES: MatchupSums = { voteCount: 0, valueSum: 0, squareSum: 0 };
 
@@ -49,10 +56,7 @@ export function aggregateOf({
   matchupSums: MatchupSumsRow[];
 }): ShowdownAggregate {
   const sumsByMatchup = new Map(
-    matchupSums.map((row) => [
-      matchupKey(row.elementLow, row.elementHigh),
-      row,
-    ]),
+    matchupSums.map((row) => [matchupKey(row), row]),
   );
   const active = elements
     .filter((element) => element.isActive)
@@ -65,8 +69,12 @@ export function aggregateOf({
         elementLow,
         elementHigh,
         score: scoreMatchup(
-          sumsByMatchup.get(matchupKey(elementLow.id, elementHigh.id)) ??
-            NO_VOTES,
+          sumsByMatchup.get(
+            matchupKey({
+              elementLow: elementLow.id,
+              elementHigh: elementHigh.id,
+            }),
+          ) ?? NO_VOTES,
         ),
       });
 

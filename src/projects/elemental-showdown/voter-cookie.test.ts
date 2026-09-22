@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readVoterCookie, VOTER_COOKIE_OPTIONS } from "./voter-cookie";
+import { noVotes, type VoteCastResult } from "./vote-reveal";
+import {
+  keepsTheVoter,
+  mintVoter,
+  readVoterCookie,
+  VOTER_COOKIE_OPTIONS,
+} from "./voter-cookie";
 
 describe("readVoterCookie", () => {
   it("takes the Voter the last Vote minted", () => {
@@ -18,6 +24,33 @@ describe("readVoterCookie", () => {
     expect(readVoterCookie("11111111-1111-4111-8111-11111111111")).toBe(
       undefined,
     );
+  });
+});
+
+describe("mintVoter", () => {
+  it("mints a Voter the cookie reads back as the same one", () => {
+    const minted = mintVoter();
+
+    expect(readVoterCookie(minted)).toBe(minted);
+  });
+});
+
+describe("keepsTheVoter", () => {
+  it("keeps the Voter of a Vote the crowd's split came back for", () => {
+    const reveal: VoteCastResult = {
+      state: "reveal",
+      counts: noVotes(),
+      vote: 0,
+      sameShare: 1,
+      headline: "first",
+      crowdMean: null,
+    };
+
+    expect(keepsTheVoter(reveal)).toBe(true);
+  });
+
+  it("keeps no Voter for an attempt the cap turned down", () => {
+    expect(keepsTheVoter({ state: "limited", window: "minute" })).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
-import type { ShowdownElement } from "./schema";
 import { type VoteValue, voteValueSchema } from "./showdown-schema";
+import type { ShownElement } from "./showdown-stats";
 
 // A strong win, the furthest either Element can be pulled.
 export const STRONG_WIN = 2;
@@ -40,8 +40,8 @@ const verb = (value: VoteValue) =>
 // The Vote as a sentence, which the pill wears and a screen reader hears.
 export const voteSentence = (
   value: VoteValue,
-  top: ShowdownElement,
-  bottom: ShowdownElement,
+  top: ShownElement,
+  bottom: ShownElement,
 ) =>
   value === 0
     ? "too close to call"
@@ -51,8 +51,8 @@ export const voteSentence = (
 // colour and a name there would read as the wrong Element's.
 export const tabLabel = (
   value: VoteValue,
-  top: ShowdownElement,
-  bottom: ShowdownElement,
+  top: ShownElement,
+  bottom: ShownElement,
 ) =>
   value === 0
     ? "too close"

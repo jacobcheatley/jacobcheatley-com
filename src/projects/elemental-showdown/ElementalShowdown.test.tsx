@@ -8,13 +8,12 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElementalShowdown } from "./ElementalShowdown";
-import type { VoteCastResult, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
 import { REVEAL_LINGER_MS } from "./Reveal";
-import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteCast } from "./showdown-schema";
-import { statsElementOf } from "./showdown-stats";
+import type { ShownElement } from "./showdown-stats";
 import { UNLOCK_MS } from "./UnlockMoment";
+import type { VoteCastResult, VoteReveal } from "./vote-reveal";
 
 // The route's only contribution is the Matchup the loader drew and the two
 // server functions, so the tests hand those in. `vi.mock` is hoisted above
@@ -30,23 +29,17 @@ const element = (
   name: string,
   emoji: string,
   colour: string,
-): ShowdownElement => ({
-  id,
-  name,
-  emoji,
-  colour,
-  kind: "common",
-  isActive: true,
-});
+): ShownElement => ({ id, name, emoji, colour });
 
 const fire = element(1, "fire", "🔥", "#f2541b");
 const water = element(2, "water", "💧", "#2f7fe0");
 const plant = element(3, "plant", "🌿", "#3f9d4a");
 
-const matchup = (
-  top: ShowdownElement,
-  bottom: ShowdownElement,
-): NextMatchup => ({ state: "matchup", top, bottom });
+const matchup = (top: ShownElement, bottom: ShownElement): NextMatchup => ({
+  state: "matchup",
+  top,
+  bottom,
+});
 
 // Ten Votes with the crowd behind fire: the Voter crushed it too, as half of
 // them did.
@@ -107,7 +100,7 @@ describe("the Tug as a slider", () => {
     const castVote = showdown();
 
     tug().focus();
-    await user.keyboard("{ArrowUp}{ArrowUp}{Enter}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
     expect(castVote).toHaveBeenCalledWith(cast(2));
   });
@@ -117,9 +110,30 @@ describe("the Tug as a slider", () => {
     const castVote = showdown();
 
     tug().focus();
-    await user.keyboard("{ArrowDown}{Enter}");
+    await user.keyboard("{ArrowUp}{Enter}");
 
     expect(castVote).toHaveBeenCalledWith(cast(-1));
+  });
+
+  it("raises the seam, and the slider's value with it, on ArrowUp", async () => {
+    const user = userEvent.setup();
+    showdown();
+
+    tug().focus();
+    await user.keyboard("{ArrowUp}");
+
+    expect(tug()).toHaveAttribute("aria-valuenow", "1");
+    expect(tug()).toHaveAttribute("aria-valuetext", "water beats fire");
+  });
+
+  it("follows Down and Up with Left and Right", async () => {
+    const user = userEvent.setup();
+    const castVote = showdown();
+
+    tug().focus();
+    await user.keyboard("{ArrowLeft}{ArrowLeft}{ArrowRight}{Enter}");
+
+    expect(castVote).toHaveBeenCalledWith(cast(1));
   });
 
   it("reads the Vote as a sentence while the seam moves", async () => {
@@ -129,11 +143,11 @@ describe("the Tug as a slider", () => {
     tug().focus();
     expect(tug()).toHaveAttribute("aria-valuetext", "too close to call");
 
-    await user.keyboard("{ArrowUp}");
+    await user.keyboard("{ArrowDown}");
     expect(tug()).toHaveAttribute("aria-valuetext", "fire beats water");
     expect(pill()).toHaveAccessibleName("fire beats water");
 
-    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+    await user.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
     expect(tug()).toHaveAttribute("aria-valuetext", "water crushes fire");
   });
 
@@ -142,7 +156,7 @@ describe("the Tug as a slider", () => {
     const castVote = showdown();
 
     tug().focus();
-    await user.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}{Enter}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
 
     expect(castVote).toHaveBeenCalledWith(cast(2));
   });
@@ -269,7 +283,7 @@ describe("after a Vote", () => {
 });
 
 describe("the Vote that unlocks the Stats", () => {
-  const THE_ROSTER = [fire, water, plant].map(statsElementOf);
+  const THE_ROSTER = [fire, water, plant];
 
   // The reveal is read out as ever; the moment comes after it, on the clock
   // the draining bar runs on.
@@ -349,7 +363,7 @@ describe("a Vote the address has no room left for", () => {
     showdown({ castVote: vi.fn<CastVote>(async () => limitedBy("minute")) });
 
     tug().focus();
-    await user.keyboard("{ArrowUp}{ArrowUp}{Enter}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
     await screen.findByText("slow down a sec");
     expect(tug()).toHaveAttribute("aria-valuenow", "0");

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
-import { INK, NO_ELEMENT, PAPER, textOn } from "./element-colour";
+import { INK, MET, NO_ELEMENT, PAPER, textOn } from "./element-colour";
 import { elementPageOf } from "./element-page";
+import { MOSAIC_TILE, Mosaic } from "./Mosaic";
 import type { Confidence } from "./matchup-score";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
@@ -11,12 +12,9 @@ import {
   type LockedStats,
   OWN_VOTES_TO_UNLOCK,
   type ShowdownStats,
-  type StatsElement,
+  type ShownElement,
   type UnlockedStats,
 } from "./showdown-stats";
-
-// The colour a meter turns once it is met.
-const MET = "#9fe870";
 
 // The Stats in the Project's own full-height layout rather than the Portfolio's
 // shell, scrolling where the voting screen does not.
@@ -35,7 +33,6 @@ export function Stats({ stats }: { stats: ShowdownStats }) {
   );
 }
 
-// Placeholder copy, as the prototype wrote it: the owner writes the real words.
 const stillMissing = (ownVoteCount: number) =>
   ownVoteCount < OWN_VOTES_TO_UNLOCK
     ? `${OWN_VOTES_TO_UNLOCK - ownVoteCount} more from you and it opens.`
@@ -51,7 +48,7 @@ function LockedScreen({
       <h1 className="font-showdown-display text-[40px] leading-[1.05]">
         the stats are locked
       </h1>
-      <Mosaic tileCount={elementCount} />
+      <BlankMosaic tileCount={elementCount} />
       <Meter
         label="your Votes"
         count={ownVoteCount}
@@ -75,22 +72,22 @@ function LockedScreen({
   );
 }
 
-// One blank tile per Active Element, and nothing about which Element: the
-// Stats' shape is all a locked screen is allowed to show.
-function Mosaic({ tileCount }: { tileCount: number }) {
+// Nothing about which Element: the Stats' shape is all a locked screen is
+// allowed to show.
+function BlankMosaic({ tileCount }: { tileCount: number }) {
   // Blank tiles differ in nothing, so a tile's place in the mosaic is the only
   // identity it has.
   const places = Array.from({ length: tileCount }, (_, at) => at);
   return (
-    <div aria-hidden className="grid grid-cols-13 gap-[3px]">
+    <Mosaic>
       {places.map((place) => (
         <span
           key={place}
-          className="aspect-square rounded-md"
+          className={MOSAIC_TILE}
           style={{ background: NO_ELEMENT }}
         />
       ))}
-    </div>
+    </Mosaic>
   );
 }
 
@@ -194,10 +191,9 @@ function OpenStats({ stats }: { stats: UnlockedStats }) {
   );
 }
 
-// The outline is the Confidence: heavy where the crowd is sure, thin where it
-// is fairly sure, dashed and translucent where the call is a guess. The two
-// thinner ones carry the heavy one's width as a margin, so every chip takes up
-// the same room whatever the crowd knows. The border is the chip's own ink.
+// The outline is the Confidence. The two thinner ones carry the heavy one's
+// width as a margin, so every chip takes up the same room whatever the crowd
+// knows.
 const CHIP_OUTLINE: Record<Confidence, string> = {
   solid: "border-[3px]",
   medium: "m-[1.5px] border-[1.5px]",
@@ -211,7 +207,7 @@ function ElementPage({
   calls,
   onChoose,
 }: {
-  element: StatsElement;
+  element: ShownElement;
   calls: CrowdCalls;
   onChoose: (elementId: number) => void;
 }) {

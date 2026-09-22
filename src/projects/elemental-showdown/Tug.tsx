@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
-import type { VoteLimited, VoteReveal } from "./matchup-score";
 import { Reveal } from "./Reveal";
-import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteValue } from "./showdown-schema";
+import type { ShownElement } from "./showdown-stats";
 import {
   draggedVote,
   SEAM_LANDINGS,
@@ -13,21 +12,21 @@ import {
   tabLabel,
   voteSentence,
 } from "./tug";
+import type { VoteLimited, VoteReveal } from "./vote-reveal";
 
-// Up and right take ground for the Element on top, the way a slider's keys
-// read. A thumb does the opposite: it shoves the seam away from the Element it
-// is voting for, so that the winner's side grows under it.
+// The seam moves the way the key points, as it does under a thumb: down hands
+// the ground to the Element on top. Left and Right follow Down and Up, the way
+// a slider's keys read.
 const ARROW_STEPS: Record<string, number> = {
-  ArrowUp: 1,
-  ArrowRight: 1,
-  ArrowDown: -1,
-  ArrowLeft: -1,
+  ArrowDown: 1,
+  ArrowLeft: 1,
+  ArrowUp: -1,
+  ArrowRight: -1,
 };
 
 // The emoji grows with the ground its Element holds.
 const EMOJI_BASE_PX = 36;
 
-// Placeholder copy, as the spec wrote it: the owner writes the real words.
 const LIMITED_COPY = {
   minute: "slow down a sec",
   day: "that’s plenty for today, come back tomorrow",
@@ -43,8 +42,8 @@ export function Tug({
   reveal,
   onAdvance,
 }: {
-  top: ShowdownElement;
-  bottom: ShowdownElement;
+  top: ShownElement;
+  bottom: ShownElement;
   // The first Matchup of the visit is already on screen, so it does not slide
   // in, and it is the one that says how this works.
   isFirstMatchup: boolean;
@@ -60,6 +59,11 @@ export function Tug({
   const [value, setValue] = useState<VoteValue>(0);
   const [isDragging, setDragging] = useState(false);
   const dragFrom = useRef<number | null>(null);
+  const pill = useRef<HTMLButtonElement>(null);
+  // A gesture that went down on the pill and has not moved the seam since: let
+  // go and it casts the draw the pill reads, where any other gesture back in
+  // the middle casts nothing.
+  const tapsPill = useRef(false);
   const seam = seamAt(value);
   const sentence = voteSentence(value, top, bottom);
 
@@ -76,6 +80,9 @@ export function Tug({
       return;
     }
     dragFrom.current = event.clientY;
+    tapsPill.current =
+      event.target instanceof Node &&
+      pill.current?.contains(event.target) === true;
     setDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -84,6 +91,7 @@ export function Tug({
     if (dragFrom.current === null) return;
     const dragged = draggedVote(event.clientY - dragFrom.current);
     if (dragged === value) return;
+    if (dragged !== 0) tapsPill.current = false;
     navigator.vibrate?.(10 * Math.abs(dragged));
     setValue(dragged);
   }
@@ -92,8 +100,10 @@ export function Tug({
     if (dragFrom.current === null) return;
     dragFrom.current = null;
     setDragging(false);
+    const tapped = tapsPill.current;
+    tapsPill.current = false;
     // Let go back in the middle and nothing is cast: a stray drag is no Vote.
-    if (value !== 0) onCast(value);
+    if (value !== 0 || tapped) onCast(value);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -123,7 +133,9 @@ export function Tug({
       aria-orientation="vertical"
       aria-valuemin={-STRONG_WIN}
       aria-valuemax={STRONG_WIN}
-      aria-valuenow={value}
+      // The slider's value is how high the seam sits, so that Up raises it as
+      // a vertical slider's must. The Vote it reads as is the sentence.
+      aria-valuenow={-value}
       aria-valuetext={sentence}
       onPointerDown={startDrag}
       onPointerMove={dragTo}
@@ -164,16 +176,25 @@ export function Tug({
 
           <button
             type="button"
+            ref={pill}
             // The slider takes the keyboard for both of them: Enter on it casts
             // whatever the pill reads.
             tabIndex={-1}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onCast(value)}
-            className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring"
+            // A pointer's tap on the pill has cast already, on release, and
+            // browsers disagree on whether its click still lands here. Only an
+            // activation with no pointer behind it, as a screen reader sends,
+            // casts from the click.
+            onClick={(event) => {
+              if (event.detail === 0) onCast(value);
+            }}
+            className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring active:scale-95"
             style={{
               top: `${seam}%`,
               background: INK,
               color: PAPER,
+              // The ring is what says the pill is a button and not one more
+              // tab: the draw is cast by tapping it.
+              boxShadow: `0 0 0 2px ${PAPER}`,
               fontSize: Math.abs(value) === STRONG_WIN ? 19 : 15,
             }}
           >
@@ -188,6 +209,8 @@ export function Tug({
           style={{ top: "calc(50% + 30px)", color: textOn(bottom.colour) }}
         >
           drag up or down: the winner takes ground
+          <br />
+          or tap the pill: too close to call
         </p>
       )}
 
@@ -208,7 +231,7 @@ function Side({
   topPercent,
   heightPercent,
 }: {
-  element: ShowdownElement;
+  element: ShownElement;
   topPercent: number;
   heightPercent: number;
 }) {

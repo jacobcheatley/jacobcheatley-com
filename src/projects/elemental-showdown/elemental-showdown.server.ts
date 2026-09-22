@@ -1,11 +1,5 @@
 import { and, count, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db/index.server";
-import {
-  noVotes,
-  revealFor,
-  type VoteCastResult,
-  type VoteReveal,
-} from "./matchup-score";
 import { drawMatchup, type NextMatchup } from "./matchup-selection";
 import { elements, votes } from "./schema";
 import {
@@ -22,11 +16,18 @@ import {
   crowdCallsOf,
   isStatsUnlocked,
   type ShowdownStats,
-  statsElementOf,
+  shownElementOf,
   type UnlockCounts,
 } from "./showdown-stats";
 import { type OwnVote, storiesOf } from "./showdown-stories";
 import { createVoteLimiter } from "./vote-limiter";
+import {
+  noVotes,
+  revealFor,
+  type VoteCastResult,
+  type VoteReveal,
+} from "./vote-reveal";
+import type { Voter } from "./voter-cookie";
 
 // The roster and the three sums of every voted Matchup, in two queries. A
 // Matchup nobody has voted on has no row here and is scored from the prior.
@@ -57,7 +58,7 @@ export const showdownAggregate = readAggregate;
 // roster's Matchups. Their own Votes are read fresh every time: the cache would
 // offer them a Matchup they have just voted on.
 export async function nextMatchup(
-  voter: string | undefined,
+  voter: Voter | undefined,
   random: () => number,
   nowMs: number,
 ): Promise<NextMatchup> {
@@ -79,7 +80,7 @@ export async function nextMatchup(
 // A visitor with no cookie has cast nothing, so there is nothing to ask for.
 // The gate counts these and the "you" Story reads their values, both of which
 // the cached aggregate is too old to know.
-async function votesBy(voter: string | undefined): Promise<OwnVote[]> {
+async function votesBy(voter: Voter | undefined): Promise<OwnVote[]> {
   if (!voter) return [];
   return db
     .select({
@@ -92,11 +93,10 @@ async function votesBy(voter: string | undefined): Promise<OwnVote[]> {
 }
 
 // The gate is the server's: while it holds, the only things to leave here are
-// the two counts and how many tiles the mosaic has. The crowd's number comes
-// from the cached aggregate and the Voter's own Votes are always fresh, so
-// their last one is in it.
+// the two counts and how many tiles the mosaic has. The Voter's own Votes are
+// read fresh, so their last one is in it.
 export async function showdownStats(
-  voter: string | undefined,
+  voter: Voter | undefined,
   nowMs: number,
 ): Promise<ShowdownStats> {
   const [aggregate, ownVotes] = await Promise.all([
@@ -126,11 +126,11 @@ export async function showdownStats(
 const fromTheOtherSide = (value: VoteValue) => voteValueSchema.parse(-value);
 
 // The Tug reads a Vote from the top Element's side; a Matchup is stored one way
-// round only. A Voter who votes on the same Matchup twice (two tabs, a double
-// submit) is not an error: their first Vote stands, and the reveal is the
-// crowd as it is now, read back from the Matchup's own side.
+// round only. A Voter who votes on the same Matchup twice is not an error:
+// their first Vote stands and the reveal is the crowd as it is now.
 export async function castVote(
-  voter: string,
+  voter: Voter,
+  nowMs: number,
   { topElementId, bottomElementId, value }: VoteCast,
 ): Promise<VoteReveal> {
   const topIsLow = topElementId < bottomElementId;
@@ -207,12 +207,8 @@ export async function castVote(
   // at worst: the Voter who has just watched them open must not be dropped
   // onto the locked screen.
   forgetAggregate();
-  const roster = await db
-    .select()
-    .from(elements)
-    .where(eq(elements.isActive, true))
-    .orderBy(elements.name);
-  return { ...reveal, unlockedElements: roster.map(statsElementOf) };
+  const { elements: active } = await showdownAggregate(nowMs);
+  return { ...reveal, unlockedElements: active.map(shownElementOf) };
 }
 
 // One cap per Machine, as the aggregate's cache is one copy per Machine.
@@ -221,12 +217,12 @@ const limitVote = createVoteLimiter();
 // The whole of casting a Vote: the cap is counted first, so an address that has
 // run past it stores nothing and reads nothing back.
 export async function castVoteFromAddress(
-  voter: string,
+  voter: Voter,
   address: string | undefined,
   nowMs: number,
   cast: VoteCast,
 ): Promise<VoteCastResult> {
   const limitedBy = limitVote(address, nowMs);
   if (limitedBy) return { state: "limited", window: limitedBy };
-  return castVote(voter, cast);
+  return castVote(voter, nowMs, cast);
 }

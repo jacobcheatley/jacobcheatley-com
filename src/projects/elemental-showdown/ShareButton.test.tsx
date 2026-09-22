@@ -6,31 +6,28 @@ import { ShareButton } from "./ShareButton";
 // The voting screen's own address, absolute as a share sheet needs it.
 const SHARED_LINK = `${window.location.origin}/elemental-showdown`;
 
-// jsdom has neither API, so each test defines the platform it stands for.
-function platformWith({
-  share,
-  writeText = vi.fn(async () => {}),
-}: {
-  share?: Navigator["share"];
-  writeText?: Clipboard["writeText"];
+// jsdom brings neither API and userEvent stubs the clipboard, so every test
+// says what its platform holds, `undefined` included.
+function platformWith(apis: {
+  share: Navigator["share"] | undefined;
+  clipboard: { writeText: Clipboard["writeText"] } | undefined;
 }) {
-  Object.defineProperty(navigator, "share", {
-    value: share,
-    configurable: true,
-  });
-  Object.defineProperty(navigator, "clipboard", {
-    value: { writeText },
-    configurable: true,
-  });
-  return { share, writeText };
+  for (const [api, value] of Object.entries(apis))
+    Object.defineProperty(navigator, api, { value, configurable: true });
+  return apis;
 }
+
+const aClipboard = () => ({ writeText: vi.fn(async () => {}) });
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("the share button", () => {
   it("hands the link to the share sheet where there is one", async () => {
     const user = userEvent.setup();
-    const { share, writeText } = platformWith({ share: vi.fn(async () => {}) });
+    const { share, clipboard } = platformWith({
+      share: vi.fn(async () => {}),
+      clipboard: aClipboard(),
+    });
     render(<ShareButton label="send it to a friend" />);
 
     await user.click(screen.getByRole("button"));
@@ -38,19 +35,34 @@ describe("the share button", () => {
     expect(share).toHaveBeenCalledWith(
       expect.objectContaining({ url: SHARED_LINK }),
     );
-    expect(writeText).not.toHaveBeenCalled();
+    expect(clipboard?.writeText).not.toHaveBeenCalled();
   });
 
   it("copies the link where there is no share sheet, and says so", async () => {
     const user = userEvent.setup();
-    const { writeText } = platformWith({ share: undefined });
+    const clipboard = aClipboard();
+    platformWith({ share: undefined, clipboard });
     render(<ShareButton label="send it to a friend" />);
 
     await user.click(screen.getByRole("button"));
 
-    expect(writeText).toHaveBeenCalledWith(SHARED_LINK);
+    expect(clipboard.writeText).toHaveBeenCalledWith(SHARED_LINK);
     expect(
       await screen.findByRole("button", { name: "link copied" }),
+    ).toBeInTheDocument();
+  });
+
+  it("copies nothing, and claims nothing, where there is neither", async () => {
+    const failed = vi.spyOn(console, "error").mockImplementation(() => {});
+    const user = userEvent.setup();
+    platformWith({ share: undefined, clipboard: undefined });
+    render(<ShareButton label="send it to a friend" />);
+
+    await user.click(screen.getByRole("button"));
+
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("button", { name: "send it to a friend" }),
     ).toBeInTheDocument();
   });
 
@@ -61,6 +73,7 @@ describe("the share button", () => {
       share: vi.fn(() =>
         Promise.reject(new DOMException("share canceled", "AbortError")),
       ),
+      clipboard: aClipboard(),
     });
     render(<ShareButton label="send it to a friend" />);
 

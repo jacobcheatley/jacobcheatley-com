@@ -28,7 +28,18 @@ export function ShareButton({ label }: { label: string }) {
         });
       return;
     }
-    navigator.clipboard
+    // An insecure context has no clipboard either, and the label has to go on
+    // telling the truth: nothing was copied.
+    const { clipboard } = navigator;
+    if (!clipboard) {
+      console.error(
+        new Error(
+          `this browser offers neither a share sheet nor a clipboard for ${url}`,
+        ),
+      );
+      return;
+    }
+    clipboard
       .writeText(url)
       .then(() => setCopied(true))
       .catch((cause: unknown) => {

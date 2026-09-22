@@ -36,21 +36,21 @@ export type LockedStats = UnlockCounts & {
   elementCount: number;
 };
 
-// An Element as the open Stats draw it. Its kind is not here: Common and Rare
-// are never user facing.
-export type StatsElement = {
+// An Element as a screen draws it: the Matchup, the unlock's mosaic and the
+// Stats. Its kind is not here — Common and Rare are never user facing.
+export type ShownElement = {
   id: number;
   name: string;
   emoji: string;
   colour: string;
 };
 
-export const statsElementOf = ({
+export const shownElementOf = ({
   id,
   name,
   emoji,
   colour,
-}: ShowdownElement): StatsElement => ({ id, name, emoji, colour });
+}: ShowdownElement): ShownElement => ({ id, name, emoji, colour });
 
 // The crowd's call on one Matchup it has judged, read from the lower-id
 // Element's side, the way the Vote is stored.
@@ -66,7 +66,7 @@ export type JudgedMatchup = {
 // The Active Elements and every call the crowd has made, which the Element
 // pages and the Stories are both read out of.
 export type CrowdCalls = {
-  elements: StatsElement[];
+  elements: ShownElement[];
   matchups: JudgedMatchup[];
 };
 
@@ -87,7 +87,7 @@ export const crowdCallsOf = ({
   elements,
   matchups,
 }: ShowdownAggregate): CrowdCalls => ({
-  elements: elements.map(statsElementOf),
+  elements: elements.map(shownElementOf),
   matchups: matchups
     .filter(({ score }) => score.voteCount > 0)
     .map(({ elementLow, elementHigh, score }) => ({

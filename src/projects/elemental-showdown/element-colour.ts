@@ -7,6 +7,9 @@ export const PAPER = "#ffffff";
 // before the Stats open, a Story the crowd has not settled.
 export const NO_ELEMENT = "#2c2825";
 
+// The colour a meter turns once it is met.
+export const MET = "#9fe870";
+
 // sRGB gamma, so the luminance below is the one the eye reads.
 const linearChannelAt = (colour: string, at: number) => {
   const channel = Number.parseInt(colour.slice(at, at + 2), 16) / 255;

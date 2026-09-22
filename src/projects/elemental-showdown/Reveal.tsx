@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { INK, PAPER } from "./element-colour";
-import type { HeadlineKind, VoteReveal } from "./matchup-score";
-import type { ShowdownElement } from "./schema";
+import type { HeadlineKind } from "./matchup-score";
+import { percent } from "./showdown-copy";
+import type { ShownElement } from "./showdown-stats";
 import { SEAM_LANDINGS, seamAt, tabLabel } from "./tug";
+import type { VoteReveal } from "./vote-reveal";
 
 // How long the reveal holds the screen on its own, which is what the draining
 // bar drains over.
-export const REVEAL_LINGER_MS = 3500;
+export const REVEAL_LINGER_MS = 2500;
 
 // The bars growing out of their labels and the crowd line travelling to the
 // mean, both in the Tug's own spring.
@@ -37,9 +39,6 @@ const PERCENTAGE_OUTLINE = [
   .map((offset) => `${offset} ${INK}`)
   .join(", ");
 
-const percent = (share: number) => `${Math.round(share * 100)}%`;
-
-// Placeholder copy, as the prototype wrote it: the owner writes the real words.
 function headlineCopy(kind: HeadlineKind, voteCount: number) {
   switch (kind) {
     case "first":
@@ -66,8 +65,8 @@ export function Reveal({
   onAdvance,
 }: {
   reveal: VoteReveal;
-  top: ShowdownElement;
-  bottom: ShowdownElement;
+  top: ShownElement;
+  bottom: ShownElement;
   onAdvance: () => void;
 }) {
   const [hasSettled, setSettled] = useState(false);

@@ -11,6 +11,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { ELEMENT_KINDS, type VoteValue } from "./showdown-schema";
+import type { Voter } from "./voter-cookie";
 
 // The roster the migration seeds and the owner tunes with SQL from then on.
 // Ids are never reused or reassigned: a Vote points at one forever.
@@ -33,7 +34,7 @@ export type ShowdownElement = typeof elements.$inferSelect;
 export const votes = pgTable(
   "votes",
   {
-    voter: uuid().notNull(),
+    voter: uuid().$type<Voter>().notNull(),
     elementLow: integer("element_low")
       .notNull()
       .references(() => elements.id),

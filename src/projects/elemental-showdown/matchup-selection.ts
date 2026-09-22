@@ -1,12 +1,14 @@
-import type { ShowdownElement } from "./schema";
 import {
   matchupKey,
   type ScoredMatchup,
   type ShowdownAggregate,
 } from "./showdown-aggregate";
+import { type ShownElement, shownElementOf } from "./showdown-stats";
 
 // A Matchup as it is shown: which Element is on top is the draw's coin flip.
-export type Matchup = { top: ShowdownElement; bottom: ShowdownElement };
+// The Elements are as shown and no more, so a roster row's kind stays on the
+// server.
+export type Matchup = { top: ShownElement; bottom: ShownElement };
 
 export type NextMatchup =
   | ({ state: "matchup" } & Matchup)
@@ -36,12 +38,12 @@ export function drawMatchup({
   votes: VotedMatchup[];
   random: () => number;
 }): NextMatchup {
-  const voted = new Set(
-    votes.map((vote) => matchupKey(vote.elementLow, vote.elementHigh)),
-  );
+  const voted = new Set(votes.map(matchupKey));
   const unvoted = aggregate.matchups.filter(
-    (matchup) =>
-      !voted.has(matchupKey(matchup.elementLow.id, matchup.elementHigh.id)),
+    ({ elementLow, elementHigh }) =>
+      !voted.has(
+        matchupKey({ elementLow: elementLow.id, elementHigh: elementHigh.id }),
+      ),
   );
   const opening =
     votes.length < OPENING_COMMON_VOTES
@@ -66,7 +68,13 @@ export function drawMatchup({
   if (!drawn)
     return { state: "exhausted", matchupCount: aggregate.matchups.length };
 
-  return random() < 0.5
-    ? { state: "matchup", top: drawn.elementLow, bottom: drawn.elementHigh }
-    : { state: "matchup", top: drawn.elementHigh, bottom: drawn.elementLow };
+  const [top, bottom] =
+    random() < 0.5
+      ? [drawn.elementLow, drawn.elementHigh]
+      : [drawn.elementHigh, drawn.elementLow];
+  return {
+    state: "matchup",
+    top: shownElementOf(top),
+    bottom: shownElementOf(bottom),
+  };
 }
