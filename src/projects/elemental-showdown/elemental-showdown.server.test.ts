@@ -413,6 +413,53 @@ describe("showdownStats", () => {
     ).not.toEqual([]);
   });
 
+  // Enough Votes the same way round that the crowd is sure of the call, so the
+  // Matchup is settled enough to feed a Story.
+  const VOTES_THAT_SETTLE_A_MATCHUP = 20;
+
+  it("tells no Story about a switched-off Element", async () => {
+    // The crowd piles onto the first Matchup, so the last one needs a crowd of
+    // its own before it can feed a Story. Both Elements then hold one win, and
+    // the tie goes to the alphabetically first — the one switched off here.
+    const { matchups, anElement } = await unlockFor(ELEMENTS_FOR_THE_GATE);
+    const theOther = matchups.at(-1);
+    if (!theOther) throw new Error("no Matchup to vote on");
+    await db.insert(votes).values(
+      Array.from({ length: VOTES_THAT_SETTLE_A_MATCHUP }, () => ({
+        voter: crypto.randomUUID(),
+        ...theOther,
+        value: A_WEAK_WIN,
+      })),
+    );
+    await db
+      .update(elements)
+      .set({ isActive: false })
+      .where(eq(elements.id, anElement));
+
+    const { stories } = await openStats();
+
+    expect(stories).toContainEqual(
+      expect.objectContaining({
+        kind: "champion",
+        element: expect.objectContaining({ id: theOther.elementLow }),
+      }),
+    );
+  });
+
+  it("reads the Voter's own Votes into the Story about them", async () => {
+    // Every Vote of theirs went the way the crowd went.
+    await unlockFor(ELEMENTS_FOR_THE_GATE);
+
+    const { stories } = await openStats();
+
+    expect(stories).toContainEqual(
+      expect.objectContaining({
+        kind: "you",
+        record: expect.objectContaining({ withTheCrowdShare: 1 }),
+      }),
+    );
+  });
+
   it("sends a Voter one Vote short of the crowd's number the counts and nothing else", async () => {
     const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
     await castVotes(matchups, {

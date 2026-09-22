@@ -3,6 +3,10 @@
 export const INK = "#14110f";
 export const PAPER = "#ffffff";
 
+// The one colour in the Project that belongs to no Element: a mosaic tile
+// before the Stats open, a Story the crowd has not settled.
+export const NO_ELEMENT = "#2c2825";
+
 // sRGB gamma, so the luminance below is the one the eye reads.
 const linearChannelAt = (colour: string, at: number) => {
   const channel = Number.parseInt(colour.slice(at, at + 2), 16) / 255;
