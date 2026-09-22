@@ -4,15 +4,7 @@ import type { ShowdownElement } from "./schema";
 import type { ScoredMatchup, ShowdownAggregate } from "./showdown-aggregate";
 import { VOTE_VALUES, type VoteValue } from "./showdown-schema";
 import { type OwnVote, type Story, storiesOf } from "./showdown-stories";
-
-const element = (id: number, name: string): ShowdownElement => ({
-  id,
-  name,
-  emoji: "🔥",
-  colour: "#f2541b",
-  kind: "common",
-  isActive: true,
-});
+import { element } from "./test-elements";
 
 const fire = element(1, "fire");
 const water = element(2, "water");

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { INK, NO_ELEMENT, PAPER, textOn } from "./element-colour";
+import { INK, MET, NO_ELEMENT, PAPER, textOn } from "./element-colour";
 import { elementPageOf } from "./element-page";
 import { MOSAIC_TILE, Mosaic } from "./Mosaic";
 import type { Confidence } from "./matchup-score";
@@ -15,9 +15,6 @@ import {
   type StatsElement,
   type UnlockedStats,
 } from "./showdown-stats";
-
-// The colour a meter turns once it is met.
-const MET = "#9fe870";
 
 // The Stats in the Project's own full-height layout rather than the Portfolio's
 // shell, scrolling where the voting screen does not.

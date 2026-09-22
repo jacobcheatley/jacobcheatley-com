@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { INK, PAPER } from "./element-colour";
 import type { HeadlineKind } from "./matchup-score";
 import type { ShowdownElement } from "./schema";
+import { percent } from "./showdown-copy";
 import { SEAM_LANDINGS, seamAt, tabLabel } from "./tug";
 import type { VoteReveal } from "./vote-reveal";
 
@@ -37,8 +38,6 @@ const PERCENTAGE_OUTLINE = [
 ]
   .map((offset) => `${offset} ${INK}`)
   .join(", ");
-
-const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 function headlineCopy(kind: HeadlineKind, voteCount: number) {
   switch (kind) {

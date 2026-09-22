@@ -6,23 +6,7 @@ import {
   type MatchupSumsRow,
   type ShowdownAggregate,
 } from "./showdown-aggregate";
-import type { ElementKind } from "./showdown-schema";
-
-const element = (
-  id: number,
-  name: string,
-  {
-    kind = "common",
-    isActive = true,
-  }: { kind?: ElementKind; isActive?: boolean } = {},
-): ShowdownElement => ({
-  id,
-  name,
-  emoji: "🔥",
-  colour: "#f2541b",
-  kind,
-  isActive,
-});
+import { element } from "./test-elements";
 
 const fire = element(1, "fire");
 const water = element(2, "water");

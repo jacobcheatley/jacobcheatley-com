@@ -1,4 +1,5 @@
 import { INK, NO_ELEMENT, PAPER } from "./element-colour";
+import { percent } from "./showdown-copy";
 import type { HottestTake, Story } from "./showdown-stories";
 
 // The crowd's calls as headlines: a row that scrolls sideways with the next
@@ -75,8 +76,6 @@ const TAKE_VERB = { 0: "is even with", 1: "beats", 2: "crushes" } as const;
 
 const takeLine = ({ elements: [backed, over], vote }: HottestTake) =>
   `Your hottest take: ${backed.emoji} ${backed.name} ${TAKE_VERB[vote]} ${over.emoji} ${over.name}. The crowd is not so sure.`;
-
-const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 function StoryCard({ story }: { story: Story }) {
   switch (story.kind) {
