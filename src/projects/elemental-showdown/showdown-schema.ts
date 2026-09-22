@@ -17,6 +17,10 @@ export const voteValueSchema = z.literal(VOTE_VALUES);
 
 export type VoteValue = z.infer<typeof voteValueSchema>;
 
+// The two windows a Voter's address is capped over. Which one a Vote ran past
+// is the difference between slowing down and coming back tomorrow.
+export type RateWindow = "minute" | "day";
+
 // A Vote as the Tug casts it: the Matchup's two Elements in the order they were
 // shown, and the value read from the top one's side. The server turns that into
 // the orientation the Vote is stored in.

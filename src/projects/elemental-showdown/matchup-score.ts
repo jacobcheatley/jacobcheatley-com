@@ -1,4 +1,8 @@
-import { VOTE_VALUES, type VoteValue } from "./showdown-schema";
+import {
+  type RateWindow,
+  VOTE_VALUES,
+  type VoteValue,
+} from "./showdown-schema";
 
 // What the crowd's Votes on one Matchup add up to. Nothing here may import
 // server code: the reveal, the Stats and the Stories all read these values in
@@ -62,6 +66,16 @@ export type VoteReveal = {
   // gate, where a handful of Votes is no crowd to stand against.
   crowdMean: number | null;
 };
+
+// A Vote that was never stored: this address has cast more than the window
+// named allows. The Matchup stays up, so the next drag simply casts again.
+export type VoteLimited = {
+  state: "limited";
+  window: RateWindow;
+};
+
+// What casting a Vote gives the Voter back.
+export type VoteCastResult = VoteReveal | VoteLimited;
 
 export type MatchupScore = {
   voteCount: number;

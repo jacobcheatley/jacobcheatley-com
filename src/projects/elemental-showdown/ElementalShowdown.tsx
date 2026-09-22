@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
-import type { VoteReveal } from "./matchup-score";
+import type { VoteCastResult, VoteLimited, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
 import type { VoteCast, VoteValue } from "./showdown-schema";
 import { Tug } from "./Tug";
@@ -14,11 +14,12 @@ export function ElementalShowdown({
   nextMatchup,
 }: {
   shown: NextMatchup;
-  castVote: (options: { data: VoteCast }) => Promise<VoteReveal>;
+  castVote: (options: { data: VoteCast }) => Promise<VoteCastResult>;
   nextMatchup: () => Promise<NextMatchup>;
 }) {
   const [matchup, setMatchup] = useState(shown);
   const [reveal, setReveal] = useState<VoteReveal | null>(null);
+  const [limited, setLimited] = useState<VoteLimited | null>(null);
   const [votesCast, setVotesCast] = useState(0);
   // A ref for the guard: a second Enter can arrive before a re-render would
   // have told it the first Vote is already on its way.
@@ -34,8 +35,15 @@ export function ElementalShowdown({
     castVote({
       data: { topElementId: top.id, bottomElementId: bottom.id, value },
     })
-      .then((crowd) => {
-        setReveal(crowd);
+      .then((cast) => {
+        // A capped Vote was never stored, so there is no crowd to reveal and
+        // no next Matchup to draw: this one stays up for the Voter to retry.
+        if (cast.state === "limited") {
+          setLimited(cast);
+          return;
+        }
+        setLimited(null);
+        setReveal(cast);
         drawing.current = nextMatchup();
       })
       .catch((cause: unknown) => {
@@ -77,6 +85,7 @@ export function ElementalShowdown({
           bottom={matchup.bottom}
           isFirstMatchup={votesCast === 0}
           onCast={cast}
+          limited={limited}
           reveal={reveal}
           onAdvance={advance}
         />

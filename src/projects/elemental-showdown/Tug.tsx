@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
-import type { VoteReveal } from "./matchup-score";
+import type { VoteLimited, VoteReveal } from "./matchup-score";
 import { Reveal } from "./Reveal";
 import type { ShowdownElement } from "./schema";
-import type { VoteValue } from "./showdown-schema";
+import type { RateWindow, VoteValue } from "./showdown-schema";
 import {
   draggedVote,
   SEAM_LANDINGS,
@@ -27,12 +27,19 @@ const ARROW_STEPS: Record<string, number> = {
 // The emoji grows with the ground its Element holds.
 const EMOJI_BASE_PX = 36;
 
+// Placeholder copy, as the spec wrote it: the owner writes the real words.
+const LIMITED_COPY = {
+  minute: "slow down a sec",
+  day: "that’s plenty for today, come back tomorrow",
+} as const satisfies Record<RateWindow, string>;
+
 // Dragging anywhere is the whole gesture, so the two Elements are the slider.
 export function Tug({
   top,
   bottom,
   isFirstMatchup,
   onCast,
+  limited,
   reveal,
   onAdvance,
 }: {
@@ -42,6 +49,9 @@ export function Tug({
   // in, and it is the one that says how this works.
   isFirstMatchup: boolean;
   onCast: (value: VoteValue) => void;
+  // The Vote the address had no room left for, each answer its own object so
+  // that a second one in the same window springs the seam back too.
+  limited: VoteLimited | null;
   // The crowd, once this Voter's own Vote is in it. Until then the Tug is the
   // whole screen and the crowd cannot sway them.
   reveal: VoteReveal | null;
@@ -52,6 +62,11 @@ export function Tug({
   const dragFrom = useRef<number | null>(null);
   const seam = seamAt(value);
   const sentence = voteSentence(value, top, bottom);
+
+  // A capped Vote took no ground, so the seam has nothing to rest on.
+  useEffect(() => {
+    if (limited) setValue(0);
+  }, [limited]);
 
   // Revealed, the Tug has nothing left to drag and a touch anywhere is the
   // Voter asking for the next Matchup rather than waiting out the bar.
@@ -167,12 +182,21 @@ export function Tug({
         </>
       )}
 
-      {isFirstMatchup && !reveal && (
+      {isFirstMatchup && !reveal && !limited && (
         <p
           className="pointer-events-none absolute inset-x-0 z-20 text-center text-[13px] opacity-75"
           style={{ top: "calc(50% + 30px)", color: textOn(bottom.colour) }}
         >
           drag up or down: the winner takes ground
+        </p>
+      )}
+
+      {limited && (
+        <p
+          className="pointer-events-none absolute inset-x-0 z-20 px-8 text-center font-showdown-display text-[17px] leading-[1.2]"
+          style={{ top: "calc(50% + 30px)", color: textOn(bottom.colour) }}
+        >
+          {LIMITED_COPY[limited.window]}
         </p>
       )}
     </div>

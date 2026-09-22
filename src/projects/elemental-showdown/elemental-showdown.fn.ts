@@ -1,6 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie } from "@tanstack/react-start/server";
-import { castVote, nextMatchup } from "./elemental-showdown.server";
+import {
+  getCookie,
+  getRequestHeader,
+  setCookie,
+} from "@tanstack/react-start/server";
+import { castVoteFromAddress, nextMatchup } from "./elemental-showdown.server";
 import { voteCastSchema } from "./showdown-schema";
 import {
   readVoterCookie,
@@ -9,8 +13,13 @@ import {
 } from "./voter-cookie";
 
 // Thin wrappers over the helpers, which carry the tests: the handlers are the
-// only place that reads the cookie and the random source.
+// only place that reads the cookie, the address, the clock and the random
+// source.
 const voterOfRequest = () => readVoterCookie(getCookie(VOTER_COOKIE));
+
+// Fly Proxy's own view of the client, the one header in front of this app that
+// a client cannot write. `X-Forwarded-For` is whatever the client sent.
+const addressOfRequest = () => getRequestHeader("fly-client-ip");
 
 export const nextMatchupFn = createServerFn({ method: "GET" }).handler(() =>
   nextMatchup(voterOfRequest(), Math.random, Date.now()),
@@ -24,5 +33,5 @@ export const castVoteFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const voter = voterOfRequest() ?? crypto.randomUUID();
     setCookie(VOTER_COOKIE, voter, VOTER_COOKIE_OPTIONS);
-    return castVote(voter, data);
+    return castVoteFromAddress(voter, addressOfRequest(), Date.now(), data);
   });

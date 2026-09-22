@@ -1,6 +1,11 @@
 import { and, count, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db/index.server";
-import { noVotes, revealFor, type VoteReveal } from "./matchup-score";
+import {
+  noVotes,
+  revealFor,
+  type VoteCastResult,
+  type VoteReveal,
+} from "./matchup-score";
 import { drawMatchup, type NextMatchup } from "./matchup-selection";
 import { elements, votes } from "./schema";
 import {
@@ -13,6 +18,7 @@ import {
   type VoteValue,
   voteValueSchema,
 } from "./showdown-schema";
+import { createVoteLimiter } from "./vote-limiter";
 
 // The roster and the three sums of every voted Matchup, in two queries. A
 // Matchup nobody has voted on has no row here and is scored from the prior.
@@ -117,4 +123,20 @@ export async function castVote(
   for (const { value: stored, voteCount } of tally)
     counts[asShown(stored)] += voteCount;
   return revealFor(counts, asShown(stood.value));
+}
+
+// One cap per Machine, as the aggregate's cache is one copy per Machine.
+const limitVote = createVoteLimiter();
+
+// The whole of casting a Vote: the cap is counted first, so an address that has
+// run past it stores nothing and reads nothing back.
+export async function castVoteFromAddress(
+  voter: string,
+  address: string | undefined,
+  nowMs: number,
+  cast: VoteCast,
+): Promise<VoteCastResult> {
+  const limitedBy = limitVote(address, nowMs);
+  if (limitedBy) return { state: "limited", window: limitedBy };
+  return castVote(voter, cast);
 }
