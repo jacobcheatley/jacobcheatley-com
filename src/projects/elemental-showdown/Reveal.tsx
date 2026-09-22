@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { INK, PAPER } from "./element-colour";
-import type { HeadlineKind, VoteReveal } from "./matchup-score";
+import type { HeadlineKind } from "./matchup-score";
 import type { ShowdownElement } from "./schema";
 import { SEAM_LANDINGS, seamAt, tabLabel } from "./tug";
+import type { VoteReveal } from "./vote-reveal";
 
 // How long the reveal holds the screen on its own, which is what the draining
 // bar drains over.

@@ -1,11 +1,5 @@
 import { and, count, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db/index.server";
-import {
-  noVotes,
-  revealFor,
-  type VoteCastResult,
-  type VoteReveal,
-} from "./matchup-score";
 import { drawMatchup, type NextMatchup } from "./matchup-selection";
 import { elements, votes } from "./schema";
 import {
@@ -27,6 +21,12 @@ import {
 } from "./showdown-stats";
 import { type OwnVote, storiesOf } from "./showdown-stories";
 import { createVoteLimiter } from "./vote-limiter";
+import {
+  noVotes,
+  revealFor,
+  type VoteCastResult,
+  type VoteReveal,
+} from "./vote-reveal";
 
 // The roster and the three sums of every voted Matchup, in two queries. A
 // Matchup nobody has voted on has no row here and is scored from the prior.

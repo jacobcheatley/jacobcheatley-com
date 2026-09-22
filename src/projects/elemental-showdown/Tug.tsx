@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
-import type { VoteLimited, VoteReveal } from "./matchup-score";
 import { Reveal } from "./Reveal";
 import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteValue } from "./showdown-schema";
@@ -13,6 +12,7 @@ import {
   tabLabel,
   voteSentence,
 } from "./tug";
+import type { VoteLimited, VoteReveal } from "./vote-reveal";
 
 // Up and right take ground for the Element on top, the way a slider's keys
 // read. A thumb does the opposite: it shoves the seam away from the Element it

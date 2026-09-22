@@ -8,13 +8,13 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElementalShowdown } from "./ElementalShowdown";
-import type { VoteCastResult, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
 import { REVEAL_LINGER_MS } from "./Reveal";
 import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteCast } from "./showdown-schema";
 import { statsElementOf } from "./showdown-stats";
 import { UNLOCK_MS } from "./UnlockMoment";
+import type { VoteCastResult, VoteReveal } from "./vote-reveal";
 
 // The route's only contribution is the Matchup the loader drew and the two
 // server functions, so the tests hand those in. `vi.mock` is hoisted above

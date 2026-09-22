@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
-import type { VoteCastResult, VoteLimited, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
@@ -9,6 +8,7 @@ import type { VoteCast, VoteValue } from "./showdown-schema";
 import type { StatsElement } from "./showdown-stats";
 import { Tug } from "./Tug";
 import { UnlockMoment } from "./UnlockMoment";
+import type { VoteCastResult, VoteLimited, VoteReveal } from "./vote-reveal";
 
 // The wave is motion a visitor can ask not to be shown; asked, the Stats take
 // the screen at once instead. `matchMedia` belongs to a browser, and this is
