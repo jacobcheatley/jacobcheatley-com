@@ -130,6 +130,7 @@ const fromTheOtherSide = (value: VoteValue) => voteValueSchema.parse(-value);
 // their first Vote stands and the reveal is the crowd as it is now.
 export async function castVote(
   voter: Voter,
+  nowMs: number,
   { topElementId, bottomElementId, value }: VoteCast,
 ): Promise<VoteReveal> {
   const topIsLow = topElementId < bottomElementId;
@@ -206,12 +207,8 @@ export async function castVote(
   // at worst: the Voter who has just watched them open must not be dropped
   // onto the locked screen.
   forgetAggregate();
-  const roster = await db
-    .select()
-    .from(elements)
-    .where(eq(elements.isActive, true))
-    .orderBy(elements.name);
-  return { ...reveal, unlockedElements: roster.map(statsElementOf) };
+  const { elements: active } = await showdownAggregate(nowMs);
+  return { ...reveal, unlockedElements: active.map(statsElementOf) };
 }
 
 // One cap per Machine, as the aggregate's cache is one copy per Machine.
@@ -227,5 +224,5 @@ export async function castVoteFromAddress(
 ): Promise<VoteCastResult> {
   const limitedBy = limitVote(address, nowMs);
   if (limitedBy) return { state: "limited", window: limitedBy };
-  return castVote(voter, cast);
+  return castVote(voter, nowMs, cast);
 }

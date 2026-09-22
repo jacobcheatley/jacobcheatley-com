@@ -87,7 +87,7 @@ describe("castVote", () => {
     const water = await insertElement("water");
 
     // water is on top and crushes fire, so fire — the lower id — loses by two
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: water,
       bottomElementId: fire,
       value: 2,
@@ -102,7 +102,7 @@ describe("castVote", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
 
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 1,
@@ -117,7 +117,7 @@ describe("castVote", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
 
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: water,
       bottomElementId: fire,
       value: 0,
@@ -129,13 +129,13 @@ describe("castVote", () => {
   it("lets the Voter's first Vote on a Matchup stand, without an error on the second", async () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 2,
     });
 
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: water,
       bottomElementId: fire,
       value: 1,
@@ -148,7 +148,7 @@ describe("castVote", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
 
-    const reveal = await castVote(VOTER, {
+    const reveal = await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 2,
@@ -167,14 +167,14 @@ describe("castVote", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
     // fire crushes water, from fire's side: the Matchup's own way round
-    await castVote(OTHER_VOTER, {
+    await castVote(OTHER_VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 2,
     });
 
     // this Voter is shown water on top, and gives fire a weak win from there
-    const reveal = await castVote(VOTER, {
+    const reveal = await castVote(VOTER, nextRead(), {
       topElementId: water,
       bottomElementId: fire,
       value: -1,
@@ -190,9 +190,9 @@ describe("castVote", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
     const matchup = { topElementId: fire, bottomElementId: water };
-    await castVote(VOTER, { ...matchup, value: 2 });
+    await castVote(VOTER, nextRead(), { ...matchup, value: 2 });
 
-    const reveal = await castVote(VOTER, { ...matchup, value: 1 });
+    const reveal = await castVote(VOTER, nextRead(), { ...matchup, value: 1 });
 
     expect(reveal).toMatchObject({
       state: "reveal",
@@ -206,8 +206,8 @@ describe("castVote", () => {
     const water = await insertElement("water");
     const matchup = { topElementId: fire, bottomElementId: water };
 
-    await castVote(VOTER, { ...matchup, value: 2 });
-    await castVote(OTHER_VOTER, { ...matchup, value: -1 });
+    await castVote(VOTER, nextRead(), { ...matchup, value: 2 });
+    await castVote(OTHER_VOTER, nextRead(), { ...matchup, value: -1 });
 
     expect(await storedVotes()).toHaveLength(2);
   });
@@ -241,7 +241,7 @@ describe("the Vote that unlocks the Stats", () => {
   it("carries the Active Elements the wave flips a tile for", async () => {
     const { unlocking } = await oneVoteShortOfBoth();
 
-    const reveal = await castVote(VOTER, unlocking);
+    const reveal = await castVote(VOTER, nextRead(), unlocking);
 
     expect(reveal.unlockedElements).toHaveLength(ELEMENTS_FOR_THE_GATE);
     expect(reveal.unlockedElements?.[0]).toEqual({
@@ -250,6 +250,19 @@ describe("the Vote that unlocks the Stats", () => {
       emoji: "🔥",
       colour: "#f2541b",
     });
+  });
+
+  it("flips no tile for an Element the owner has switched off", async () => {
+    const { unlocking } = await oneVoteShortOfBoth();
+    const santa = await insertElement("santa", {
+      kind: "rare",
+      isActive: false,
+    });
+
+    const reveal = await castVote(VOTER, nextRead(), unlocking);
+
+    expect(reveal.unlockedElements).toHaveLength(ELEMENTS_FOR_THE_GATE);
+    expect(reveal.unlockedElements?.map(({ id }) => id)).not.toContain(santa);
   });
 
   it("says nothing of an unlock on the Vote before both numbers are met", async () => {
@@ -261,6 +274,7 @@ describe("the Vote that unlocks the Stats", () => {
 
     const reveal = await castVote(
       VOTER,
+      nextRead(),
       theVoteOn(matchups, OWN_VOTES_TO_UNLOCK - 2),
     );
 
@@ -269,10 +283,11 @@ describe("the Vote that unlocks the Stats", () => {
 
   it("says nothing of an unlock on the Vote after it", async () => {
     const { matchups, unlocking } = await oneVoteShortOfBoth();
-    await castVote(VOTER, unlocking);
+    await castVote(VOTER, nextRead(), unlocking);
 
     const reveal = await castVote(
       VOTER,
+      nextRead(),
       theVoteOn(matchups, OWN_VOTES_TO_UNLOCK),
     );
 
@@ -281,9 +296,9 @@ describe("the Vote that unlocks the Stats", () => {
 
   it("says nothing of an unlock on a repeat Vote that stored nothing", async () => {
     const { unlocking } = await oneVoteShortOfBoth();
-    await castVote(VOTER, unlocking);
+    await castVote(VOTER, nextRead(), unlocking);
 
-    const reveal = await castVote(VOTER, unlocking);
+    const reveal = await castVote(VOTER, nextRead(), unlocking);
 
     expect(reveal.unlockedElements).toBeUndefined();
   });
@@ -297,7 +312,7 @@ describe("the Vote that unlocks the Stats", () => {
       state: "locked",
     });
 
-    await castVote(VOTER, unlocking);
+    await castVote(VOTER, whileHeldMs, unlocking);
 
     expect(await showdownStats(VOTER, whileHeldMs)).toMatchObject({
       state: "unlocked",
@@ -351,8 +366,8 @@ describe("showdownAggregate", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
     const matchup = { topElementId: fire, bottomElementId: water };
-    await castVote(VOTER, { ...matchup, value: 2 });
-    await castVote(OTHER_VOTER, { ...matchup, value: -1 });
+    await castVote(VOTER, nextRead(), { ...matchup, value: 2 });
+    await castVote(OTHER_VOTER, nextRead(), { ...matchup, value: -1 });
 
     const { matchups } = await showdownAggregate(nextRead());
 
@@ -372,12 +387,12 @@ describe("showdownAggregate", () => {
       kind: "rare",
       isActive: false,
     });
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: santa,
       value: 1,
     });
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 1,
@@ -395,7 +410,7 @@ describe("showdownAggregate", () => {
       kind: "rare",
       isActive: false,
     });
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: santa,
       value: 2,
@@ -634,7 +649,7 @@ describe("nextMatchup", () => {
       kind: "rare",
       isActive: false,
     });
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 0,
@@ -658,7 +673,7 @@ describe("nextMatchup", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
     const plant = await insertElement("plant");
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 2,
@@ -679,7 +694,7 @@ describe("nextMatchup", () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
     await insertElement("santa", { kind: "rare", isActive: false });
-    await castVote(VOTER, {
+    await castVote(VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 0,
@@ -694,7 +709,7 @@ describe("nextMatchup", () => {
   it("does not hold another Voter's Votes against this one", async () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");
-    await castVote(OTHER_VOTER, {
+    await castVote(OTHER_VOTER, nextRead(), {
       topElementId: fire,
       bottomElementId: water,
       value: 2,
