@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { INK, NO_ELEMENT, PAPER } from "./element-colour";
 import { MOSAIC_COLUMNS, MOSAIC_TILE, Mosaic } from "./Mosaic";
-import type { StatsElement } from "./showdown-stats";
+import type { ShownElement } from "./showdown-stats";
 
 // The whole moment: the wave crossing the mosaic, the stamp landing under it,
 // and a beat to read it before the Stats take the screen.
@@ -36,7 +36,7 @@ export function UnlockMoment({
   elements,
   onDone,
 }: {
-  elements: StatsElement[];
+  elements: ShownElement[];
   onDone: () => void;
 }) {
   const [hasFlipped, setFlipped] = useState(false);

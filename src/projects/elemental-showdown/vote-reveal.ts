@@ -9,7 +9,7 @@ import {
   VOTE_VALUES,
   type VoteValue,
 } from "./showdown-schema";
-import type { StatsElement } from "./showdown-stats";
+import type { ShownElement } from "./showdown-stats";
 
 // What casting a Vote gives the Voter back. Nothing here may import server
 // code: the Tug reads the reveal in the browser.
@@ -43,7 +43,7 @@ export type VoteReveal = {
   // The Active Elements the unlock's wave flips a tile for, here on the one
   // Vote that opened the Stats to this Voter and on no other. Only the cast
   // path can tell: it counts the Votes either side of this one.
-  unlockedElements?: StatsElement[];
+  unlockedElements?: ShownElement[];
 };
 
 // A Vote that was never stored: this address has cast more than the window

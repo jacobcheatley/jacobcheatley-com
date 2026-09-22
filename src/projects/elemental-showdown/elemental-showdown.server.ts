@@ -16,7 +16,7 @@ import {
   crowdCallsOf,
   isStatsUnlocked,
   type ShowdownStats,
-  statsElementOf,
+  shownElementOf,
   type UnlockCounts,
 } from "./showdown-stats";
 import { type OwnVote, storiesOf } from "./showdown-stories";
@@ -208,7 +208,7 @@ export async function castVote(
   // onto the locked screen.
   forgetAggregate();
   const { elements: active } = await showdownAggregate(nowMs);
-  return { ...reveal, unlockedElements: active.map(statsElementOf) };
+  return { ...reveal, unlockedElements: active.map(shownElementOf) };
 }
 
 // One cap per Machine, as the aggregate's cache is one copy per Machine.

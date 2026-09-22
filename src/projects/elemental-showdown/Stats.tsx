@@ -12,7 +12,7 @@ import {
   type LockedStats,
   OWN_VOTES_TO_UNLOCK,
   type ShowdownStats,
-  type StatsElement,
+  type ShownElement,
   type UnlockedStats,
 } from "./showdown-stats";
 
@@ -207,7 +207,7 @@ function ElementPage({
   calls,
   onChoose,
 }: {
-  element: StatsElement;
+  element: ShownElement;
   calls: CrowdCalls;
   onChoose: (elementId: number) => void;
 }) {

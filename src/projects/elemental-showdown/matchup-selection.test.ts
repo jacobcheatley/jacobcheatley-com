@@ -6,6 +6,7 @@ import {
   type MatchupSumsRow,
   type ShowdownAggregate,
 } from "./showdown-aggregate";
+import { shownElementOf } from "./showdown-stats";
 import { element } from "./test-elements";
 
 const fire = element(1, "fire");
@@ -174,6 +175,18 @@ describe("drawMatchup", () => {
     expect(drawn).toEqual({ state: "exhausted", matchupCount: 0 });
   });
 
+  it("hands the browser the Elements as shown and nothing of their kind", () => {
+    const drawn = drawMatchup({
+      aggregate: rosterOf([fire, water]),
+      votes: [],
+      random: randomFrom(0.5),
+    });
+
+    if (drawn.state !== "matchup") throw new Error("nothing was offered");
+    expect(drawn.top).not.toHaveProperty("kind");
+    expect(drawn.bottom).not.toHaveProperty("kind");
+  });
+
   it("flips a coin for which Element is on top", () => {
     const drawnWith = (flip: number) =>
       drawMatchup({
@@ -182,7 +195,13 @@ describe("drawMatchup", () => {
         random: randomFrom(0.5, flip),
       });
 
-    expect(drawnWith(0.4)).toMatchObject({ top: fire, bottom: water });
-    expect(drawnWith(0.6)).toMatchObject({ top: water, bottom: fire });
+    expect(drawnWith(0.4)).toMatchObject({
+      top: shownElementOf(fire),
+      bottom: shownElementOf(water),
+    });
+    expect(drawnWith(0.6)).toMatchObject({
+      top: shownElementOf(water),
+      bottom: shownElementOf(fire),
+    });
   });
 });

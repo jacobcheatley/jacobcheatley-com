@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
 import { Reveal } from "./Reveal";
-import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteValue } from "./showdown-schema";
+import type { ShownElement } from "./showdown-stats";
 import {
   draggedVote,
   SEAM_LANDINGS,
@@ -42,8 +42,8 @@ export function Tug({
   reveal,
   onAdvance,
 }: {
-  top: ShowdownElement;
-  bottom: ShowdownElement;
+  top: ShownElement;
+  bottom: ShownElement;
   // The first Matchup of the visit is already on screen, so it does not slide
   // in, and it is the one that says how this works.
   isFirstMatchup: boolean;
@@ -207,7 +207,7 @@ function Side({
   topPercent,
   heightPercent,
 }: {
-  element: ShowdownElement;
+  element: ShownElement;
   topPercent: number;
   heightPercent: number;
 }) {

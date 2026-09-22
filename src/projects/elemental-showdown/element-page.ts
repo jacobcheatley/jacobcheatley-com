@@ -5,14 +5,14 @@ import {
   isWin,
   mirrorEffectiveness,
 } from "./matchup-score";
-import type { CrowdCalls, JudgedMatchup, StatsElement } from "./showdown-stats";
+import type { CrowdCalls, JudgedMatchup, ShownElement } from "./showdown-stats";
 
 // One Element's whole standing, read out of the crowd's calls: everything its
 // page says, so the page itself only draws.
 
 // An opponent as a chip in its own colour, outlined by how sure the crowd is.
 export type OpponentChip = {
-  opponent: StatsElement;
+  opponent: ShownElement;
   confidence: Confidence;
 };
 
@@ -29,8 +29,8 @@ export type ElementPage = {
   lossCount: number;
   // The opponent it does worst against and the one it does best against, or
   // null while the crowd has judged none of its Matchups.
-  nemesis: StatsElement | null;
-  favouriteVictim: StatsElement | null;
+  nemesis: ShownElement | null;
+  favouriteVictim: ShownElement | null;
   // Only the bands an opponent landed in, in reading order.
   bands: EffectivenessBand[];
   notYetJudgedCount: number;
@@ -70,8 +70,8 @@ const strongestFirst = (one: OpponentRead, other: OpponentRead) =>
 // reads the same call, and the same mean, the other way round.
 function readFrom(
   matchup: JudgedMatchup,
-  element: StatsElement,
-  byId: Map<number, StatsElement>,
+  element: ShownElement,
+  byId: Map<number, ShownElement>,
 ): OpponentRead {
   const fromTheLowSide = matchup.elementLow === element.id;
   const opponentId = fromTheLowSide ? matchup.elementHigh : matchup.elementLow;
@@ -92,7 +92,7 @@ function readFrom(
 
 export function elementPageOf(
   { elements, matchups }: CrowdCalls,
-  element: StatsElement,
+  element: ShownElement,
 ): ElementPage {
   const byId = new Map(elements.map((one) => [one.id, one]));
   const reads = matchups

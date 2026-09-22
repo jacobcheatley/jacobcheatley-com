@@ -6,7 +6,7 @@ import { Stats } from "./Stats";
 import type {
   JudgedMatchup,
   LockedStats,
-  StatsElement,
+  ShownElement,
   UnlockedStats,
 } from "./showdown-stats";
 import type { Story } from "./showdown-stories";
@@ -75,25 +75,25 @@ describe("the locked Stats", () => {
   });
 });
 
-const fire: StatsElement = {
+const fire: ShownElement = {
   id: 1,
   name: "fire",
   emoji: "🔥",
   colour: "#f2541b",
 };
-const water: StatsElement = {
+const water: ShownElement = {
   id: 2,
   name: "water",
   emoji: "💧",
   colour: "#2f7fe0",
 };
-const plant: StatsElement = {
+const plant: ShownElement = {
   id: 3,
   name: "plant",
   emoji: "🌿",
   colour: "#3f9d4a",
 };
-const rock: StatsElement = {
+const rock: ShownElement = {
   id: 4,
   name: "rock",
   emoji: "🪨",
@@ -102,8 +102,8 @@ const rock: StatsElement = {
 
 // A call the crowd has made, read from the lower-id Element's side.
 const call = (
-  elementLow: StatsElement,
-  elementHigh: StatsElement,
+  elementLow: ShownElement,
+  elementHigh: ShownElement,
   effectiveness: Effectiveness,
   meanVote: number,
   confidence: Confidence = "solid",
@@ -116,7 +116,7 @@ const call = (
 });
 
 const unlocked = (
-  elements: StatsElement[],
+  elements: ShownElement[],
   matchups: JudgedMatchup[] = [],
   stories: Story[] = [],
 ): UnlockedStats => ({ state: "unlocked", elements, matchups, stories });

@@ -12,7 +12,7 @@ import {
   type ShowdownAggregate,
 } from "./showdown-aggregate";
 import type { VoteValue } from "./showdown-schema";
-import { type StatsElement, statsElementOf } from "./showdown-stats";
+import { type ShownElement, shownElementOf } from "./showdown-stats";
 
 // The headlines the open Stats lead with, read out of the crowd's calls and the
 // Voter's own Votes. Nothing here may import server code, and nothing here
@@ -28,7 +28,7 @@ export type OwnVote = {
 // The Voter's Vote the crowd disagrees with most, read from the side the Voter
 // backed: the Element they put first, then the one they put it over.
 export type HottestTake = {
-  elements: [StatsElement, StatsElement];
+  elements: [ShownElement, ShownElement];
   // How far apart the Voter put them, so never negative.
   vote: 0 | 1 | 2;
 };
@@ -44,30 +44,30 @@ export type OwnRecord = {
 export type Story =
   | {
       kind: "champion";
-      element: StatsElement;
+      element: ShownElement;
       winCount: number;
       opponentCount: number;
     }
   | {
       kind: "argument";
-      elements: [StatsElement, StatsElement];
+      elements: [ShownElement, ShownElement];
       voteCount: number;
     }
-  | { kind: "triangle"; elements: [StatsElement, StatsElement, StatsElement] }
+  | { kind: "triangle"; elements: [ShownElement, ShownElement, ShownElement] }
   | {
       kind: "biggest-crush";
-      winner: StatsElement;
-      loser: StatsElement;
+      winner: ShownElement;
+      loser: ShownElement;
       voteCount: number;
     }
   | {
       kind: "punching-bag";
-      element: StatsElement;
+      element: ShownElement;
       lossCount: number;
       opponentCount: number;
     }
-  | { kind: "glass-cannon"; element: StatsElement }
-  | { kind: "diplomat"; element: StatsElement }
+  | { kind: "glass-cannon"; element: ShownElement }
+  | { kind: "diplomat"; element: ShownElement }
   | { kind: "you"; record: OwnRecord | null };
 
 // Only a call the crowd is sure enough of feeds a Story: a faint one is a
@@ -184,8 +184,8 @@ const takeOf = ({
 }: OwnCall): HottestTake => ({
   elements:
     vote < 0
-      ? [statsElementOf(elementHigh), statsElementOf(elementLow)]
-      : [statsElementOf(elementLow), statsElementOf(elementHigh)],
+      ? [shownElementOf(elementHigh), shownElementOf(elementLow)]
+      : [shownElementOf(elementLow), shownElementOf(elementHigh)],
   vote: MARGIN[vote],
 });
 
@@ -275,7 +275,7 @@ export function storiesOf(
   if (champion)
     stories.push({
       kind: "champion",
-      element: statsElementOf(champion.element),
+      element: shownElementOf(champion.element),
       winCount: champion.winCount,
       opponentCount,
     });
@@ -283,8 +283,8 @@ export function storiesOf(
     stories.push({
       kind: "argument",
       elements: [
-        statsElementOf(argument.elementLow),
-        statsElementOf(argument.elementHigh),
+        shownElementOf(argument.elementLow),
+        shownElementOf(argument.elementHigh),
       ],
       voteCount: argument.score.voteCount,
     });
@@ -292,36 +292,36 @@ export function storiesOf(
     stories.push({
       kind: "triangle",
       elements: [
-        statsElementOf(triangle[0]),
-        statsElementOf(triangle[1]),
-        statsElementOf(triangle[2]),
+        shownElementOf(triangle[0]),
+        shownElementOf(triangle[1]),
+        shownElementOf(triangle[2]),
       ],
     });
   if (crush) {
     const lowWon = crush.score.meanVote >= 0;
     stories.push({
       kind: "biggest-crush",
-      winner: statsElementOf(lowWon ? crush.elementLow : crush.elementHigh),
-      loser: statsElementOf(lowWon ? crush.elementHigh : crush.elementLow),
+      winner: shownElementOf(lowWon ? crush.elementLow : crush.elementHigh),
+      loser: shownElementOf(lowWon ? crush.elementHigh : crush.elementLow),
       voteCount: crush.score.voteCount,
     });
   }
   if (punchingBag)
     stories.push({
       kind: "punching-bag",
-      element: statsElementOf(punchingBag.element),
+      element: shownElementOf(punchingBag.element),
       lossCount: punchingBag.lossCount,
       opponentCount,
     });
   if (glassCannon)
     stories.push({
       kind: "glass-cannon",
-      element: statsElementOf(glassCannon.element),
+      element: shownElementOf(glassCannon.element),
     });
   if (diplomat)
     stories.push({
       kind: "diplomat",
-      element: statsElementOf(diplomat.element),
+      element: shownElementOf(diplomat.element),
     });
   stories.push({ kind: "you", record: ownRecordOf(settled, ownVotes) });
   return stories;

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { elementPageOf } from "./element-page";
 import type { Confidence, Effectiveness } from "./matchup-score";
-import type { CrowdCalls, JudgedMatchup, StatsElement } from "./showdown-stats";
+import type { CrowdCalls, JudgedMatchup, ShownElement } from "./showdown-stats";
 
-const named = (id: number, name: string): StatsElement => ({
+const named = (id: number, name: string): ShownElement => ({
   id,
   name,
   emoji: "🔥",
@@ -18,8 +18,8 @@ const rock = named(4, "rock");
 // A call the crowd has made, read from the lower-id Element's side: `fire`
 // beating `water` and `water` losing to `fire` are the same row.
 const call = (
-  elementLow: StatsElement,
-  elementHigh: StatsElement,
+  elementLow: ShownElement,
+  elementHigh: ShownElement,
   effectiveness: Effectiveness,
   meanVote: number,
   confidence: Confidence = "solid",
@@ -32,7 +32,7 @@ const call = (
 });
 
 const calls = (
-  elements: StatsElement[],
+  elements: ShownElement[],
   matchups: JudgedMatchup[],
 ): CrowdCalls => ({ elements, matchups });
 

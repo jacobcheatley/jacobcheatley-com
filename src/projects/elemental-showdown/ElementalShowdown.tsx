@@ -5,7 +5,7 @@ import type { NextMatchup } from "./matchup-selection";
 import { PrimaryLink } from "./PrimaryLink";
 import { ShareButton } from "./ShareButton";
 import type { VoteCast, VoteValue } from "./showdown-schema";
-import type { StatsElement } from "./showdown-stats";
+import type { ShownElement } from "./showdown-stats";
 import { Tug } from "./Tug";
 import { UnlockMoment } from "./UnlockMoment";
 import type { VoteCastResult, VoteLimited, VoteReveal } from "./vote-reveal";
@@ -33,7 +33,7 @@ export function ElementalShowdown({
   const [limited, setLimited] = useState<VoteLimited | null>(null);
   const [votesCast, setVotesCast] = useState(0);
   // The Elements of the moment being played, once a Vote has unlocked them.
-  const [unlocking, setUnlocking] = useState<StatsElement[] | null>(null);
+  const [unlocking, setUnlocking] = useState<ShownElement[] | null>(null);
   // A ref for the guard: a second Enter can arrive before a re-render would
   // have told it the first Vote is already on its way.
   const casting = useRef(false);

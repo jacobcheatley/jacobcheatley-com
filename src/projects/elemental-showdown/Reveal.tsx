@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { INK, PAPER } from "./element-colour";
 import type { HeadlineKind } from "./matchup-score";
-import type { ShowdownElement } from "./schema";
 import { percent } from "./showdown-copy";
+import type { ShownElement } from "./showdown-stats";
 import { SEAM_LANDINGS, seamAt, tabLabel } from "./tug";
 import type { VoteReveal } from "./vote-reveal";
 
@@ -65,8 +65,8 @@ export function Reveal({
   onAdvance,
 }: {
   reveal: VoteReveal;
-  top: ShowdownElement;
-  bottom: ShowdownElement;
+  top: ShownElement;
+  bottom: ShownElement;
   onAdvance: () => void;
 }) {
   const [hasSettled, setSettled] = useState(false);

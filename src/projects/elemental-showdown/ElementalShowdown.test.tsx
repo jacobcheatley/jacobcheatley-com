@@ -10,9 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElementalShowdown } from "./ElementalShowdown";
 import type { NextMatchup } from "./matchup-selection";
 import { REVEAL_LINGER_MS } from "./Reveal";
-import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteCast } from "./showdown-schema";
-import { statsElementOf } from "./showdown-stats";
+import type { ShownElement } from "./showdown-stats";
 import { UNLOCK_MS } from "./UnlockMoment";
 import type { VoteCastResult, VoteReveal } from "./vote-reveal";
 
@@ -30,23 +29,17 @@ const element = (
   name: string,
   emoji: string,
   colour: string,
-): ShowdownElement => ({
-  id,
-  name,
-  emoji,
-  colour,
-  kind: "common",
-  isActive: true,
-});
+): ShownElement => ({ id, name, emoji, colour });
 
 const fire = element(1, "fire", "🔥", "#f2541b");
 const water = element(2, "water", "💧", "#2f7fe0");
 const plant = element(3, "plant", "🌿", "#3f9d4a");
 
-const matchup = (
-  top: ShowdownElement,
-  bottom: ShowdownElement,
-): NextMatchup => ({ state: "matchup", top, bottom });
+const matchup = (top: ShownElement, bottom: ShownElement): NextMatchup => ({
+  state: "matchup",
+  top,
+  bottom,
+});
 
 // Ten Votes with the crowd behind fire: the Voter crushed it too, as half of
 // them did.
@@ -269,7 +262,7 @@ describe("after a Vote", () => {
 });
 
 describe("the Vote that unlocks the Stats", () => {
-  const THE_ROSTER = [fire, water, plant].map(statsElementOf);
+  const THE_ROSTER = [fire, water, plant];
 
   // The reveal is read out as ever; the moment comes after it, on the clock
   // the draining bar runs on.
