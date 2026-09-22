@@ -11,6 +11,7 @@ import {
 } from "./elemental-showdown.server";
 import { voteCastSchema } from "./showdown-schema";
 import {
+  keepsTheVoter,
   mintVoter,
   readVoterCookie,
   VOTER_COOKIE,
@@ -35,12 +36,19 @@ export const showdownStatsFn = createServerFn({ method: "GET" }).handler(() =>
 );
 
 // `.validator(voteCastSchema)` re-validates on the server: the trust boundary.
-// The cookie is minted here by the first Vote and re-sent by every one after
-// it, so the expiry slides and nothing is set before a deliberate Vote.
+// The cookie is minted here by the first Vote that lands and re-sent by every
+// one after it, so the expiry slides.
 export const castVoteFn = createServerFn({ method: "POST" })
   .validator(voteCastSchema)
   .handler(async ({ data }) => {
     const voter = voterOfRequest() ?? mintVoter();
-    setCookie(VOTER_COOKIE, voter, VOTER_COOKIE_OPTIONS);
-    return castVoteFromAddress(voter, addressOfRequest(), Date.now(), data);
+    const cast = await castVoteFromAddress(
+      voter,
+      addressOfRequest(),
+      Date.now(),
+      data,
+    );
+    if (keepsTheVoter(cast))
+      setCookie(VOTER_COOKIE, voter, VOTER_COOKIE_OPTIONS);
+    return cast;
   });

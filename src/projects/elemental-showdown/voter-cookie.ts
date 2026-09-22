@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { VoteCastResult } from "./vote-reveal";
 
 // A Voter is a browser: an unsigned uuid in a cookie, minted by the first Vote
 // and re-sent by every one after it. Nothing else is kept, so there is nothing
@@ -26,6 +27,10 @@ export type Voter = z.infer<typeof voterSchema>;
 // browser has voted on nothing and gets a fresh Voter on its next Vote.
 export const readVoterCookie = (cookie: string | undefined) =>
   voterSchema.safeParse(cookie).data;
+
+// A Vote the cap turned down stored nothing, so it neither mints a Voter nor
+// slides one's expiry: the cookie is set by a Vote that landed and no other.
+export const keepsTheVoter = (cast: VoteCastResult) => cast.state === "reveal";
 
 // A browser's first Vote mints one, parsed the same way as one read back.
 export const mintVoter = (): Voter => voterSchema.parse(crypto.randomUUID());
