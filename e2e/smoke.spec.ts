@@ -6,6 +6,20 @@ test("/ responds 200 and the h1 is the name", async ({ page }) => {
   await expect(page.locator("h1")).toHaveText("Jacob Cheatley");
 });
 
+// The Cover wears the Project's display face as outlined paths, and the two
+// webfonts are linked by the Project's own routes, so the Portfolio pays for
+// neither.
+test("/ declares neither of Elemental Showdown's webfonts", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const families = await page.evaluate(() =>
+    [...document.fonts].map((face) => face.family),
+  );
+  expect(families).not.toContain("Bowlby One");
+  expect(families).not.toContain("Bricolage Grotesque Variable");
+});
+
 test("the favicon link in the head serves a PNG", async ({ page, request }) => {
   await page.goto("/");
   const faviconUrl = await page

@@ -135,6 +135,15 @@ body {
   }
 }
 
+/* Where fire meets water on the Elemental Showdown Cover. Typed, so it
+   interpolates and one transition on it moves the fire's edge, the seam and the
+   pill together; the rest position lives here and hovering overrides it. */
+@property --cover-seam {
+  syntax: "<percentage>";
+  inherits: true;
+  initial-value: 50%;
+}
+
 /* Frames only: how long the reveal lingers comes inline from Reveal.tsx, which
    moves on by the same clock. */
 @keyframes reveal-drain {
