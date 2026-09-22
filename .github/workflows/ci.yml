@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Run by hand on any branch to put it on staging; production stays main-only.
+  workflow_dispatch:
 
 jobs:
   check:
@@ -42,7 +44,7 @@ jobs:
       - run: bun run test
 
   deploy-staging:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     needs: [check, test]
     runs-on: ubuntu-latest
     environment:
@@ -77,6 +79,7 @@ jobs:
           SMOKE_WRITE: "1"
 
   deploy-prod:
+    if: github.event_name == 'push'
     needs: [smoke]
     runs-on: ubuntu-latest
     environment:
