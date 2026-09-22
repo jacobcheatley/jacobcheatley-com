@@ -14,14 +14,14 @@ import {
 } from "./tug";
 import type { VoteLimited, VoteReveal } from "./vote-reveal";
 
-// Up and right take ground for the Element on top, the way a slider's keys
-// read. A thumb does the opposite: it shoves the seam away from the Element it
-// is voting for, so that the winner's side grows under it.
+// The seam moves the way the key points, as it does under a thumb: down hands
+// the ground to the Element on top. Left and Right follow Down and Up, the way
+// a slider's keys read.
 const ARROW_STEPS: Record<string, number> = {
-  ArrowUp: 1,
-  ArrowRight: 1,
-  ArrowDown: -1,
-  ArrowLeft: -1,
+  ArrowDown: 1,
+  ArrowLeft: 1,
+  ArrowUp: -1,
+  ArrowRight: -1,
 };
 
 // The emoji grows with the ground its Element holds.
@@ -122,7 +122,9 @@ export function Tug({
       aria-orientation="vertical"
       aria-valuemin={-STRONG_WIN}
       aria-valuemax={STRONG_WIN}
-      aria-valuenow={value}
+      // The slider's value is how high the seam sits, so that Up raises it as
+      // a vertical slider's must. The Vote it reads as is the sentence.
+      aria-valuenow={-value}
       aria-valuetext={sentence}
       onPointerDown={startDrag}
       onPointerMove={dragTo}

@@ -100,7 +100,7 @@ describe("the Tug as a slider", () => {
     const castVote = showdown();
 
     tug().focus();
-    await user.keyboard("{ArrowUp}{ArrowUp}{Enter}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
     expect(castVote).toHaveBeenCalledWith(cast(2));
   });
@@ -110,9 +110,30 @@ describe("the Tug as a slider", () => {
     const castVote = showdown();
 
     tug().focus();
-    await user.keyboard("{ArrowDown}{Enter}");
+    await user.keyboard("{ArrowUp}{Enter}");
 
     expect(castVote).toHaveBeenCalledWith(cast(-1));
+  });
+
+  it("raises the seam, and the slider's value with it, on ArrowUp", async () => {
+    const user = userEvent.setup();
+    showdown();
+
+    tug().focus();
+    await user.keyboard("{ArrowUp}");
+
+    expect(tug()).toHaveAttribute("aria-valuenow", "1");
+    expect(tug()).toHaveAttribute("aria-valuetext", "water beats fire");
+  });
+
+  it("follows Down and Up with Left and Right", async () => {
+    const user = userEvent.setup();
+    const castVote = showdown();
+
+    tug().focus();
+    await user.keyboard("{ArrowLeft}{ArrowLeft}{ArrowRight}{Enter}");
+
+    expect(castVote).toHaveBeenCalledWith(cast(1));
   });
 
   it("reads the Vote as a sentence while the seam moves", async () => {
@@ -122,11 +143,11 @@ describe("the Tug as a slider", () => {
     tug().focus();
     expect(tug()).toHaveAttribute("aria-valuetext", "too close to call");
 
-    await user.keyboard("{ArrowUp}");
+    await user.keyboard("{ArrowDown}");
     expect(tug()).toHaveAttribute("aria-valuetext", "fire beats water");
     expect(pill()).toHaveAccessibleName("fire beats water");
 
-    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
+    await user.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
     expect(tug()).toHaveAttribute("aria-valuetext", "water crushes fire");
   });
 
@@ -135,7 +156,7 @@ describe("the Tug as a slider", () => {
     const castVote = showdown();
 
     tug().focus();
-    await user.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}{Enter}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{Enter}");
 
     expect(castVote).toHaveBeenCalledWith(cast(2));
   });
@@ -342,7 +363,7 @@ describe("a Vote the address has no room left for", () => {
     showdown({ castVote: vi.fn<CastVote>(async () => limitedBy("minute")) });
 
     tug().focus();
-    await user.keyboard("{ArrowUp}{ArrowUp}{Enter}");
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
 
     await screen.findByText("slow down a sec");
     expect(tug()).toHaveAttribute("aria-valuenow", "0");
