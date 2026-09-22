@@ -187,11 +187,14 @@ export function Tug({
             onClick={(event) => {
               if (event.detail === 0) onCast(value);
             }}
-            className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring"
+            className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring active:scale-95"
             style={{
               top: `${seam}%`,
               background: INK,
               color: PAPER,
+              // The ring is what says the pill is a button and not one more
+              // tab: the draw is cast by tapping it.
+              boxShadow: `0 0 0 2px ${PAPER}`,
               fontSize: Math.abs(value) === STRONG_WIN ? 19 : 15,
             }}
           >
@@ -206,6 +209,8 @@ export function Tug({
           style={{ top: "calc(50% + 30px)", color: textOn(bottom.colour) }}
         >
           drag up or down: the winner takes ground
+          <br />
+          or tap the pill: too close to call
         </p>
       )}
 
