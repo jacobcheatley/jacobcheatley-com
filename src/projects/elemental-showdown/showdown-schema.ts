@@ -14,3 +14,21 @@ export type ElementKind = z.infer<typeof elementKindSchema>;
 export const voteValueSchema = z.literal([-2, -1, 0, 1, 2]);
 
 export type VoteValue = z.infer<typeof voteValueSchema>;
+
+// A Vote as the Tug casts it: the Matchup's two Elements in the order they were
+// shown, and the value read from the top one's side. The server turns that into
+// the orientation the Vote is stored in.
+export const voteCastSchema = z
+  .object({
+    topElementId: z.int().positive(),
+    bottomElementId: z.int().positive(),
+    value: voteValueSchema,
+  })
+  .refine(
+    ({ topElementId, bottomElementId }) => topElementId !== bottomElementId,
+    {
+      error: "a Matchup is two different Elements",
+    },
+  );
+
+export type VoteCast = z.infer<typeof voteCastSchema>;

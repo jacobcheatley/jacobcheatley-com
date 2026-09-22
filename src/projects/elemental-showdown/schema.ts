@@ -23,6 +23,10 @@ export const elements = pgTable("elements", {
   isActive: boolean("is_active").notNull().default(true),
 });
 
+// The DOM has an `Element` of its own, so the roster's row wears the Project's
+// name the way a Sticky Note's `NoteElement` wears its own.
+export type ShowdownElement = typeof elements.$inferSelect;
+
 // A Matchup is the Element self-join on `element_low < element_high`, so it
 // has one orientation here and a positive `value` means the low id wins. No
 // cascade: an Element with Votes cannot be deleted, only switched off.

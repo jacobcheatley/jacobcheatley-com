@@ -57,3 +57,21 @@ test("the Sticky Notes editor loads with the mat over the wall", async ({
     page.getByRole("button", { name: "Tear off a yellow sheet" }),
   ).toBeVisible();
 });
+
+// The roster ships with the migration, so every environment has Matchups.
+test("/elemental-showdown responds 200 and shows a Matchup", async ({
+  page,
+}) => {
+  const response = await page.goto("/elemental-showdown");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("slider")).toBeVisible();
+});
+
+// Reading, never voting: the cookie is set by a deliberate Vote and nothing
+// else, which is why there is no cookie notice.
+test("being shown a Matchup leaves no cookie behind", async ({ page }) => {
+  await page.goto("/elemental-showdown");
+  expect(await page.context().cookies()).not.toContainEqual(
+    expect.objectContaining({ name: "elemental_showdown_voter" }),
+  );
+});

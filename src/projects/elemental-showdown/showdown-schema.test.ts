@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { elementKindSchema, voteValueSchema } from "./showdown-schema";
+import {
+  elementKindSchema,
+  voteCastSchema,
+  voteValueSchema,
+} from "./showdown-schema";
 
 describe("voteValueSchema", () => {
   it("accepts every step of the Tug", () => {
@@ -26,5 +30,50 @@ describe("elementKindSchema", () => {
 
   it("rejects a kind nobody seeded", () => {
     expect(elementKindSchema.safeParse("legendary").success).toBe(false);
+  });
+});
+
+describe("voteCastSchema", () => {
+  const matchup = { topElementId: 7, bottomElementId: 3 };
+
+  it("takes a strong win for either Element", () => {
+    expect(voteCastSchema.parse({ ...matchup, value: 2 })).toEqual({
+      ...matchup,
+      value: 2,
+    });
+    expect(voteCastSchema.parse({ ...matchup, value: -2 })).toEqual({
+      ...matchup,
+      value: -2,
+    });
+  });
+
+  it("refuses a win stronger than the Tug can reach", () => {
+    expect(voteCastSchema.safeParse({ ...matchup, value: 3 }).success).toBe(
+      false,
+    );
+    expect(voteCastSchema.safeParse({ ...matchup, value: -3 }).success).toBe(
+      false,
+    );
+  });
+
+  it("refuses an Element matched against itself", () => {
+    expect(
+      voteCastSchema.safeParse({
+        topElementId: 7,
+        bottomElementId: 7,
+        value: 1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses an id no Element could have", () => {
+    expect(
+      voteCastSchema.safeParse({ ...matchup, topElementId: 0, value: 1 })
+        .success,
+    ).toBe(false);
+    expect(
+      voteCastSchema.safeParse({ ...matchup, topElementId: 1.5, value: 1 })
+        .success,
+    ).toBe(false);
   });
 });
