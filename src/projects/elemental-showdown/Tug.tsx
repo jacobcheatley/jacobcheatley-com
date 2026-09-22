@@ -59,6 +59,11 @@ export function Tug({
   const [value, setValue] = useState<VoteValue>(0);
   const [isDragging, setDragging] = useState(false);
   const dragFrom = useRef<number | null>(null);
+  const pill = useRef<HTMLButtonElement>(null);
+  // A gesture that went down on the pill and has not moved the seam since: let
+  // go and it casts the draw the pill reads, where any other gesture back in
+  // the middle casts nothing.
+  const tapsPill = useRef(false);
   const seam = seamAt(value);
   const sentence = voteSentence(value, top, bottom);
 
@@ -75,6 +80,9 @@ export function Tug({
       return;
     }
     dragFrom.current = event.clientY;
+    tapsPill.current =
+      event.target instanceof Node &&
+      pill.current?.contains(event.target) === true;
     setDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -83,6 +91,7 @@ export function Tug({
     if (dragFrom.current === null) return;
     const dragged = draggedVote(event.clientY - dragFrom.current);
     if (dragged === value) return;
+    if (dragged !== 0) tapsPill.current = false;
     navigator.vibrate?.(10 * Math.abs(dragged));
     setValue(dragged);
   }
@@ -91,8 +100,10 @@ export function Tug({
     if (dragFrom.current === null) return;
     dragFrom.current = null;
     setDragging(false);
+    const tapped = tapsPill.current;
+    tapsPill.current = false;
     // Let go back in the middle and nothing is cast: a stray drag is no Vote.
-    if (value !== 0) onCast(value);
+    if (value !== 0 || tapped) onCast(value);
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -165,11 +176,17 @@ export function Tug({
 
           <button
             type="button"
+            ref={pill}
             // The slider takes the keyboard for both of them: Enter on it casts
             // whatever the pill reads.
             tabIndex={-1}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onCast(value)}
+            // A pointer's tap on the pill has cast already, on release, and
+            // browsers disagree on whether its click still lands here. Only an
+            // activation with no pointer behind it, as a screen reader sends,
+            // casts from the click.
+            onClick={(event) => {
+              if (event.detail === 0) onCast(value);
+            }}
             className="-translate-x-1/2 -translate-y-1/2 absolute left-1/2 z-20 whitespace-nowrap rounded-full px-5 py-[11px] font-showdown-display transition-[top] duration-300 ease-spring"
             style={{
               top: `${seam}%`,
