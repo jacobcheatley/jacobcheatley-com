@@ -1,7 +1,5 @@
 // Greeked prose: line widths in the viewBox's user units.
 const TEXT_LINES = [228, 210, 137];
-
-// A hover writes the prose in, one line after the next.
 const LINE_STAGGER_MS = 80;
 
 // A white page in miniature, drawn 3:2 in a viewBox so it scales with its

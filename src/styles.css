@@ -35,9 +35,9 @@
       transform: translateY(100%);
     }
   }
-  /* The Blog Cover's prose writing itself in. `both` holds a line at nothing
-     through its stagger delay, so the lines land top to bottom. */
-  --animate-cover-line-write: cover-line-write 300ms ease-out both;
+  /* The Blog Cover's prose writing itself in. `backwards` holds a line at
+     nothing through its stagger delay, so the lines land top to bottom. */
+  --animate-cover-line-write: cover-line-write 300ms ease-out backwards;
   @keyframes cover-line-write {
     from {
       width: 0;
