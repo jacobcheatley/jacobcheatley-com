@@ -8,7 +8,7 @@ import type { VoteReveal } from "./vote-reveal";
 
 // How long the reveal holds the screen on its own, which is what the draining
 // bar drains over.
-export const REVEAL_LINGER_MS = 3500;
+export const REVEAL_LINGER_MS = 2500;
 
 // The bars growing out of their labels and the crowd line travelling to the
 // mean, both in the Tug's own spring.
