@@ -6,11 +6,13 @@ import {
   castVoteFromAddress,
   nextMatchup,
   showdownAggregate,
+  showdownStats,
 } from "./elemental-showdown.server";
 import { scoreMatchup } from "./matchup-score";
 import { elements, votes } from "./schema";
 import { AGGREGATE_LIFETIME_MS } from "./showdown-aggregate";
-import type { ElementKind } from "./showdown-schema";
+import type { ElementKind, VoteValue } from "./showdown-schema";
+import { EVERY_VOTES_TO_UNLOCK, OWN_VOTES_TO_UNLOCK } from "./showdown-stats";
 import { VOTES_PER_MINUTE } from "./vote-limiter";
 
 const VOTER = "11111111-1111-4111-8111-111111111111";
@@ -275,6 +277,115 @@ describe("showdownAggregate", () => {
     expect(matchups).toMatchObject([
       { score: scoreMatchup({ voteCount: 1, valueSum: 2, squareSum: 4 }) },
     ]);
+  });
+});
+
+describe("showdownStats", () => {
+  type Matchup = { elementLow: number; elementHigh: number };
+
+  const A_WEAK_WIN: VoteValue = 1;
+
+  // Seven Elements give 21 Matchups, more than the Voter's own number, so each
+  // of their Votes below is on a Matchup of its own.
+  const ELEMENTS_FOR_THE_GATE = 7;
+
+  async function insertMatchups(elementCount: number) {
+    const ids: number[] = [];
+    for (let at = 0; at < elementCount; at++)
+      ids.push(await insertElement(`element ${at}`));
+    return ids.flatMap((elementLow, at) =>
+      ids.slice(at + 1).map((elementHigh) => ({ elementLow, elementHigh })),
+    );
+  }
+
+  // The Voter takes a Matchup each; the rest of the crowd piles onto the first
+  // of them, one Voter apiece so that every Vote stands.
+  async function castVotes(
+    matchups: Matchup[],
+    { own, everyone }: { own: number; everyone: number },
+  ) {
+    const [crowded] = matchups;
+    if (!crowded) throw new Error("no Matchup to vote on");
+    await db.insert(votes).values([
+      ...matchups
+        .slice(0, own)
+        .map((matchup) => ({ voter: VOTER, ...matchup, value: A_WEAK_WIN })),
+      ...Array.from({ length: everyone - own }, () => ({
+        voter: crypto.randomUUID(),
+        ...crowded,
+        value: A_WEAK_WIN,
+      })),
+    ]);
+  }
+
+  it("opens the Stats once both numbers are met exactly", async () => {
+    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+    await castVotes(matchups, {
+      own: OWN_VOTES_TO_UNLOCK,
+      everyone: EVERY_VOTES_TO_UNLOCK,
+    });
+
+    expect(await showdownStats(VOTER, nextRead())).toEqual({
+      state: "unlocked",
+    });
+  });
+
+  it("sends a Voter one Vote short of the crowd's number the counts and nothing else", async () => {
+    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+    await castVotes(matchups, {
+      own: OWN_VOTES_TO_UNLOCK,
+      everyone: EVERY_VOTES_TO_UNLOCK - 1,
+    });
+
+    expect(await showdownStats(VOTER, nextRead())).toEqual({
+      state: "locked",
+      ownVoteCount: OWN_VOTES_TO_UNLOCK,
+      everyVoteCount: EVERY_VOTES_TO_UNLOCK - 1,
+      elementCount: ELEMENTS_FOR_THE_GATE,
+    });
+  });
+
+  it("keeps them locked while the Voter is one Vote short of their own number", async () => {
+    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+    await castVotes(matchups, {
+      own: OWN_VOTES_TO_UNLOCK - 1,
+      everyone: EVERY_VOTES_TO_UNLOCK,
+    });
+
+    expect(await showdownStats(VOTER, nextRead())).toMatchObject({
+      state: "locked",
+      ownVoteCount: OWN_VOTES_TO_UNLOCK - 1,
+    });
+  });
+
+  it("counts the Votes on a switched-off Element in everyone's number", async () => {
+    const fire = await insertElement("fire");
+    const santa = await insertElement("santa", {
+      kind: "rare",
+      isActive: false,
+    });
+    await castVotes([{ elementLow: fire, elementHigh: santa }], {
+      own: 0,
+      everyone: EVERY_VOTES_TO_UNLOCK,
+    });
+
+    expect(await showdownStats(VOTER, nextRead())).toMatchObject({
+      everyVoteCount: EVERY_VOTES_TO_UNLOCK,
+      elementCount: 1,
+    });
+  });
+
+  it("has nothing of its own to count for a visitor with no cookie", async () => {
+    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+    await castVotes(matchups, {
+      own: OWN_VOTES_TO_UNLOCK,
+      everyone: EVERY_VOTES_TO_UNLOCK,
+    });
+
+    expect(await showdownStats(undefined, nextRead())).toMatchObject({
+      state: "locked",
+      ownVoteCount: 0,
+    });
   });
 });
 

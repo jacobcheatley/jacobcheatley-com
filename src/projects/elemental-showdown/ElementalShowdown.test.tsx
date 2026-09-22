@@ -302,6 +302,18 @@ describe("a Voter who has judged every Matchup", () => {
     expect(screen.getByText(/judged all 1326 matchups/i)).toBeInTheDocument();
     expect(screen.queryByRole("slider")).toBeNull();
   });
+
+  it("is sent on to the Stats, with the link to pass around", () => {
+    showdown({ shown: { state: "exhausted", matchupCount: 1326 } });
+
+    expect(screen.getByRole("link", { name: "the stats" })).toHaveAttribute(
+      "href",
+      "/elemental-showdown/stats",
+    );
+    expect(
+      screen.getByRole("button", { name: "send it to a friend" }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("the way back", () => {
@@ -311,5 +323,14 @@ describe("the way back", () => {
     expect(
       screen.getByRole("link", { name: /jacob cheatley/i }),
     ).toHaveAttribute("href", "/");
+  });
+
+  it("leaves a small link to the Stats on the Matchup", () => {
+    showdown();
+
+    expect(screen.getByRole("link", { name: "the stats" })).toHaveAttribute(
+      "href",
+      "/elemental-showdown/stats",
+    );
   });
 });

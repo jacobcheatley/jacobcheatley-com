@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { INK, PAPER, textOn } from "./element-colour";
 import type { VoteCastResult, VoteLimited, VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
+import { ShareButton } from "./ShareButton";
 import type { VoteCast, VoteValue } from "./showdown-schema";
 import { Tug } from "./Tug";
 
@@ -79,22 +80,33 @@ export function ElementalShowdown({
       style={{ background: INK, color: PAPER }}
     >
       {matchup.state === "matchup" ? (
-        <Tug
-          key={`${matchup.top.id}:${matchup.bottom.id}`}
-          top={matchup.top}
-          bottom={matchup.bottom}
-          isFirstMatchup={votesCast === 0}
-          onCast={cast}
-          limited={limited}
-          reveal={reveal}
-          onAdvance={advance}
-        />
+        <>
+          <Tug
+            key={`${matchup.top.id}:${matchup.bottom.id}`}
+            top={matchup.top}
+            bottom={matchup.bottom}
+            isFirstMatchup={votesCast === 0}
+            onCast={cast}
+            limited={limited}
+            reveal={reveal}
+            onAdvance={advance}
+          />
+          {/* The Stats have a screen of their own; the Matchup keeps its
+              corner link to them, in the top Element's own ink. */}
+          <Link
+            to="/elemental-showdown/stats"
+            className={`${CORNER_LINK} right-0 text-right`}
+            style={{ color: textOn(matchup.top.colour) }}
+          >
+            the stats
+          </Link>
+        </>
       ) : (
         <AllJudged matchupCount={matchup.matchupCount} />
       )}
       <Link
         to="/"
-        className="absolute top-0 left-0 z-30 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] text-[13px] no-underline opacity-75 hover:underline"
+        className={`${CORNER_LINK} left-0`}
         style={{
           color:
             matchup.state === "matchup" ? textOn(matchup.top.colour) : PAPER,
@@ -106,12 +118,25 @@ export function ElementalShowdown({
   );
 }
 
+const CORNER_LINK =
+  "absolute top-0 z-30 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] text-[13px] no-underline opacity-75 hover:underline";
+
 function AllJudged({ matchupCount }: { matchupCount: number }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-7 px-8 text-center">
       <p className="font-showdown-display text-[30px] leading-[1.05]">
         you’ve judged all {matchupCount} matchups
       </p>
+      <div className="grid w-full max-w-[22rem] gap-3">
+        <Link
+          to="/elemental-showdown/stats"
+          className="grid h-14 place-items-center rounded-[14px] font-showdown-display text-[20px] no-underline"
+          style={{ background: PAPER, color: INK }}
+        >
+          the stats
+        </Link>
+        <ShareButton label="send it to a friend" />
+      </div>
     </div>
   );
 }
