@@ -14,9 +14,13 @@ import { AGGREGATE_LIFETIME_MS } from "./showdown-aggregate";
 import type { ElementKind, VoteValue } from "./showdown-schema";
 import { EVERY_VOTES_TO_UNLOCK, OWN_VOTES_TO_UNLOCK } from "./showdown-stats";
 import { VOTES_PER_MINUTE } from "./vote-limiter";
+import { mintVoter, voterSchema } from "./voter-cookie";
 
-const VOTER = "11111111-1111-4111-8111-111111111111";
-const OTHER_VOTER = "22222222-2222-4222-8222-222222222222";
+// A Voter whose uuid a test can tell from another at a glance.
+const voterOf = (uuid: string) => voterSchema.parse(uuid);
+
+const VOTER = voterOf("11111111-1111-4111-8111-111111111111");
+const OTHER_VOTER = voterOf("22222222-2222-4222-8222-222222222222");
 
 // The aggregate is held for a minute, so every read here is a minute on from
 // the last: no test is handed the Elements and Votes of the one before it.
@@ -70,7 +74,7 @@ async function castVotes(
       .slice(0, own)
       .map((matchup) => ({ voter: VOTER, ...matchup, value: A_WEAK_WIN })),
     ...Array.from({ length: everyone - own }, () => ({
-      voter: crypto.randomUUID(),
+      voter: mintVoter(),
       ...crowded,
       value: A_WEAK_WIN,
     })),
@@ -518,7 +522,7 @@ describe("showdownStats", () => {
     if (!theOther) throw new Error("no Matchup to vote on");
     await db.insert(votes).values(
       Array.from({ length: VOTES_THAT_SETTLE_A_MATCHUP }, () => ({
-        voter: crypto.randomUUID(),
+        voter: mintVoter(),
         ...theOther,
         value: A_WEAK_WIN,
       })),

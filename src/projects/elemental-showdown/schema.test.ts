@@ -5,10 +5,11 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
 import { elements, votes } from "./schema";
 import type { ElementKind } from "./showdown-schema";
+import { voterSchema } from "./voter-cookie";
 
 const ROSTER_MIGRATION = "drizzle/0003_element_roster.sql";
 
-const VOTER = "11111111-1111-4111-8111-111111111111";
+const VOTER = voterSchema.parse("11111111-1111-4111-8111-111111111111");
 
 async function insertElement(name: string, kind: ElementKind = "common") {
   const [element] = await db

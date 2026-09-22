@@ -11,6 +11,7 @@ import {
 } from "./elemental-showdown.server";
 import { voteCastSchema } from "./showdown-schema";
 import {
+  mintVoter,
   readVoterCookie,
   VOTER_COOKIE,
   VOTER_COOKIE_OPTIONS,
@@ -39,7 +40,7 @@ export const showdownStatsFn = createServerFn({ method: "GET" }).handler(() =>
 export const castVoteFn = createServerFn({ method: "POST" })
   .validator(voteCastSchema)
   .handler(async ({ data }) => {
-    const voter = voterOfRequest() ?? crypto.randomUUID();
+    const voter = voterOfRequest() ?? mintVoter();
     setCookie(VOTER_COOKIE, voter, VOTER_COOKIE_OPTIONS);
     return castVoteFromAddress(voter, addressOfRequest(), Date.now(), data);
   });

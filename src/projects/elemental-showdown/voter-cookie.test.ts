@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { readVoterCookie, VOTER_COOKIE_OPTIONS } from "./voter-cookie";
+import {
+  mintVoter,
+  readVoterCookie,
+  VOTER_COOKIE_OPTIONS,
+} from "./voter-cookie";
 
 describe("readVoterCookie", () => {
   it("takes the Voter the last Vote minted", () => {
@@ -18,6 +22,14 @@ describe("readVoterCookie", () => {
     expect(readVoterCookie("11111111-1111-4111-8111-11111111111")).toBe(
       undefined,
     );
+  });
+});
+
+describe("mintVoter", () => {
+  it("mints a Voter the cookie reads back as the same one", () => {
+    const minted = mintVoter();
+
+    expect(readVoterCookie(minted)).toBe(minted);
   });
 });
 
