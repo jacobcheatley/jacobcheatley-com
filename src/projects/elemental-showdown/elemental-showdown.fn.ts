@@ -13,7 +13,7 @@ import {
 const voterOfRequest = () => readVoterCookie(getCookie(VOTER_COOKIE));
 
 export const nextMatchupFn = createServerFn({ method: "GET" }).handler(() =>
-  nextMatchup(voterOfRequest(), Math.random),
+  nextMatchup(voterOfRequest(), Math.random, Date.now()),
 );
 
 // `.validator(voteCastSchema)` re-validates on the server: the trust boundary.

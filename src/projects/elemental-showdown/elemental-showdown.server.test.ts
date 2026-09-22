@@ -1,11 +1,23 @@
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { db } from "@/db/index.server";
-import { castVote, nextMatchup } from "./elemental-showdown.server";
+import {
+  castVote,
+  nextMatchup,
+  showdownAggregate,
+} from "./elemental-showdown.server";
+import { scoreMatchup } from "./matchup-score";
 import { elements, votes } from "./schema";
+import { AGGREGATE_LIFETIME_MS } from "./showdown-aggregate";
 import type { ElementKind } from "./showdown-schema";
 
 const VOTER = "11111111-1111-4111-8111-111111111111";
 const OTHER_VOTER = "22222222-2222-4222-8222-222222222222";
+
+// The aggregate is held for a minute, so every read here is a minute on from
+// the last: no test is handed the Elements and Votes of the one before it.
+let readAtMs = 0;
+const nextRead = () => (readAtMs += AGGREGATE_LIFETIME_MS);
 
 async function insertElement(
   name: string,
@@ -156,6 +168,73 @@ describe("castVote", () => {
   });
 });
 
+describe("showdownAggregate", () => {
+  it("adds up the three sums of every Vote on a Matchup", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+    const matchup = { topElementId: fire, bottomElementId: water };
+    await castVote(VOTER, { ...matchup, value: 2 });
+    await castVote(OTHER_VOTER, { ...matchup, value: -1 });
+
+    const { matchups } = await showdownAggregate(nextRead());
+
+    expect(matchups).toMatchObject([
+      {
+        elementLow: { id: fire },
+        elementHigh: { id: water },
+        score: scoreMatchup({ voteCount: 2, valueSum: 1, squareSum: 5 }),
+      },
+    ]);
+  });
+
+  it("counts the Votes of a switched-off Element in every Vote cast", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+    const santa = await insertElement("santa", {
+      kind: "rare",
+      isActive: false,
+    });
+    await castVote(VOTER, {
+      topElementId: fire,
+      bottomElementId: santa,
+      value: 1,
+    });
+    await castVote(VOTER, {
+      topElementId: fire,
+      bottomElementId: water,
+      value: 1,
+    });
+
+    const aggregate = await showdownAggregate(nextRead());
+
+    expect(aggregate.everyVoteCount).toBe(2);
+    expect(aggregate.matchups).toHaveLength(1);
+  });
+
+  it("brings a switched-off Element's Votes back with it", async () => {
+    const fire = await insertElement("fire");
+    const santa = await insertElement("santa", {
+      kind: "rare",
+      isActive: false,
+    });
+    await castVote(VOTER, {
+      topElementId: fire,
+      bottomElementId: santa,
+      value: 2,
+    });
+    await db
+      .update(elements)
+      .set({ isActive: true })
+      .where(eq(elements.id, santa));
+
+    const { matchups } = await showdownAggregate(nextRead());
+
+    expect(matchups).toMatchObject([
+      { score: scoreMatchup({ voteCount: 1, valueSum: 2, squareSum: 4 }) },
+    ]);
+  });
+});
+
 describe("nextMatchup", () => {
   const always = (draw: number) => () => draw;
 
@@ -163,9 +242,36 @@ describe("nextMatchup", () => {
     await insertElement("fire");
     await insertElement("water");
 
-    const drawn = await nextMatchup(undefined, always(0));
+    const drawn = await nextMatchup(undefined, always(0), nextRead());
 
     expect(drawn.state).toBe("matchup");
+  });
+
+  it("leaves a switched-off Element out of the draw and offers it again once it is back", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+    const santa = await insertElement("santa", {
+      kind: "rare",
+      isActive: false,
+    });
+    await castVote(VOTER, {
+      topElementId: fire,
+      bottomElementId: water,
+      value: 0,
+    });
+    expect(await nextMatchup(VOTER, always(0), nextRead())).toMatchObject({
+      state: "exhausted",
+    });
+
+    await db
+      .update(elements)
+      .set({ isActive: true })
+      .where(eq(elements.id, santa));
+
+    const drawn = await nextMatchup(VOTER, always(0), nextRead());
+
+    if (drawn.state !== "matchup") throw new Error("nothing was offered");
+    expect([drawn.top.id, drawn.bottom.id]).toContain(santa);
   });
 
   it("leaves out the Matchups this Voter has already voted on", async () => {
@@ -179,7 +285,7 @@ describe("nextMatchup", () => {
     });
 
     for (const draw of [0, 0.5, 0.99]) {
-      const drawn = await nextMatchup(VOTER, always(draw));
+      const drawn = await nextMatchup(VOTER, always(draw), nextRead());
 
       if (drawn.state !== "matchup") throw new Error("nothing was offered");
       expect([drawn.top.id, drawn.bottom.id].sort()).not.toEqual(
@@ -199,7 +305,7 @@ describe("nextMatchup", () => {
       value: 0,
     });
 
-    expect(await nextMatchup(VOTER, always(0))).toEqual({
+    expect(await nextMatchup(VOTER, always(0), nextRead())).toEqual({
       state: "exhausted",
       matchupCount: 1,
     });
@@ -214,6 +320,8 @@ describe("nextMatchup", () => {
       value: 2,
     });
 
-    expect((await nextMatchup(VOTER, always(0))).state).toBe("matchup");
+    expect((await nextMatchup(VOTER, always(0), nextRead())).state).toBe(
+      "matchup",
+    );
   });
 });

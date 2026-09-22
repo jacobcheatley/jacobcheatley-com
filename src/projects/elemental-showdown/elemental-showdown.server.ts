@@ -1,22 +1,52 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db/index.server";
 import { noVotes, revealFor, type VoteReveal } from "./matchup-score";
 import { drawMatchup, type NextMatchup } from "./matchup-selection";
 import { elements, votes } from "./schema";
+import {
+  aggregateOf,
+  cacheAggregate,
+  type ShowdownAggregate,
+} from "./showdown-aggregate";
 import {
   type VoteCast,
   type VoteValue,
   voteValueSchema,
 } from "./showdown-schema";
 
+// The roster and the three sums of every voted Matchup, in two queries. A
+// Matchup nobody has voted on has no row here and is scored from the prior.
+async function loadAggregate(): Promise<ShowdownAggregate> {
+  const [roster, matchupSums] = await Promise.all([
+    db.select().from(elements),
+    db
+      .select({
+        elementLow: votes.elementLow,
+        elementHigh: votes.elementHigh,
+        voteCount: count(),
+        valueSum: sum(votes.value).mapWith(Number),
+        squareSum: sql`sum(${votes.value} * ${votes.value})`.mapWith(Number),
+      })
+      .from(votes)
+      .groupBy(votes.elementLow, votes.elementHigh),
+  ]);
+  return aggregateOf({ elements: roster, matchupSums });
+}
+
+// One copy per Machine: a suspended Machine wakes with an empty cache and a
+// second Machine holds its own, both of which the Project can live with.
+export const showdownAggregate = cacheAggregate(loadAggregate);
+
 // A visitor with no cookie has voted on nothing, so they are offered the whole
-// roster's Matchups.
+// roster's Matchups. Their own Votes are read fresh every time: the cache would
+// offer them a Matchup they have just voted on.
 export async function nextMatchup(
   voter: string | undefined,
   random: () => number,
+  nowMs: number,
 ): Promise<NextMatchup> {
-  const [roster, cast] = await Promise.all([
-    db.select().from(elements),
+  const [aggregate, cast] = await Promise.all([
+    showdownAggregate(nowMs),
     voter
       ? db
           .select({
@@ -27,7 +57,7 @@ export async function nextMatchup(
           .where(eq(votes.voter, voter))
       : [],
   ]);
-  return drawMatchup({ elements: roster, votes: cast, random });
+  return drawMatchup({ aggregate, votes: cast, random });
 }
 
 // A Matchup is stored from the lower-id Element's side and shown from the top
