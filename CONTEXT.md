@@ -13,7 +13,7 @@ The landing page and pages that present the owner and point at their Projects.
 _Avoid_: about page, showcase, homepage
 
 **Cover**:
-The piece of artwork that stands for a Project on the Portfolio: the Project's name baked in, styled as the Project itself. It is the only thing the Portfolio shows of a Project, and the only place bold colour appears there.
+The piece of artwork that stands for a Project on the Portfolio: the Project's name baked in, styled as the Project itself. It is the only thing the Portfolio shows of a Project, and the only place bold colour appears there. It answers hover and keyboard focus with a motion in its Project's own idiom, and does nothing on touch or under reduced motion.
 _Avoid_: card, thumbnail, tile
 
 ### Sticky Notes
