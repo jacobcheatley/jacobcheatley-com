@@ -13,10 +13,17 @@ import type { NextMatchup } from "./matchup-selection";
 import { REVEAL_LINGER_MS } from "./Reveal";
 import type { ShowdownElement } from "./schema";
 import type { RateWindow, VoteCast } from "./showdown-schema";
+import { statsElementOf } from "./showdown-stats";
+import { UNLOCK_MS } from "./UnlockMoment";
 
 // The route's only contribution is the Matchup the loader drew and the two
-// server functions, so the tests hand those in.
-vi.mock("@tanstack/react-router", () => import("@/test/router-stub"));
+// server functions, so the tests hand those in. `vi.mock` is hoisted above
+// this declaration, so the factory has to read it lazily.
+const navigate = vi.fn();
+vi.mock("@tanstack/react-router", async () => ({
+  ...(await import("@/test/router-stub")),
+  useNavigate: () => navigate,
+}));
 
 const element = (
   id: number,
@@ -89,7 +96,9 @@ const cast = (value: number) => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
+  navigate.mockClear();
 });
 
 describe("the Tug as a slider", () => {
@@ -256,6 +265,69 @@ describe("after a Vote", () => {
     await waitFor(() => expect(failed).toHaveBeenCalledTimes(1));
     expect(screen.getByText("fire")).toBeInTheDocument();
     expect(screen.getByText("water")).toBeInTheDocument();
+  });
+});
+
+describe("the Vote that unlocks the Stats", () => {
+  const THE_ROSTER = [fire, water, plant].map(statsElementOf);
+
+  // The reveal is read out as ever; the moment comes after it, on the clock
+  // the draining bar runs on.
+  async function castTheUnlockingVote() {
+    vi.useFakeTimers();
+    showdown({
+      castVote: vi.fn<CastVote>(async () =>
+        reveal({ unlockedElements: THE_ROSTER }),
+      ),
+    });
+    fireEvent.click(pill());
+    await act(async () => {});
+    await act(async () => void vi.advanceTimersByTime(REVEAL_LINGER_MS));
+  }
+
+  it("flips a tile to every Element and stamps the screen before the Stats", async () => {
+    await castTheUnlockingVote();
+
+    expect(screen.getByText("stats unlocked")).toBeInTheDocument();
+    for (const element of THE_ROSTER)
+      expect(screen.getByText(element.emoji)).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+
+    await act(async () => void vi.advanceTimersByTime(UNLOCK_MS));
+
+    expect(navigate).toHaveBeenCalledWith({ to: "/elemental-showdown/stats" });
+  });
+
+  it("goes on showing Matchups when the Vote unlocked nothing", async () => {
+    vi.useFakeTimers();
+    showdown();
+    fireEvent.click(pill());
+    await act(async () => {});
+
+    await act(async () => void vi.advanceTimersByTime(REVEAL_LINGER_MS));
+
+    expect(screen.getByText("plant")).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("skips the wave for a Voter who asks for less motion", async () => {
+    vi.stubGlobal("matchMedia", (media: string) => ({
+      matches: media === "(prefers-reduced-motion: reduce)",
+    }));
+
+    await castTheUnlockingVote();
+
+    expect(screen.queryByText("stats unlocked")).toBeNull();
+    expect(navigate).toHaveBeenCalledWith({ to: "/elemental-showdown/stats" });
+  });
+
+  it("opens the Stats on a browser with no Vibration API", async () => {
+    expect(navigator.vibrate).toBeUndefined();
+
+    await castTheUnlockingVote();
+    await act(async () => void vi.advanceTimersByTime(UNLOCK_MS));
+
+    expect(navigate).toHaveBeenCalledWith({ to: "/elemental-showdown/stats" });
   });
 });
 

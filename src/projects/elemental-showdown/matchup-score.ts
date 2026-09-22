@@ -3,6 +3,7 @@ import {
   VOTE_VALUES,
   type VoteValue,
 } from "./showdown-schema";
+import type { StatsElement } from "./showdown-stats";
 
 // What the crowd's Votes on one Matchup add up to. Nothing here may import
 // server code: the reveal, the Stats and the Stories all read these values in
@@ -65,6 +66,10 @@ export type VoteReveal = {
   // Where the crowd's mean sits on the Vote scale, or null below the verdict
   // gate, where a handful of Votes is no crowd to stand against.
   crowdMean: number | null;
+  // The Active Elements the unlock's wave flips a tile for, here on the one
+  // Vote that opened the Stats to this Voter and on no other. Only the cast
+  // path can tell: it counts the Votes either side of this one.
+  unlockedElements?: StatsElement[];
 };
 
 // A Vote that was never stored: this address has cast more than the window

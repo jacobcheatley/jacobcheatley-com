@@ -90,9 +90,16 @@ export const AGGREGATE_LIFETIME_MS = 60_000;
 // serves a stale read.
 export function cacheAggregate(load: () => Promise<ShowdownAggregate>) {
   let held: { loadedAtMs: number; aggregate: ShowdownAggregate } | undefined;
-  return async (nowMs: number): Promise<ShowdownAggregate> => {
-    if (!held || nowMs - held.loadedAtMs >= AGGREGATE_LIFETIME_MS)
-      held = { loadedAtMs: nowMs, aggregate: await load() };
-    return held.aggregate;
+  return {
+    readAggregate: async (nowMs: number): Promise<ShowdownAggregate> => {
+      if (!held || nowMs - held.loadedAtMs >= AGGREGATE_LIFETIME_MS)
+        held = { loadedAtMs: nowMs, aggregate: await load() };
+      return held.aggregate;
+    },
+    // A Vote whose own count has to be right this second, rather than within
+    // the minute the copy is worth: the next read pays for one more load.
+    forgetAggregate: () => {
+      held = undefined;
+    },
   };
 }

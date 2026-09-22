@@ -120,35 +120,46 @@ describe("cacheAggregate", () => {
 
   it("loads once however many times it is read inside the lifetime", async () => {
     const { load, loaded } = loadCounting();
-    const aggregate = cacheAggregate(load);
+    const { readAggregate } = cacheAggregate(load);
 
-    await aggregate(1_000);
-    await aggregate(1_000 + AGGREGATE_LIFETIME_MS - 1);
+    await readAggregate(1_000);
+    await readAggregate(1_000 + AGGREGATE_LIFETIME_MS - 1);
 
     expect(loaded()).toBe(1);
   });
 
   it("loads again on the first read after the lifetime is up", async () => {
     const { load, loaded } = loadCounting();
-    const aggregate = cacheAggregate(load);
+    const { readAggregate } = cacheAggregate(load);
 
-    await aggregate(1_000);
-    await aggregate(1_000 + AGGREGATE_LIFETIME_MS);
+    await readAggregate(1_000);
+    await readAggregate(1_000 + AGGREGATE_LIFETIME_MS);
+
+    expect(loaded()).toBe(2);
+  });
+
+  it("loads again on the next read once what it holds is forgotten", async () => {
+    const { load, loaded } = loadCounting();
+    const { readAggregate, forgetAggregate } = cacheAggregate(load);
+    await readAggregate(1_000);
+
+    forgetAggregate();
+    await readAggregate(1_000);
 
     expect(loaded()).toBe(2);
   });
 
   it("holds nothing when the load fails, so the next read tries again", async () => {
     let attempt = 0;
-    const aggregate = cacheAggregate(() => {
+    const { readAggregate } = cacheAggregate(() => {
       attempt++;
       return attempt === 1
         ? Promise.reject(new Error("the database said no"))
         : Promise.resolve(aggregateOf({ elements: [fire], matchupSums: [] }));
     });
 
-    await expect(aggregate(1_000)).rejects.toThrow("the database said no");
+    await expect(readAggregate(1_000)).rejects.toThrow("the database said no");
 
-    expect(await aggregate(1_000)).toMatchObject({ elements: [fire] });
+    expect(await readAggregate(1_000)).toMatchObject({ elements: [fire] });
   });
 });
