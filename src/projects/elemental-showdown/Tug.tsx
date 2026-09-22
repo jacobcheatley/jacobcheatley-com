@@ -27,7 +27,6 @@ const ARROW_STEPS: Record<string, number> = {
 // The emoji grows with the ground its Element holds.
 const EMOJI_BASE_PX = 36;
 
-// Placeholder copy, as the spec wrote it: the owner writes the real words.
 const LIMITED_COPY = {
   minute: "slow down a sec",
   day: "that’s plenty for today, come back tomorrow",

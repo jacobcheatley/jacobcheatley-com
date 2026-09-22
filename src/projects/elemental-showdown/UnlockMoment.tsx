@@ -20,8 +20,7 @@ const UNLOCK_BUZZ = [30, 60, 120];
 
 // The stamp stays one line whatever it lands on: Bowlby One sets these two
 // words about nine times the font size wide, and the tilt and the outline add
-// to that, so on a phone the size comes from the screen and 44px is the
-// ceiling it is drawn at.
+// to that.
 const STAMP_FONT_SIZE = "min(44px, 8vw)";
 
 // The mosaic is this many tiles wide, so a tile's place gives its row and its

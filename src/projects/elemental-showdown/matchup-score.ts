@@ -154,10 +154,8 @@ const confidenceOf = (halfWidth: number): Confidence => {
   return halfWidth <= MEDIUM_HALF_WIDTH ? "medium" : "faint";
 };
 
-// The Dirichlet-multinomial posterior of one Matchup, read out as the numbers
-// the reveal, the Stats, the Stories and Matchup selection all work from. A
-// Matchup with no Votes needs no special case: the prior alone scores it as
-// faint Neutral.
+// The Dirichlet-multinomial posterior of one Matchup. One with no Votes needs
+// no special case: the prior alone scores it as faint Neutral.
 export function scoreMatchup({
   voteCount,
   valueSum,

@@ -2,9 +2,7 @@ import { INK, NO_ELEMENT, PAPER } from "./element-colour";
 import type { HottestTake, Story } from "./showdown-stories";
 
 // The crowd's calls as headlines: a row that scrolls sideways with the next
-// Story peeking, each a full-bleed field in its Element's colour under an ink
-// card. All the copy here is the prototype's placeholder: the owner writes the
-// real words.
+// Story peeking, each a full-bleed field in its Element's colour.
 
 // The diagonal a Matchup's two colours and a triangle's three are split on.
 const FIELD_ANGLE = "115deg";

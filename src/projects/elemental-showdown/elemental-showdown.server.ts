@@ -92,9 +92,8 @@ async function votesBy(voter: string | undefined): Promise<OwnVote[]> {
 }
 
 // The gate is the server's: while it holds, the only things to leave here are
-// the two counts and how many tiles the mosaic has. The crowd's number comes
-// from the cached aggregate and the Voter's own Votes are always fresh, so
-// their last one is in it.
+// the two counts and how many tiles the mosaic has. The Voter's own Votes are
+// read fresh, so their last one is in it.
 export async function showdownStats(
   voter: string | undefined,
   nowMs: number,
@@ -126,9 +125,8 @@ export async function showdownStats(
 const fromTheOtherSide = (value: VoteValue) => voteValueSchema.parse(-value);
 
 // The Tug reads a Vote from the top Element's side; a Matchup is stored one way
-// round only. A Voter who votes on the same Matchup twice (two tabs, a double
-// submit) is not an error: their first Vote stands, and the reveal is the
-// crowd as it is now, read back from the Matchup's own side.
+// round only. A Voter who votes on the same Matchup twice is not an error:
+// their first Vote stands and the reveal is the crowd as it is now.
 export async function castVote(
   voter: string,
   { topElementId, bottomElementId, value }: VoteCast,

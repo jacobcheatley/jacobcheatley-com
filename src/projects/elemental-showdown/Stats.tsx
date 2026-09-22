@@ -35,7 +35,6 @@ export function Stats({ stats }: { stats: ShowdownStats }) {
   );
 }
 
-// Placeholder copy, as the prototype wrote it: the owner writes the real words.
 const stillMissing = (ownVoteCount: number) =>
   ownVoteCount < OWN_VOTES_TO_UNLOCK
     ? `${OWN_VOTES_TO_UNLOCK - ownVoteCount} more from you and it opens.`
@@ -194,10 +193,9 @@ function OpenStats({ stats }: { stats: UnlockedStats }) {
   );
 }
 
-// The outline is the Confidence: heavy where the crowd is sure, thin where it
-// is fairly sure, dashed and translucent where the call is a guess. The two
-// thinner ones carry the heavy one's width as a margin, so every chip takes up
-// the same room whatever the crowd knows. The border is the chip's own ink.
+// The outline is the Confidence. The two thinner ones carry the heavy one's
+// width as a margin, so every chip takes up the same room whatever the crowd
+// knows.
 const CHIP_OUTLINE: Record<Confidence, string> = {
   solid: "border-[3px]",
   medium: "m-[1.5px] border-[1.5px]",

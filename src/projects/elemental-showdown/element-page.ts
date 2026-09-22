@@ -16,8 +16,8 @@ export type OpponentChip = {
   confidence: Confidence;
 };
 
-// One band of chips under its heading. The verb is the placeholder copy the
-// prototype wrote; the multiplier beside it is the Effectiveness itself.
+// One band of chips under its heading, named by a verb with the Effectiveness
+// itself beside it.
 export type EffectivenessBand = {
   effectiveness: Effectiveness;
   verb: string;

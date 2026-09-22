@@ -1,11 +1,6 @@
 import { isIPv6 } from "node:net";
 import type { RateWindow } from "./showdown-schema";
 
-// The cap on Votes per network address, so that a casual script cannot flood
-// the Stats. It lives in this Machine's memory: a restart or a second Machine
-// costs at most one more window's worth of Votes, which is inside what a cap
-// against casual flooding is for.
-
 // A fast thumb casts perhaps 30 Votes a minute, and a whole household, office
 // or carrier can sit behind one address, so the cap is generous.
 export const VOTES_PER_MINUTE = 60;

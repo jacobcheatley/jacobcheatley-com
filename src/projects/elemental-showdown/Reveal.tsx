@@ -39,7 +39,6 @@ const PERCENTAGE_OUTLINE = [
 
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 
-// Placeholder copy, as the prototype wrote it: the owner writes the real words.
 function headlineCopy(kind: HeadlineKind, voteCount: number) {
   switch (kind) {
     case "first":
