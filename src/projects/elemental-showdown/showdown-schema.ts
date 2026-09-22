@@ -11,7 +11,9 @@ export type ElementKind = z.infer<typeof elementKindSchema>;
 
 // One Vote read from the first Element's side: two steps is a strong win, one a
 // weak win, zero too close to call.
-export const voteValueSchema = z.literal([-2, -1, 0, 1, 2]);
+export const VOTE_VALUES = [-2, -1, 0, 1, 2] as const;
+
+export const voteValueSchema = z.literal(VOTE_VALUES);
 
 export type VoteValue = z.infer<typeof voteValueSchema>;
 

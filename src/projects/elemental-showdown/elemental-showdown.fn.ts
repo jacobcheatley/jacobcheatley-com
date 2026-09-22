@@ -24,5 +24,5 @@ export const castVoteFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const voter = voterOfRequest() ?? crypto.randomUUID();
     setCookie(VOTER_COOKIE, voter, VOTER_COOKIE_OPTIONS);
-    await castVote(voter, data);
+    return castVote(voter, data);
   });

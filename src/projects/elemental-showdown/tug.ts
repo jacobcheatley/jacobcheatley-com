@@ -15,9 +15,10 @@ const SEAM_STEP_PERCENT = 17;
 // The five landings, top to bottom: one edge tab marks each.
 export const SEAM_LANDINGS = [2, 1, 0, -1, -2] as const satisfies VoteValue[];
 
-// Where the seam rests, as a percentage down the screen. The winner takes
-// ground, so the seam moves away from the Element that is winning.
-export const seamAt = (value: VoteValue) => 50 + SEAM_STEP_PERCENT * value;
+// Where the seam rests, as a percentage down the screen, for any point on the
+// Vote scale: the five landings and the crowd's mean between them. The winner
+// takes ground, so the seam moves away from the Element that is winning.
+export const seamAt = (value: number) => 50 + SEAM_STEP_PERCENT * value;
 
 // A drag down is the top Element taking ground, a drag up the bottom one.
 export const draggedVote = (dragPx: number): VoteValue => {

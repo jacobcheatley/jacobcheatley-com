@@ -87,6 +87,63 @@ describe("castVote", () => {
     expect(await storedVotes()).toMatchObject([{ value: 2 }]);
   });
 
+  it("counts the Vote just cast in the reveal it hands back", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+
+    const reveal = await castVote(VOTER, {
+      topElementId: fire,
+      bottomElementId: water,
+      value: 2,
+    });
+
+    expect(reveal).toMatchObject({
+      state: "reveal",
+      counts: { "2": 1 },
+      vote: 2,
+      sameShare: 1,
+      headline: "first",
+    });
+  });
+
+  it("reveals the Matchup from the side it was shown, whichever Element is on top", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+    // fire crushes water, from fire's side: the Matchup's own way round
+    await castVote(OTHER_VOTER, {
+      topElementId: fire,
+      bottomElementId: water,
+      value: 2,
+    });
+
+    // this Voter is shown water on top, and gives fire a weak win from there
+    const reveal = await castVote(VOTER, {
+      topElementId: water,
+      bottomElementId: fire,
+      value: -1,
+    });
+
+    expect(reveal).toMatchObject({
+      counts: { "-2": 1, "-1": 1, "0": 0, "1": 0, "2": 0 },
+      vote: -1,
+    });
+  });
+
+  it("reveals the Matchup again on a repeat Vote, showing the Vote that stands", async () => {
+    const fire = await insertElement("fire");
+    const water = await insertElement("water");
+    const matchup = { topElementId: fire, bottomElementId: water };
+    await castVote(VOTER, { ...matchup, value: 2 });
+
+    const reveal = await castVote(VOTER, { ...matchup, value: 1 });
+
+    expect(reveal).toMatchObject({
+      state: "reveal",
+      counts: { "1": 0, "2": 1 },
+      vote: 2,
+    });
+  });
+
   it("keeps one Vote per Voter, so another Voter's verdict on the same Matchup is its own", async () => {
     const fire = await insertElement("fire");
     const water = await insertElement("water");

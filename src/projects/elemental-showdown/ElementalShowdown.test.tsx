@@ -1,8 +1,16 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ElementalShowdown } from "./ElementalShowdown";
+import type { VoteReveal } from "./matchup-score";
 import type { NextMatchup } from "./matchup-selection";
+import { REVEAL_LINGER_MS } from "./Reveal";
 import type { ShowdownElement } from "./schema";
 import type { VoteCast } from "./showdown-schema";
 
@@ -33,17 +41,27 @@ const matchup = (
   bottom: ShowdownElement,
 ): NextMatchup => ({ state: "matchup", top, bottom });
 
+// Ten Votes with the crowd behind fire: the Voter crushed it too, as half of
+// them did.
+const reveal = (crowd: Partial<VoteReveal> = {}): VoteReveal => ({
+  state: "reveal",
+  counts: { "-2": 1, "-1": 0, "0": 1, "1": 3, "2": 5 },
+  vote: 2,
+  sameShare: 0.5,
+  headline: "with",
+  crowdMean: 1.4,
+  ...crowd,
+});
+
+type CastVote = (options: { data: VoteCast }) => Promise<VoteReveal>;
+
 function showdown({
   shown = matchup(fire, water),
-  castVote = vi.fn<(options: { data: VoteCast }) => Promise<void>>(
-    async () => {},
-  ),
+  castVote = vi.fn<CastVote>(async () => reveal()),
   nextMatchup = async () => matchup(plant, fire),
 }: {
   shown?: NextMatchup;
-  castVote?: ReturnType<
-    typeof vi.fn<(options: { data: VoteCast }) => Promise<void>>
-  >;
+  castVote?: ReturnType<typeof vi.fn<CastVote>>;
   nextMatchup?: () => Promise<NextMatchup>;
 } = {}) {
   render(
@@ -65,6 +83,7 @@ const cast = (value: number) => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("the Tug as a slider", () => {
@@ -137,23 +156,80 @@ describe("the Tug as a slider", () => {
   });
 });
 
-describe("after a Vote", () => {
-  it("brings on the next Matchup", async () => {
+describe("the reveal", () => {
+  it("keeps the crowd out of sight until the Vote is cast", () => {
+    showdown();
+
+    expect(screen.queryByText("▲ your vote")).toBeNull();
+    expect(screen.queryByText("the crowd")).toBeNull();
+    expect(screen.queryByText(/voted the same/)).toBeNull();
+  });
+
+  it("marks the Voter's own bar and says where the crowd stands", async () => {
     const user = userEvent.setup();
     showdown();
 
     await user.click(pill());
 
-    await screen.findByText("plant");
+    const ownBar = await screen.findByText("▲ your vote");
+    expect(ownBar.parentElement).toHaveTextContent("🔥 crushes");
+    expect(screen.getByText("with the crowd")).toBeInTheDocument();
+    expect(screen.getByText("50% voted the same, of 10")).toBeInTheDocument();
+    expect(screen.getByText("the crowd")).toBeInTheDocument();
+  });
+
+  it("dresses a Matchup nobody has settled up as no crowd at all", async () => {
+    const user = userEvent.setup();
+    showdown({
+      castVote: vi.fn<CastVote>(async () =>
+        reveal({
+          counts: { "-2": 0, "-1": 1, "0": 0, "1": 1, "2": 1 },
+          vote: 2,
+          sameShare: 1 / 3,
+          headline: "early",
+          crowdMean: null,
+        }),
+      ),
+    });
+
+    await user.click(pill());
+
+    await screen.findByText("early days, only 3 votes");
+    expect(screen.queryByText("the crowd")).toBeNull();
+    expect(screen.queryByText(/voted the same/)).toBeNull();
+  });
+});
+
+describe("after a Vote", () => {
+  it("brings on the next Matchup when the draining bar runs out", async () => {
+    // the clock, not userEvent: the wait the draining bar shows is a timer
+    vi.useFakeTimers();
+    showdown();
+    fireEvent.click(pill());
+    await act(async () => {});
+    expect(screen.getByText("with the crowd")).toBeInTheDocument();
+
+    await act(async () => void vi.advanceTimersByTime(REVEAL_LINGER_MS));
+
+    expect(screen.getByText("plant")).toBeInTheDocument();
     expect(screen.queryByText("water")).toBeNull();
+  });
+
+  it("brings on the next Matchup at once when the Voter taps", async () => {
+    const user = userEvent.setup();
+    showdown();
+    await user.click(pill());
+    await screen.findByText("with the crowd");
+
+    fireEvent.pointerDown(tug());
+
+    await screen.findByText("plant");
   });
 
   it("casts once, however often the Tug is let go while the Vote is on its way", async () => {
     const user = userEvent.setup();
     const castVote = showdown({
-      castVote: vi.fn<(options: { data: VoteCast }) => Promise<void>>(
-        () => new Promise(() => {}),
-      ),
+      castVote: vi.fn<CastVote>(() => new Promise(() => {})),
     });
 
     await user.click(pill());
@@ -166,9 +242,7 @@ describe("after a Vote", () => {
     const failed = vi.spyOn(console, "error").mockImplementation(() => {});
     const user = userEvent.setup();
     showdown({
-      castVote: vi.fn<(options: { data: VoteCast }) => Promise<void>>(() =>
-        Promise.reject(new Error("offline")),
-      ),
+      castVote: vi.fn<CastVote>(() => Promise.reject(new Error("offline"))),
     });
 
     await user.click(pill());
