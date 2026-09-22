@@ -1,3 +1,6 @@
+import type { Confidence, Effectiveness } from "./matchup-score";
+import type { ShowdownAggregate } from "./showdown-aggregate";
+
 // What the Stats hand a visitor, and the two numbers that open them. Nothing
 // here may import server code: the locked screen draws its meters from these
 // constants in the browser.
@@ -31,4 +34,58 @@ export type LockedStats = UnlockCounts & {
   elementCount: number;
 };
 
-export type ShowdownStats = LockedStats | { state: "unlocked" };
+// An Element as the open Stats draw it. Its kind is not here: Common and Rare
+// are never user facing.
+export type StatsElement = {
+  id: number;
+  name: string;
+  emoji: string;
+  colour: string;
+};
+
+// The crowd's call on one Matchup it has judged, read from the lower-id
+// Element's side, the way the Vote is stored.
+export type JudgedMatchup = {
+  elementLow: number;
+  elementHigh: number;
+  effectiveness: Effectiveness;
+  confidence: Confidence;
+  // Where the crowd's mean Vote sits: what ranks one opponent against another.
+  meanVote: number;
+};
+
+// The Active Elements and every call the crowd has made, which the Element
+// pages and the Stories are both read out of.
+export type CrowdCalls = {
+  elements: StatsElement[];
+  matchups: JudgedMatchup[];
+};
+
+export type UnlockedStats = CrowdCalls & { state: "unlocked" };
+
+export type ShowdownStats = LockedStats | UnlockedStats;
+
+// A Matchup nobody has voted on is left out rather than sent as the Neutral
+// its prior alone scores it: on an Element's page it is not yet judged, and
+// silence is not a verdict.
+export const unlockedStatsOf = ({
+  elements,
+  matchups,
+}: ShowdownAggregate): UnlockedStats => ({
+  state: "unlocked",
+  elements: elements.map(({ id, name, emoji, colour }) => ({
+    id,
+    name,
+    emoji,
+    colour,
+  })),
+  matchups: matchups
+    .filter(({ score }) => score.voteCount > 0)
+    .map(({ elementLow, elementHigh, score }) => ({
+      elementLow: elementLow.id,
+      elementHigh: elementHigh.id,
+      effectiveness: score.effectiveness,
+      confidence: score.confidence,
+      meanVote: score.meanVote,
+    })),
+});

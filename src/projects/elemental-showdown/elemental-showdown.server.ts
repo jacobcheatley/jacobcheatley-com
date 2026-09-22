@@ -22,6 +22,7 @@ import {
   isStatsUnlocked,
   type ShowdownStats,
   type UnlockCounts,
+  unlockedStatsOf,
 } from "./showdown-stats";
 import { createVoteLimiter } from "./vote-limiter";
 
@@ -99,7 +100,7 @@ export async function showdownStats(
     ownVoteCount,
     everyVoteCount: aggregate.everyVoteCount,
   };
-  if (isStatsUnlocked(counts)) return { state: "unlocked" };
+  if (isStatsUnlocked(counts)) return unlockedStatsOf(aggregate);
   return {
     state: "locked",
     ...counts,

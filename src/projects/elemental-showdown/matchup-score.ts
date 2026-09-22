@@ -188,6 +188,14 @@ export const mirrorEffectiveness = (
   effectiveness: Effectiveness,
 ): Effectiveness => MIRRORED_EFFECTIVENESS[effectiveness];
 
+// What counts as a win and a loss wherever an Element's record is added up,
+// read from that Element's own side.
+export const isWin = (effectiveness: Effectiveness) =>
+  effectiveness === "2×" || effectiveness === "4×";
+
+export const isLoss = (effectiveness: Effectiveness) =>
+  effectiveness === "½×" || effectiveness === "¼×";
+
 // What the reveal says to a Voter who has just cast `vote` on this Matchup,
 // their own Vote counted in the score.
 export function headlineFor(

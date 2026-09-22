@@ -318,16 +318,99 @@ describe("showdownStats", () => {
     ]);
   }
 
-  it("opens the Stats once both numbers are met exactly", async () => {
-    const matchups = await insertMatchups(ELEMENTS_FOR_THE_GATE);
+  // The gate is met exactly, so every test below reads the open Stats.
+  async function unlockFor(elementCount: number) {
+    const matchups = await insertMatchups(elementCount);
     await castVotes(matchups, {
       own: OWN_VOTES_TO_UNLOCK,
       everyone: EVERY_VOTES_TO_UNLOCK,
     });
+    const [judged] = matchups;
+    if (!judged) throw new Error("no Matchup to vote on");
+    return { matchups, anElement: judged.elementLow };
+  }
 
-    expect(await showdownStats(VOTER, nextRead())).toEqual({
-      state: "unlocked",
+  async function openStats() {
+    const stats = await showdownStats(VOTER, nextRead());
+    if (stats.state !== "unlocked")
+      throw new Error("the Stats were expected to be open");
+    return stats;
+  }
+
+  it("opens the Stats once both numbers are met exactly", async () => {
+    await unlockFor(ELEMENTS_FOR_THE_GATE);
+
+    expect(await openStats()).toMatchObject({ state: "unlocked" });
+  });
+
+  it("hands over every Active Element and nothing of its kind", async () => {
+    await unlockFor(ELEMENTS_FOR_THE_GATE);
+
+    const { elements: shown } = await openStats();
+
+    expect(shown).toHaveLength(ELEMENTS_FOR_THE_GATE);
+    expect(shown[0]).toEqual({
+      id: expect.any(Number),
+      name: "element 0",
+      emoji: "🔥",
+      colour: "#f2541b",
     });
+  });
+
+  it("calls every Matchup the crowd has judged and none it has not", async () => {
+    // The Voter's own Votes are one Matchup each, and the crowd piles onto the
+    // first of them, so every Matchup but the last is judged.
+    const { matchups } = await unlockFor(ELEMENTS_FOR_THE_GATE);
+
+    const called = await openStats();
+
+    expect(called.matchups).toHaveLength(OWN_VOTES_TO_UNLOCK);
+    expect(matchups).toHaveLength(OWN_VOTES_TO_UNLOCK + 1);
+    expect(called.matchups[0]).toMatchObject({
+      effectiveness: "2×",
+      confidence: "solid",
+    });
+  });
+
+  it("takes a switched-off Element and its Matchups out of the open Stats", async () => {
+    const { anElement } = await unlockFor(ELEMENTS_FOR_THE_GATE);
+    await db
+      .update(elements)
+      .set({ isActive: false })
+      .where(eq(elements.id, anElement));
+
+    const closed = await openStats();
+
+    expect(closed.elements.map(({ id }) => id)).not.toContain(anElement);
+    expect(
+      closed.matchups.filter(
+        ({ elementLow, elementHigh }) =>
+          elementLow === anElement || elementHigh === anElement,
+      ),
+    ).toEqual([]);
+  });
+
+  it("brings a switched-off Element and its Matchups back when it returns", async () => {
+    const { anElement } = await unlockFor(ELEMENTS_FOR_THE_GATE);
+    await db
+      .update(elements)
+      .set({ isActive: false })
+      .where(eq(elements.id, anElement));
+    await openStats();
+    await db
+      .update(elements)
+      .set({ isActive: true })
+      .where(eq(elements.id, anElement));
+
+    const reopened = await openStats();
+
+    expect(reopened.elements.map(({ id }) => id)).toContain(anElement);
+    expect(
+      reopened.matchups.filter(
+        ({ elementLow, elementHigh }) =>
+          elementLow === anElement || elementHigh === anElement,
+      ),
+    ).not.toEqual([]);
   });
 
   it("sends a Voter one Vote short of the crowd's number the counts and nothing else", async () => {
