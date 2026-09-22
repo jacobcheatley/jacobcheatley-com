@@ -1,4 +1,4 @@
-import { isIPv6 } from "node:net";
+import { isIPv4, isIPv6 } from "node:net";
 import type { RateWindow } from "./showdown-schema";
 
 // A fast thumb casts perhaps 30 Votes a minute, and a whole household, office
@@ -33,10 +33,16 @@ function ipv6Bucket(address: string): string {
     .join(":");
 }
 
+// A socket listening on IPv6 reports an IPv4 client as `::ffff:203.0.113.7`,
+// whose /64 is the whole of IPv4: it is the IPv4 address it carries.
+const IPV4_MAPPED_PREFIX = /^::ffff:/i;
+
 // An address the header did not give in a form the counter can key on is
 // counted whole: a bucket of its own is still a bucket.
 const bucketFor = (address: string | undefined): string => {
   if (!address) return NO_ADDRESS;
+  const mapped = address.replace(IPV4_MAPPED_PREFIX, "");
+  if (isIPv4(mapped)) return mapped;
   return isIPv6(address) ? ipv6Bucket(address) : address;
 };
 
