@@ -197,14 +197,15 @@ function ownRecordOf(
 ): OwnRecord | null {
   const byMatchup = new Map(
     settled.map((matchup) => [
-      matchupKey(matchup.elementLow.id, matchup.elementHigh.id),
+      matchupKey({
+        elementLow: matchup.elementLow.id,
+        elementHigh: matchup.elementHigh.id,
+      }),
       matchup,
     ]),
   );
   const calls = ownVotes.flatMap((vote) => {
-    const matchup = byMatchup.get(
-      matchupKey(vote.elementLow, vote.elementHigh),
-    );
+    const matchup = byMatchup.get(matchupKey(vote));
     return matchup ? [{ vote: vote.value, matchup }] : [];
   });
   const hottest = leaderBy(

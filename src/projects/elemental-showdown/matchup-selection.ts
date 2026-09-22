@@ -36,12 +36,12 @@ export function drawMatchup({
   votes: VotedMatchup[];
   random: () => number;
 }): NextMatchup {
-  const voted = new Set(
-    votes.map((vote) => matchupKey(vote.elementLow, vote.elementHigh)),
-  );
+  const voted = new Set(votes.map(matchupKey));
   const unvoted = aggregate.matchups.filter(
-    (matchup) =>
-      !voted.has(matchupKey(matchup.elementLow.id, matchup.elementHigh.id)),
+    ({ elementLow, elementHigh }) =>
+      !voted.has(
+        matchupKey({ elementLow: elementLow.id, elementHigh: elementHigh.id }),
+      ),
   );
   const opening =
     votes.length < OPENING_COMMON_VOTES
