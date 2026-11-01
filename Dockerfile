@@ -1,4 +1,4 @@
-FROM oven/bun:1.4.2-slim AS build
+FROM oven/bun:1.4.4-slim AS build
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -10,7 +10,7 @@ RUN bun run build
 RUN ! grep -rqE 'blog-editor\.(fn|server)|Create Draft|Unsaved changes|Delete this Article' dist
 RUN rm -rf node_modules && bun install --frozen-lockfile --production
 
-FROM oven/bun:1.4.2-slim
+FROM oven/bun:1.4.4-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000
 COPY --from=build /app/node_modules ./node_modules
